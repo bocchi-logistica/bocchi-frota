@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Bocchi Frota — Portal do Motorista e ADM Logística (v5 — produção)</title>
+<title>Bocchi Frota — Portal do Motorista e ADM Logística (v6 — Azure)</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
@@ -150,24 +150,31 @@ const SEED = {"motoristas": [{"nome": "ADAIR DE MORAIS", "login": "adair", "plac
 const {useState, useMemo, useRef, useEffect} = React;
 
 /* ============================================================================
-   ALTERAÇÃO V5 — CONFIG (configuração centralizada)
+   ALTERAÇÃO V6 — CONFIG (configuração centralizada)
    >>> AQUI é o ÚNICO lugar onde se configura a URL da API. <<<
-   Em produção: MODO_DEMONSTRACAO = false e API_URL = endereço real (Vercel).
+   Em produção: MODO_DEMONSTRACAO = false e API_URL = endereço real da Azure Function.
    ========================================================================== */
 const CONFIG = {
-  API_URL: "https://SEU-PROJETO.vercel.app/api",  // <<< CONFIGURAR AQUI a URL da API
-  VERSAO: "5.0.0",
-  MODO_DEMONSTRACAO: true,   // true = funciona sem backend (dados locais + fila simulada)
+  // ÚNICO ponto de configuração da integração. Não inserir credenciais neste HTML.
+  API_URL: "https://NOME-DA-FUNCTION.azurewebsites.net/api",
+  VERSAO: "6.0.0",
+  MODO_DEMONSTRACAO: true,   // true = funciona offline e não grava no SharePoint
+  ORIGEM_PORTAL: "https://bocchi-logistica.github.io",
+  SHAREPOINT_ESTRUTURA: {
+    listaChecklists: "Checklists_Frota",
+    listaRespostas: "Checklists_Respostas",
+    bibliotecaFotos: "Fotos_Checklist"
+  },
   MAX_FOTO_MB: 2,
   QUALIDADE_FOTO: 0.7,
   FOTO_MAX_PX: 1600,
   TIMEOUT_MS: 30000,
-  RETRY_DELAYS_MS: [0, 10000, 30000, 120000], // 1ª imediata, depois 10s, 30s, 2min
+  RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4
 };
 
 /* ============================================================================
-   ALTERAÇÃO V5 — UTILITÁRIOS
+   ALTERAÇÃO V6 — UTILITÁRIOS
    ========================================================================== */
 function gerarUUID(){
   if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
@@ -189,7 +196,7 @@ async function fetchComTimeout(url, options = {}, timeout = CONFIG.TIMEOUT_MS){
 const agoraISO = ()=> new Date().toISOString();
 
 /* ============================================================================
-   ALTERAÇÃO V5 — INDEXEDDB (fila de envio local + rascunho)
+   ALTERAÇÃO V6 — INDEXEDDB (fila de envio local + rascunho)
    Status locais: RASCUNHO, PENDENTE, ENVIANDO, ENVIADO, ERRO
    ========================================================================== */
 const IDB = {
@@ -237,7 +244,7 @@ const IDB = {
 };
 
 /* ============================================================================
-   ALTERAÇÃO V5 — FOTOS (compressão antes do envio)
+   ALTERAÇÃO V6 — FOTOS (compressão antes do envio)
    Redimensiona para no máximo CONFIG.FOTO_MAX_PX no maior lado,
    converte para JPEG qualidade CONFIG.QUALIDADE_FOTO e valida o tamanho.
    Isolada de propósito: se o backend passar a aceitar multipart/form-data,
@@ -274,7 +281,7 @@ function comprimirImagem(arquivo){
 }
 
 /* ============================================================================
-   ALTERAÇÃO V5 — API SERVICE
+   ALTERAÇÃO V6 — API SERVICE
    Toda comunicação com o servidor passa por aqui. Nenhuma credencial do
    SharePoint existe neste arquivo: o HTML só conhece CONFIG.API_URL.
    Em MODO_DEMONSTRACAO as funções simulam o servidor localmente.
@@ -293,9 +300,17 @@ const ApiService = {
       body: corpo ? JSON.stringify(corpo) : undefined
     });
     if (!r.ok){
+      let detalhe = null;
       let msg = 'Erro '+r.status;
-      try{ const j = await r.json(); if(j && j.mensagem) msg = j.mensagem; }catch(e){}
-      const err = new Error(msg); err.status = r.status; throw err;
+      try{ detalhe = await r.json(); if(detalhe && (detalhe.mensagem||detalhe.message)) msg = detalhe.mensagem||detalhe.message; }catch(e){}
+      // Idempotência: se a API informar que o checklist já existe e devolver o protocolo,
+      // considerar o envio confirmado em vez de gerar duplicidade.
+      if (r.status===409 && detalhe && detalhe.protocolo){
+        return {sucesso:true, protocolo:detalhe.protocolo, dataHoraRecebimento:detalhe.dataHoraRecebimento||agoraISO(), status:detalhe.status||'PENDENTE', duplicado:true};
+      }
+      const mensagens = {401:'Sessão inválida. Entre novamente.',403:'Usuário sem permissão.',413:'Fotos ou requisição acima do limite.',429:'Muitas tentativas. Aguarde e tente novamente.',500:'Erro interno do servidor.',503:'Serviço temporariamente indisponível.'};
+      const err = new Error(detalhe&&detalhe.mensagem ? detalhe.mensagem : (mensagens[r.status]||msg));
+      err.status = r.status; err.detalhe = detalhe; throw err;
     }
     return r.json();
   },
@@ -308,11 +323,11 @@ const ApiService = {
   sair(){ _token = null; },
   enviarChecklist(registro){
     if (CONFIG.MODO_DEMONSTRACAO){
-      // Simula o servidor: gera protocolo local no formato CK-AAAAMMDD-XXXX
+      // Simula o servidor com prefixo DEMO, sem confundir com protocolos reais
       return new Promise(res=>setTimeout(()=>{
         const d = new Date();
         const dt = d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');
-        res({sucesso:true, protocolo:'CK-'+dt+'-'+String(Math.floor(Math.random()*9000)+1000),
+        res({sucesso:true, protocolo:'DEMO-'+dt+'-'+String(Math.floor(Math.random()*9000)+1000),
              dataHoraRecebimento: agoraISO(), status:'RECEBIDO'});
       }, 700));
     }
@@ -335,7 +350,7 @@ const ApiService = {
 };
 
 /* ============================================================================
-   ALTERAÇÃO V5 — FILA DE ENVIO (internet instável)
+   ALTERAÇÃO V6 — FILA DE ENVIO (internet instável)
    O checklist é gravado no IndexedDB ANTES da tentativa de envio.
    Só é marcado como ENVIADO com confirmação real da API (protocolo).
    O mesmo idLocal é mantido em todas as tentativas (idempotência).
@@ -364,7 +379,7 @@ const FilaEnvio = {
         await IDB.salvarFila(item); this._notificar();
         try{
           const resp = await ApiService.enviarChecklist(item);
-          if (resp && resp.sucesso){
+          if (resp && resp.sucesso===true && resp.protocolo){
             item.statusEnvio = 'ENVIADO';
             item.protocolo = resp.protocolo;
             item.dataHoraRecebimento = resp.dataHoraRecebimento;
@@ -578,7 +593,7 @@ function StatusTag({s}){
 /* ================= LOGIN ================= */
 function Login({st, onLogin}){
   const [login,setLogin]=useState(''); const [senha,setSenha]=useState(''); const [erro,setErro]=useState('');
-  /* ALTERAÇÃO V5: em produção a autenticação é feita pelo endpoint POST /auth/login
+  /* ALTERAÇÃO V6: em produção a autenticação é feita pelo endpoint POST /auth/login
      da API (o token fica só em memória; a senha nunca é gravada no navegador).
      O modo demonstração usa a base local e está claramente separado. */
   const [carregando,setCarregando]=useState(false);
@@ -604,7 +619,7 @@ function Login({st, onLogin}){
     <div className="login-wrap">
       <div className="login-card">
         <div className="marca">Bocchi <em>Frota</em></div>
-        <div className="login-sub">Portal do motorista e ADM logística — v5</div>
+        <div className="login-sub">Portal do motorista e ADM logística — v6 Azure</div>
         <div style={{display:'flex',flexDirection:'column',gap:12}}>
           <div><label>Usuário</label><input value={login} onChange={e=>setLogin(e.target.value)} placeholder="ex.: adelir" autoCapitalize="none"/></div>
           <div><label>Senha</label><input type="password" value={senha} onChange={e=>setSenha(e.target.value)} onKeyDown={e=>e.key==='Enter'&&entrar()} placeholder="••••"/></div>
@@ -781,7 +796,7 @@ function TelaPremiacao({st, user, dados}){
 
 /* ================= MOTORISTA: CHECK LIST ================= */
 function TelaChecklist({st, setSt, user, toast}){
-  /* ALTERAÇÃO V5: o envio agora passa por IndexedDB + ApiService (fila offline
+  /* ALTERAÇÃO V6: o envio agora passa por IndexedDB + ApiService (fila offline
      com idempotência por idLocal). O estado local (setSt) é mantido apenas
      para a demonstração do fluxo de aprovação do ADM. */
   const meus = st.checklists.filter(c=>c.motorista===user.nome).sort((a,b)=>b.data.localeCompare(a.data));
@@ -813,7 +828,7 @@ function TelaChecklist({st, setSt, user, toast}){
   const cont = lista => ({tot:lista.length, ap:lista.filter(c=>c.status==='aprovado').length, rep:lista.filter(c=>c.status==='reprovado').length, pen:lista.filter(c=>c.status==='pendente').length});
   const cM = cont(doMes), cA = cont(mesAnt);
 
-  /* ALTERAÇÃO V5: monitorar fila local e estado da conexão */
+  /* ALTERAÇÃO V6: monitorar fila local e estado da conexão */
   const atualizarFila = ()=>{ FilaEnvio.pendentes().then(setPendentes).catch(()=>{}); };
   useEffect(()=>{
     atualizarFila();
@@ -826,7 +841,7 @@ function TelaChecklist({st, setSt, user, toast}){
     return ()=>{ FilaEnvio.ouvintes.delete(ouv); window.removeEventListener('online', on); window.removeEventListener('offline', off); };
   },[]);
 
-  /* ALTERAÇÃO V5: salvamento automático do rascunho + aviso ao sair da página */
+  /* ALTERAÇÃO V6: salvamento automático do rascunho + aviso ao sair da página */
   useEffect(()=>{
     if(!preenchendo) return;
     const t = setTimeout(()=>{ IDB.salvarRascunho(chaveRascunho, {resps, extras, veiculo}).catch(()=>{}); }, 800);
@@ -855,7 +870,7 @@ function TelaChecklist({st, setSt, user, toast}){
 
   const setResp=(pid, campo, v)=> setResps(r=>({...r, [pid]:{...(r[pid]||{}), [campo]:v}}));
 
-  /* ALTERAÇÃO V5: foto é comprimida (máx. 1600px, JPEG q=0,7) antes de anexar */
+  /* ALTERAÇÃO V6: foto é comprimida (máx. 1600px, JPEG q=0,7) antes de anexar */
   const anexar=(pid, e)=>{
     const f = e.target.files && e.target.files[0]; if(!f) return;
     e.target.value = '';
@@ -873,7 +888,7 @@ function TelaChecklist({st, setSt, user, toast}){
       {timeout:4000, maximumAge:600000});
   });
 
-  /* ALTERAÇÃO V5: validações, payload padronizado, fila IndexedDB e envio à API */
+  /* ALTERAÇÃO V6: validações, payload padronizado, fila IndexedDB e envio à API */
   const enviar = async ()=>{
     if (enviando) return; // prevenção contra clique duplo
     // Quilometragem obrigatória e válida para qualquer frota
@@ -907,21 +922,25 @@ function TelaChecklist({st, setSt, user, toast}){
         respostas: perguntasAtivas.map(p=>{
           const r = resps[p.id]||{};
           return {idPergunta:p.id, grupo:p.grupo, pergunta:p.texto,
-                  resposta:r.resp||'NA', observacao:r.obs||'',
+                  resposta:r.resp||'NA', observacao:r.obs||'', possuiFoto:!!r.foto,
                   fotos: r.foto ? [{nome:p.id+'-01.jpg', tipo:'image/jpeg', conteudoBase64:r.foto}] : []};
         }),
-        quantidadeNC: perguntasAtivas.filter(p=>resps[p.id] && resps[p.id].resp==='NC').length
+        quantidadeNC: perguntasAtivas.filter(p=>resps[p.id] && resps[p.id].resp==='NC').length,
+        statusChecklist: 'PENDENTE'
       };
 
       // 1) grava na fila local ANTES de tentar enviar (não se perde sem internet)
       await FilaEnvio.adicionar(registro);
       localStorage.setItem('km_'+veiculo, String(km));
 
-      // mantém o fluxo local de aprovação do ADM (demonstração)
-      const registroLocal = {id:'ck'+Date.now(), idLocal, motorista:user.nome, placa:veiculo, frota:frotaSel, data:HOJE, status:'pendente', motivoReprova:'',
-        km: String(km), combustivel: extras.combustivel||'',
-        respostas: perguntasAtivas.map(p=>({pid:p.id, resp:(resps[p.id]&&resps[p.id].resp)||'NA', obs:(resps[p.id]&&resps[p.id].obs)||'', foto:(resps[p.id]&&resps[p.id].foto)||null}))};
-      setSt(s=>({...s, checklists:[...s.checklists, registroLocal]}));
+      // Somente no modo demonstração o registro entra diretamente no painel local.
+      // Em produção, o painel administrativo deve carregar exclusivamente os dados da API/SharePoint.
+      if (CONFIG.MODO_DEMONSTRACAO){
+        const registroLocal = {id:'demo'+Date.now(), idLocal, motorista:user.nome, placa:veiculo, frota:frotaSel, data:HOJE, status:'pendente', motivoReprova:'',
+          km: String(km), combustivel: extras.combustivel||'',
+          respostas: perguntasAtivas.map(p=>({pid:p.id, resp:(resps[p.id]&&resps[p.id].resp)||'NA', obs:(resps[p.id]&&resps[p.id].obs)||'', foto:(resps[p.id]&&resps[p.id].foto)||null}))};
+        setSt(s=>({...s, checklists:[...s.checklists, registroLocal]}));
+      }
 
       // 2) tenta enviar agora; só marca ENVIADO com confirmação real da API
       await FilaEnvio.processar(toast);
@@ -947,7 +966,7 @@ function TelaChecklist({st, setSt, user, toast}){
 
   return (
     <React.Fragment>
-      {/* ALTERAÇÃO V5: barra de conexão + fila pendente */}
+      {/* ALTERAÇÃO V6: barra de conexão + fila pendente */}
       {!online &&
         <div className="erro-box">Sem conexão com a internet. Você pode preencher normalmente — o checklist ficará salvo neste aparelho e será enviado quando a conexão retornar.</div>}
       {pendentes.length>0 &&
@@ -1338,12 +1357,12 @@ function AdmContestacoes({st, setSt, toast}){
 
 /* ================= ADM: CHECK LIST (aprovação + perguntas + relatório) ================= */
 function AdmChecklist({st, setSt, toast}){
-  /* ALTERAÇÃO V5: fora do modo demonstração, o painel carrega os registros pela
+  /* ALTERAÇÃO V6: fora do modo demonstração, o painel carrega os registros pela
      API (GET /admin/checklists) em vez de usar apenas o estado do navegador. */
   const [sub,setSub]=useState('aprovar');
   const [sincronizando,setSincronizando]=useState(false);
   const sincronizar = async ()=>{
-    if (CONFIG.MODO_DEMONSTRACAO){ toast('Modo demonstração: dados locais. Configure CONFIG.API_URL e desative MODO_DEMONSTRACAO para consultar o SharePoint.'); return; }
+    if (CONFIG.MODO_DEMONSTRACAO){ toast('Modo demonstração: dados locais. Configure a URL da Azure Function e desative MODO_DEMONSTRACAO para consultar o SharePoint.'); return; }
     setSincronizando(true);
     try{
       const r = await ApiService.admListarChecklists();
@@ -1367,8 +1386,8 @@ function AdmChecklist({st, setSt, toast}){
   const [fMot,setFMot]=useState('todos');
   const pendentes = st.checklists.filter(c=>c.status==='pendente');
   const decidir=(ck, status, motivo)=>{
-    /* ALTERAÇÃO V5: em produção a decisão também é gravada no SharePoint via API */
-    if (!CONFIG.MODO_DEMONSTRACAO && ck.id && String(ck.id).startsWith('CK-')){
+    /* ALTERAÇÃO V6: em produção a decisão também é gravada no SharePoint via API */
+    if (!CONFIG.MODO_DEMONSTRACAO && ck.id && !String(ck.id).startsWith('DEMO-')){
       ApiService.admStatus(ck.id, status==='aprovado'?'APROVADO':'REPROVADO', motivo||'')
         .catch(e=>toast('Aviso: falha ao gravar no servidor ('+e.message+').'));
     }
