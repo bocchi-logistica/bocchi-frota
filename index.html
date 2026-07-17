@@ -374,19 +374,12 @@ const ApiService = {
   admDetalhe(protocolo){ return this._req('GET','/admin/checklists/'+encodeURIComponent(protocolo)); },
   admStatus(protocolo, status, motivo){ return this._req('PATCH','/admin/checklists/'+encodeURIComponent(protocolo)+'/status',{status, motivo}); },
   admObservacao(protocolo, observacao){
-  return this._req(
-    'POST',
-    '/admin/checklists/' + encodeURIComponent(protocolo) + '/observacao',
-    { observacao }
-  );
+    return this._req('POST','/admin/checklists/' + encodeURIComponent(protocolo) + '/observacao',{observacao});
 },
 
 criarPergunta(dados){
-  return this._req(
-    'POST',
-    '/perguntas',
-    dados
-  );
+    return this._req('POST','/perguntas',dados);
+}
 };
 
 /* ============================================================================
