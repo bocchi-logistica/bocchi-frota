@@ -636,8 +636,19 @@ function Login({st, onLogin}){
     try{
       const r = await ApiService.login(login.trim().toLowerCase(), senha);
       if(!r || !r.sucesso){ setErro('Usuário ou senha incorretos.'); return; }
-      onLogin({id:'api'+r.motorista.id, nome:r.motorista.nome, login:login.trim().toLowerCase(),
-               perfil:r.motorista.perfil||'motorista'});
+     onLogin({
+  id: 'api' + r.motorista.id,
+  nome: r.motorista.nome,
+  login: login.trim().toLowerCase(),
+  perfil: r.motorista.perfil || 'motorista',
+  perms: r.motorista.perms || {
+    cargas: true,
+    premiacao: true,
+    checklist: true
+  },
+  veiculoPadrao: r.motorista.veiculoPadrao || '',
+  acessos: r.motorista.acessos || {}
+});
     }catch(e){
       setErro('Não foi possível conectar ao servidor. Verifique a internet e tente novamente.');
     }finally{ setCarregando(false); }
