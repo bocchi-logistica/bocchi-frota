@@ -179,9 +179,8 @@ const {useState, useMemo, useRef, useEffect} = React;
    ========================================================================== */
 const CONFIG = {
   // ÚNICO ponto de configuração da integração. Não inserir credenciais neste HTML.
-  API_URL: "https://NOME-DA-FUNCTION.azurewebsites.net/api",
-  VERSAO: "6.0.0",
-  MODO_DEMONSTRACAO: true,   // true = funciona offline e não grava no SharePoint
+  API_URL: "https://bocchi-frota-api.logistica-951.workers.dev",
+MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoint
   ORIGEM_PORTAL: "https://bocchi-logistica.github.io",
   SHAREPOINT_ESTRUTURA: {
     listaChecklists: "Checklists_Frota",
@@ -337,12 +336,35 @@ const ApiService = {
     }
     return r.json();
   },
-  async login(login, senha){
-    if (CONFIG.MODO_DEMONSTRACAO) return null; // login demo é resolvido pelo App
-    const r = await this._req('POST','/auth/login',{login, senha});
-    if (r && r.sucesso) _token = r.token;
-    return r;
-  },
+ async login(login, senha){
+  if (CONFIG.MODO_DEMONSTRACAO) return null;
+
+  const r = await this._req('POST', '/login', {
+    login,
+    pin: senha
+  });
+
+  if (r && r.ok) {
+    _token = r.token;
+
+    return {
+      sucesso: true,
+      token: r.token,
+      motorista: {
+        id: r.motorista.id,
+        nome: r.motorista.nome,
+        perfil: (r.motorista.perfil || 'motorista').toLowerCase(),
+        veiculoPadrao: r.motorista.veiculoPadrao,
+        acessos: r.motorista.acessos
+      }
+    };
+  }
+
+  return {
+    sucesso: false,
+    erro: r?.erro || 'Login ou PIN inválido.'
+  };
+},
   sair(){ _token = null; },
   enviarChecklist(registro){
     if (CONFIG.MODO_DEMONSTRACAO){
