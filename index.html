@@ -373,7 +373,20 @@ const ApiService = {
   },
   admDetalhe(protocolo){ return this._req('GET','/admin/checklists/'+encodeURIComponent(protocolo)); },
   admStatus(protocolo, status, motivo){ return this._req('PATCH','/admin/checklists/'+encodeURIComponent(protocolo)+'/status',{status, motivo}); },
-  admObservacao(protocolo, observacao){ return this._req('POST','/admin/checklists/'+encodeURIComponent(protocolo)+'/observacao',{observacao}); }
+  admObservacao(protocolo, observacao){
+  return this._req(
+    'POST',
+    '/admin/checklists/' + encodeURIComponent(protocolo) + '/observacao',
+    { observacao }
+  );
+},
+
+criarPergunta(dados){
+  return this._req(
+    'POST',
+    '/perguntas',
+    dados
+  );
 };
 
 /* ============================================================================
@@ -1433,11 +1446,54 @@ function AdmChecklist({st, setSt, toast}){
     setVer(null); setReprovando(null); setMotivoRep('');
     toast(status==='aprovado'?'Check list aprovado.':'Check list reprovado — o motorista deverá refazer.');
   };
-  const addPerg=()=>{
-    if(!novaPerg.texto.trim()){ toast('Escreva o texto da pergunta.'); return; }
-    setSt(s=>({...s, perguntas:[...s.perguntas, {id:'p'+Date.now(), ...novaPerg, texto:novaPerg.texto.trim(), grupo:novaPerg.grupo.trim()||'Geral', ativa:true}]}));
-    setNovaPerg({texto:'', grupo:'', frota:novaPerg.frota, obrigatoria:true, fotoNC:false}); toast('Pergunta adicionada.');
-  };
+  const addPerg = async()=>{
+  if(!novaPerg.texto.trim()){
+    toast('Escreva o texto da pergunta.');
+    return;
+  }
+
+  try{
+    const resposta = await ApiService.criarPergunta({
+      texto: novaPerg.texto.trim(),
+      grupo: novaPerg.grupo.trim() || 'Geral',
+      tipoFrota: novaPerg.frota.toUpperCase(),
+      frequencia: 'DIÁRIA',
+      obrigatoria: novaPerg.obrigatoria,
+      fotoObrigatoriaNC: novaPerg.fotoNC,
+      observacaoObrigatoriaNC: true,
+      ativa: true,
+      ordem: st.perguntas.length + 1
+    });
+
+    const perguntaCriada = {
+      id: resposta.pergunta.id,
+      texto: resposta.pergunta.texto,
+      grupo: resposta.pergunta.grupo,
+      frota: resposta.pergunta.tipoFrota.toLowerCase(),
+      frequencia: resposta.pergunta.frequencia,
+      obrigatoria: resposta.pergunta.obrigatoria,
+      fotoNC: resposta.pergunta.fotoObrigatoriaNC,
+      ativa: true
+    };
+
+    setSt(s=>({
+      ...s,
+      perguntas:[...s.perguntas, perguntaCriada]
+    }));
+
+    setNovaPerg({
+      texto:'',
+      grupo:'',
+      frota:novaPerg.frota,
+      obrigatoria:true,
+      fotoNC:false
+    });
+
+    toast('Pergunta salva no SharePoint.');
+  }catch(e){
+    toast('Erro ao salvar pergunta: '+e.message);
+  }
+};
   const togglePerg=(id,campo)=> setSt(s=>({...s, perguntas:s.perguntas.map(p=>p.id===id?{...p,[campo]:!p[campo]}:p)}));
   const cicloFrota=(id)=> setSt(s=>({...s, perguntas:s.perguntas.map(p=>p.id===id?{...p, frota: p.frota==='pesada'?'leve':p.frota==='leve'?'ambas':'pesada'}:p)}));
   const rotuloFrota={pesada:'Frota pesada', leve:'Frota leve', ambas:'Ambas'};
