@@ -327,13 +327,18 @@ const ApiService = {
     return {
       sucesso: true,
       token: r.token,
-      motorista: {
-        id: r.motorista.id,
-        nome: r.motorista.nome,
-        perfil: (r.motorista.perfil || 'motorista').toLowerCase(),
-        veiculoPadrao: r.motorista.veiculoPadrao,
-        acessos: r.motorista.acessos
-      }
+     motorista: {
+  id: r.motorista.id || 'teste',
+  nome: r.motorista.nome || 'MOTORISTA TESTE',
+  perfil: (r.motorista.perfil || 'motorista').toLowerCase(),
+  veiculoPadrao: r.motorista.veiculoPadrao || '',
+  acessos: r.motorista.acessos || {},
+  perms: {
+    cargas: true,
+    premiacao: true,
+    checklist: true
+  }
+}
     };
   }
 
