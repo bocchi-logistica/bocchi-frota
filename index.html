@@ -1,8 +1,9 @@
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Bocchi Frota — Portal do Motorista e ADM Logística (v2 — Edson.B)</title>
+<title>Bocchi Frota — Portal do Motorista e ADM Logística (v1 — Edson.B)</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
@@ -611,7 +612,7 @@ function Login({st, onLogin}){
     <div className="login-wrap">
       <div className="login-card">
         <div className="marca">Bocchi <em>Frota</em></div>
-        <div className="login-sub">Portal do motorista e ADM logística — v2 — Edson.B</div>
+        <div className="login-sub">Portal do motorista e ADM logística — v1 — Edson.B</div>
         <div style={{display:'flex',flexDirection:'column',gap:12}}>
           <div><label>Usuário</label><input value={login} onChange={e=>setLogin(e.target.value)} placeholder="ex.: adelir" autoCapitalize="none"/></div>
           <div><label>Senha</label><input type="password" value={senha} onChange={e=>setSenha(e.target.value)} onKeyDown={e=>e.key==='Enter'&&entrar()} placeholder="••••"/></div>
