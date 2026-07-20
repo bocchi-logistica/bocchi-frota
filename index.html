@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Bocchi Frota — Portal do Motorista e ADM Logística (v6 — Azure)</title>
+<title>Bocchi Frota — Portal do Motorista e ADM Logística (v1 — Edson.B)</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
@@ -169,7 +169,8 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   FOTO_MAX_PX: 1600,
   TIMEOUT_MS: 30000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
-  MAX_TENTATIVAS: 4
+  MAX_TENTATIVAS: 4,
+  VERSAO: '7.0-sharepoint'
 };
 
 /* ============================================================================
@@ -381,9 +382,14 @@ const ApiService = {
     return this._req('POST','/admin/checklists/' + encodeURIComponent(protocolo) + '/observacao',{observacao});
 },
 
-criarPergunta(dados){
+obterPerguntas(tipoFrota='TODAS'){
+    const tipo = String(tipoFrota || 'TODAS').toUpperCase();
+    return this._req('GET','/perguntas?tipoFrota='+encodeURIComponent(tipo));
+  },
+
+  criarPergunta(dados){
     return this._req('POST','/perguntas',dados);
-}
+  }
 };
 
 /* ============================================================================
@@ -480,72 +486,9 @@ function estadoInicial(){
     produto:c[5], nota:c[6], peso:c[7], rt:c[8], valor:c[9]}));
   const descontos = s.descontos.map((d,i)=>({id:'d'+i, motorista:d.m, mes:d.mes, item:d.item, valor:d.v, origem:'Importado da planilha'}));
   // Perguntas conforme FO 4.1.1.1 (frota pesada) e FO 4.1.2.1 (frota leve, padronizado)
-  const P=(texto,grupo,frotaP,obrig,fotoNC)=>({texto,grupo,frota:frotaP,obrigatoria:obrig,fotoNC});
-  const perguntas = [
-    // FROTA PESADA — itens com prioridade
-    P('Nível da água, óleo e demais fluidos do cavalo','Itens com prioridade','pesada',true,false),
-    P('Regulagem correta dos freios','Itens com prioridade','pesada',true,false),
-    P('Condição e funcionamento das mangueiras hidráulicas da caçamba','Itens com prioridade','pesada',true,true),
-    P('Vedações da caçamba (evitar desperdício de mercadoria)','Itens com prioridade','pesada',true,true),
-    P('Trava de segurança da caçamba em funcionamento','Itens com prioridade','pesada',true,false),
-    P('Lona fácil funcionando e sem furos ou rombos','Itens com prioridade','pesada',true,true),
-    P('EPIs em condição de uso (capacete, luva, bota, faixa refletiva, óculos)','Itens com prioridade','pesada',true,false),
-    P('Condição e calibragem dos estepes','Itens com prioridade','pesada',true,true),
-    P('Barrica de água cheia (emergência)','Itens com prioridade','pesada',false,false),
-    P('Testar a basculante','Itens com prioridade','pesada',true,false),
-    P('Carenagens do cavalinho (partes quebradas, desencaixadas ou riscadas)','Itens com prioridade','pesada',false,true),
-    // FROTA PESADA — antes da partida
-    P('Faróis, piscas e lanternas traseiras (conexões cavalo/carreta, luz baixa/alta)','Antes da partida','pesada',true,true),
-    P('Bater pneus e verificar desgaste','Antes da partida','pesada',true,true),
-    P('Indicadores do painel funcionando','Antes da partida','pesada',true,false),
-    P('Limpadores de para-brisa e água do reservatório','Antes da partida','pesada',false,false),
-    P('Extintor pressurizado e dentro da validade','Antes da partida','pesada',true,true),
-    P('Kit emergencial completo (macaco, chave de roda, chave da cabine, reparos)','Antes da partida','pesada',true,false),
-    // FROTA PESADA — cabine
-    P('Higiene da cabine (sem resíduos e objetos soltos)','Cabine','pesada',false,false),
-    P('Retrovisores funcionando e regulados','Cabine','pesada',true,true),
-    P('Tacógrafo aferido, funcionando e com discos','Cabine','pesada',true,false),
-    P('Cinto de segurança em condição de uso','Cabine','pesada',true,false),
-    // FROTA PESADA — após a partida
-    P('Nível de combustível','Após a partida','pesada',false,false),
-    P('Vazamentos de óleo (motor e hidráulico da caçamba)','Após a partida','pesada',true,true),
-    // FROTA PESADA — semanal
-    P('Óleo da caixa e diferencial (verificação semanal)','Verificação semanal','pesada',false,false),
-    P('Lubrificação da parte de baixo, cruzetas e molas (semanal)','Verificação semanal','pesada',false,false),
-    P('Folga na barra de direção (semanal)','Verificação semanal','pesada',false,false),
-    // FROTA LEVE — mecânica
-    P('Suspensão e direção sem anomalias','Anomalias mecânicas','leve',true,false),
-    P('Luzes de advertência do painel apagadas','Anomalias mecânicas','leve',true,true),
-    P('Vazamento de fluidos','Anomalias mecânicas','leve',true,true),
-    P('Freio e freio de mão','Anomalias mecânicas','leve',true,false),
-    P('Cinto de segurança','Anomalias mecânicas','leve',true,false),
-    P('Estepe, macaco e chave de roda','Anomalias mecânicas','leve',true,false),
-    P('Rodas e pneus (DD, DE, TD, TE)','Anomalias mecânicas','leve',true,true),
-    P('Ruído estranho ao rodar','Anomalias mecânicas','leve',false,false),
-    P('Climatização (ar-quente / ar-condicionado)','Anomalias mecânicas','leve',false,false),
-    // FROTA LEVE — elétrica
-    P('Faróis e lanternas','Anomalias elétricas','leve',true,true),
-    P('Bateria e partida','Anomalias elétricas','leve',true,false),
-    P('Limpador de para-brisa','Anomalias elétricas','leve',false,false),
-    P('Vidros, travas e retrovisores elétricos','Anomalias elétricas','leve',false,false),
-    P('Alarme e iluminação interna','Anomalias elétricas','leve',false,false),
-    // FROTA LEVE — estética
-    P('Limpeza interna e externa','Anomalias estéticas','leve',false,false),
-    P('Estofados, volante e painel','Anomalias estéticas','leve',false,true),
-    P('Lataria, para-choques e calotas (amassado, riscado, quebrado, faltante)','Anomalias estéticas','leve',true,true),
-    P('Vidros, para-brisa e película','Anomalias estéticas','leve',true,true),
-  ].map((p,i)=>({id:'p'+i, ...p, ativa:true}));
-  const pesadas = perguntas.filter(p=>p.frota==='pesada');
-  const idVaz = pesadas.find(p=>p.texto.startsWith('Vazamentos de óleo')).id;
-  const ckDe = (mot, placa, data, status, nc, motivoRep) => ({id:'ck_'+mot.split(' ')[0]+data, motorista:mot, placa, data, status, motivoReprova:motivoRep||'', frota:'pesada',
-    respostas:pesadas.map(p=> (nc && p.id===idVaz) ? {pid:p.id, resp:'NC', obs:'Vazamento pequeno de óleo perto do diferencial', foto:FOTO_DEMO} : {pid:p.id, resp:'C', obs:'', foto:null})});
-  const checklists = [
-    ckDe('ADELIR DE CARVALHO','TQO1G56','2026-07-01','aprovado',false),
-    ckDe('ADELIR DE CARVALHO','TQO1G56','2026-06-30','aprovado',false),
-    ckDe('ADELIR DE CARVALHO','TQO1G56','2026-06-29','reprovado',false,'Item dos pneus marcado como conforme, mas o pneu dianteiro direito estava careca na auditoria. Refazer com atenção.'),
-    ckDe('DIEGO GRADIM PEREIRA','IZD6J78','2026-07-01','pendente',true),
-    ckDe('DIEGO GRADIM PEREIRA','IZD6J78','2026-06-30','aprovado',false),
-  ];
+  // Fonte única das perguntas: SharePoint.
+  const perguntas = [];
+  const checklists = [];
   const contestacoes = [
     {id:'ct1', motorista:'JORGE LUIZ BERNARDI', cargaId: acharCargaDemo(cargas,'JORGE LUIZ BERNARDI'), motivo:'O peso dessa carga está menor do que o do ticket da balança. Ficou 38,2 t no ticket.', status:'pendente', resposta:'', data:'2026-06-28'},
   ];
@@ -865,7 +808,44 @@ function TelaChecklist({st, setSt, user, toast}){
   const [veiculo,setVeiculo]=useState(minhaPlaca ? minhaPlaca.placa : (leves[0]?leves[0].placa:''));
   const vSel = st.frota[veiculo];
   const frotaSel = vSel ? vSel.frota : 'pesada';
-  const perguntasAtivas = st.perguntas.filter(p=>p.ativa && (p.frota===frotaSel || p.frota==='ambas'));
+
+  const [perguntasAtivas,setPerguntasAtivas]=useState([]);
+  const [carregandoPerguntas,setCarregandoPerguntas]=useState(false);
+  const [erroPerguntas,setErroPerguntas]=useState('');
+
+  useEffect(()=>{
+    let ativo = true;
+    const carregar = async ()=>{
+      setCarregandoPerguntas(true);
+      setErroPerguntas('');
+      setPerguntasAtivas([]);
+      try{
+        const tipo = frotaSel==='leve' ? 'LEVE' : 'PESADA';
+        const r = await ApiService.obterPerguntas(tipo);
+        if(!ativo) return;
+        const lista = (r.perguntas || []).map(p=>({
+          id:String(p.id),
+          texto:p.texto || '',
+          grupo:p.grupo || 'Outros',
+          frota:(p.tipoFrota || tipo).toLowerCase(),
+          frequencia:p.frequencia || 'Diária',
+          obrigatoria:p.obrigatoria === true,
+          fotoNC:p.fotoObrigatoriaNC === true,
+          observacaoObrigatoriaNC:p.observacaoObrigatoriaNC === true,
+          ativa:p.ativa !== false,
+          ordem:Number(p.ordem || 999)
+        })).sort((a,b)=>a.grupo.localeCompare(b.grupo,'pt-BR') || a.ordem-b.ordem);
+        setPerguntasAtivas(lista);
+      }catch(e){
+        if(ativo) setErroPerguntas(e.message || 'Não foi possível carregar as perguntas.');
+      }finally{
+        if(ativo) setCarregandoPerguntas(false);
+      }
+    };
+    carregar();
+    return ()=>{ ativo=false; };
+  },[frotaSel]);
+
   const grupos = [...new Set(perguntasAtivas.map(p=>p.grupo))];
   const chaveRascunho = 'ck_'+user.login+'_'+HOJE;
 
@@ -903,6 +883,18 @@ function TelaChecklist({st, setSt, user, toast}){
   },[preenchendo]);
 
   const abrirFormulario = async ()=>{
+    if(carregandoPerguntas){
+      toast('Aguarde: carregando as perguntas do SharePoint.');
+      return;
+    }
+    if(erroPerguntas){
+      toast('Não foi possível abrir o checklist: '+erroPerguntas);
+      return;
+    }
+    if(!perguntasAtivas.length){
+      toast('Nenhuma pergunta ativa cadastrada para este tipo de veículo.');
+      return;
+    }
     const r = await IDB.lerRascunho(chaveRascunho).catch(()=>null);
     if (r && (Object.keys(r.resps||{}).length || r.extras && r.extras.km)){
       setResps(r.resps||{}); setExtras(r.extras||{km:'',combustivel:''});
@@ -1046,6 +1038,13 @@ function TelaChecklist({st, setSt, user, toast}){
         </div>
       </React.Fragment>}
 
+      {!preenchendo && carregandoPerguntas &&
+        <div className="aviso-box">Carregando perguntas ativas do SharePoint...</div>}
+      {!preenchendo && erroPerguntas &&
+        <div className="erro-box">Falha ao carregar as perguntas: {erroPerguntas}</div>}
+      {!preenchendo && !carregandoPerguntas && !erroPerguntas && perguntasAtivas.length===0 &&
+        <div className="aviso-box">Nenhuma pergunta ativa cadastrada para a {frotaSel==='leve'?'frota leve':'frota pesada'}.</div>}
+
       {!preenchendo && !deHoje &&
         <div className="card" style={{textAlign:'center', padding:'26px 16px'}}>
           <div style={{fontSize:34}}>📋</div>
@@ -1124,7 +1123,7 @@ function TelaChecklist({st, setSt, user, toast}){
             <button className="btn btn-g btn-sm" onClick={()=>setVer(c)}>Ver</button>
           </div>)}
       </React.Fragment>}
-      {ver && <ChecklistDetalhe ck={ver} perguntas={st.perguntas} onClose={()=>setVer(null)}/>}
+      {ver && <ChecklistDetalhe ck={ver} perguntas={perguntasAtivas} onClose={()=>setVer(null)}/>}
     </React.Fragment>
   );
 }
@@ -1432,6 +1431,34 @@ function AdmChecklist({st, setSt, toast}){
   const [novaPerg,setNovaPerg]=useState({texto:'', grupo:'Anomalias estéticas', frota:'pesada', frequencia:'Diária', obrigatoria:true, fotoNC:false});
   const [fFrota,setFFrota]=useState('pesada');
   const [fMot,setFMot]=useState('todos');
+  const [carregandoCatalogo,setCarregandoCatalogo]=useState(false);
+
+  const carregarCatalogo = async ()=>{
+    setCarregandoCatalogo(true);
+    try{
+      const r = await ApiService.obterPerguntas('TODAS');
+      const lista = (r.perguntas || []).map(p=>({
+        id:String(p.id),
+        texto:p.texto || '',
+        grupo:p.grupo || 'Outros',
+        frota:(p.tipoFrota || '').toLowerCase(),
+        frequencia:p.frequencia || 'Diária',
+        obrigatoria:p.obrigatoria === true,
+        fotoNC:p.fotoObrigatoriaNC === true,
+        observacaoObrigatoriaNC:p.observacaoObrigatoriaNC === true,
+        ativa:p.ativa !== false,
+        ordem:Number(p.ordem || 999)
+      })).sort((a,b)=>a.grupo.localeCompare(b.grupo,'pt-BR') || a.ordem-b.ordem);
+      setSt(s=>({...s, perguntas:lista}));
+    }catch(e){
+      toast('Erro ao carregar perguntas do SharePoint: '+e.message);
+    }finally{
+      setCarregandoCatalogo(false);
+    }
+  };
+
+  useEffect(()=>{ carregarCatalogo(); },[]);
+
   const pendentes = st.checklists.filter(c=>c.status==='pendente');
   const decidir=(ck, status, motivo)=>{
     /* ALTERAÇÃO V6: em produção a decisão também é gravada no SharePoint via API */
@@ -1459,24 +1486,10 @@ function AdmChecklist({st, setSt, toast}){
       fotoObrigatoriaNC: novaPerg.fotoNC,
       observacaoObrigatoriaNC: true,
       ativa: true,
-      ordem: st.perguntas.length + 1
+      ordem: (st.perguntas.reduce((m,p)=>Math.max(m,Number(p.ordem||0)),0) + 1)
     });
 
-    const perguntaCriada = {
-      id: resposta.pergunta.id,
-      texto: resposta.pergunta.texto,
-      grupo: resposta.pergunta.grupo,
-      frota: resposta.pergunta.tipoFrota.toLowerCase(),
-      frequencia: resposta.pergunta.frequencia,
-      obrigatoria: resposta.pergunta.obrigatoria,
-      fotoNC: resposta.pergunta.fotoObrigatoriaNC,
-      ativa: true
-    };
-
-    setSt(s=>({
-      ...s,
-      perguntas:[...s.perguntas, perguntaCriada]
-    }));
+    await carregarCatalogo();
 
     setNovaPerg({
       texto:'',
@@ -1492,9 +1505,6 @@ function AdmChecklist({st, setSt, toast}){
     toast('Erro ao salvar pergunta: '+e.message);
   }
 };
-  const togglePerg=(id,campo)=> setSt(s=>({...s, perguntas:s.perguntas.map(p=>p.id===id?{...p,[campo]:!p[campo]}:p)}));
-  const cicloFrota=(id)=> setSt(s=>({...s, perguntas:s.perguntas.map(p=>p.id===id?{...p, frota: p.frota==='pesada'?'leve':p.frota==='leve'?'ambas':'pesada'}:p)}));
-  const rotuloFrota={pesada:'Frota pesada', leve:'Frota leve', ambas:'Ambas'};
   const motoristas = [...new Set(st.checklists.map(c=>c.motorista))];
   const relatorio = st.checklists.filter(c=>fMot==='todos'||c.motorista===fMot).sort((a,b)=>b.data.localeCompare(a.data));
   return (
@@ -1548,9 +1558,14 @@ function AdmChecklist({st, setSt, toast}){
           </div>
           <button className="btn btn-p" style={{marginTop:12}} onClick={addPerg}>Adicionar pergunta</button>
         </div>
-        <div className="subtabs">
-          {[['pesada','Frota pesada'],['leve','Frota leve'],['todas','Todas']].map(([v,l])=>
-            <button key={v} className={'subtab'+(fFrota===v?' on':'')} onClick={()=>setFFrota(v)}>{l}</button>)}
+        <div className="row" style={{flexWrap:'wrap'}}>
+          <div className="subtabs grow">
+            {[['pesada','Frota pesada'],['leve','Frota leve'],['todas','Todas']].map(([v,l])=>
+              <button key={v} className={'subtab'+(fFrota===v?' on':'')} onClick={()=>setFFrota(v)}>{l}</button>)}
+          </div>
+          <button className="btn btn-s btn-sm" disabled={carregandoCatalogo} onClick={carregarCatalogo}>
+            {carregandoCatalogo?'Atualizando...':'Atualizar do SharePoint'}
+          </button>
         </div>
         <div className="card" style={{overflowX:'auto'}}>
           <table>
@@ -1559,11 +1574,11 @@ function AdmChecklist({st, setSt, toast}){
               <tr key={p.id} style={{opacity:p.ativa?1:.45}}>
                 <td>{p.texto}</td>
                 <td className="muted">{p.grupo}</td>
-                <td><button className="subtab" style={{padding:'4px 10px'}} onClick={()=>cicloFrota(p.id)}>{rotuloFrota[p.frota]}</button></td>
+                <td><span className="tag tag-neutro">{p.frota==='leve'?'Frota leve':'Frota pesada'}</span></td>
                 <td><span className="tag tag-neutro">{p.frequencia || 'Diária'}</span></td>
-                <td><button className={'subtab'+(p.obrigatoria?' on':'')} style={{padding:'4px 10px'}} onClick={()=>togglePerg(p.id,'obrigatoria')}>{p.obrigatoria?'Sim':'Não'}</button></td>
-                <td><button className={'subtab'+(p.fotoNC?' on':'')} style={{padding:'4px 10px'}} onClick={()=>togglePerg(p.id,'fotoNC')}>{p.fotoNC?'Sim':'Não'}</button></td>
-                <td><button className={'subtab'+(p.ativa?' on':'')} style={{padding:'4px 10px'}} onClick={()=>togglePerg(p.id,'ativa')}>{p.ativa?'Ativa':'Inativa'}</button></td>
+                <td>{p.obrigatoria?'Sim':'Não'}</td>
+                <td>{p.fotoNC?'Sim':'Não'}</td>
+                <td><span className={'tag '+(p.ativa?'tag-ok':'tag-neg')}>{p.ativa?'Ativa':'Inativa'}</span></td>
               </tr>)}</tbody>
           </table>
         </div>
