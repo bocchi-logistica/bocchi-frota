@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Bocchi Frota — Portal do Motorista e ADM Logística (v1.0 — Criação:Edson.B)</title>
+<title>Bocchi Frota — Portal do Motorista e ADM Logística (v1.1.1 — Edson.B)</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
@@ -462,7 +462,9 @@ const QUADS = [
   {id:3, nome:'3° Quadrimestre', meses:['09/2026','10/2026','11/2026','12/2026'], pgto:'até o 5° dia útil de janeiro/2027'},
 ];
 const MES_ATUAL = '06/2026'; // referência da demonstração (último mês com dados)
-const HOJE = '2026-07-02';
+const HOJE = new Intl.DateTimeFormat('en-CA', {
+  timeZone:'America/Sao_Paulo', year:'numeric', month:'2-digit', day:'2-digit'
+}).format(new Date());
 
 const brl = v => (v==null||isNaN(v)) ? '—' : v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const brn = (v,d=2) => (v==null||isNaN(v)) ? '—' : v.toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d});
@@ -610,7 +612,7 @@ function Login({st, onLogin}){
     <div className="login-wrap">
       <div className="login-card">
         <div className="marca">Bocchi <em>Frota</em></div>
-        <div className="login-sub">Portal do motorista e ADM logística — v1.1 — Criação:Edson.B</div>
+        <div className="login-sub">Portal do motorista e ADM logística — v1.1.1 — Edson.B</div>
         <div style={{display:'flex',flexDirection:'column',gap:12}}>
           <div><label>Usuário</label><input value={login} onChange={e=>setLogin(e.target.value)} placeholder="ex.: adelir" autoCapitalize="none"/></div>
           <div><label>Senha</label><input type="password" value={senha} onChange={e=>setSenha(e.target.value)} onKeyDown={e=>e.key==='Enter'&&entrar()} placeholder="••••"/></div>
@@ -813,6 +815,42 @@ function TelaChecklist({st, setSt, user, toast}){
   const [carregandoPerguntas,setCarregandoPerguntas]=useState(false);
   const [erroPerguntas,setErroPerguntas]=useState('');
 
+  const normalizarStatusChecklist = valor=>{
+    const s = String(valor||'pendente').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+    if(s.includes('aprov')) return 'aprovado';
+    if(s.includes('reprov')) return 'reprovado';
+    return 'pendente';
+  };
+
+  const carregarHistorico = async ()=>{
+    if(CONFIG.MODO_DEMONSTRACAO) return;
+    try{
+      const r = await ApiService.consultarMeusChecklists();
+      const vindos = (r.checklists||[]).map(x=>({
+        id:x.protocolo || x.id,
+        idLocal:x.idLocal || '',
+        motorista:x.motoristaNome || user.nome,
+        placa:x.placa || '',
+        frota:String(x.tipoChecklist||'').toUpperCase().includes('LEVE') ? 'leve' : 'pesada',
+        data:String(x.dataHoraLocal||'').slice(0,10),
+        status:normalizarStatusChecklist(x.status),
+        motivoReprova:x.motivoReprova || '',
+        km:String(x.quilometragem||''),
+        respostas:(x.respostas||[]).map(rr=>({
+          pid:String(rr.idPergunta||''),
+          resp:rr.resposta||'NA',
+          obs:rr.observacao||'',
+          foto:rr.linkFoto||null
+        }))
+      }));
+      setSt(s=>({...s, checklists:vindos}));
+    }catch(e){
+      toast('O checklist foi salvo, mas não foi possível atualizar o histórico: '+(e.message||e));
+    }
+  };
+
+  useEffect(()=>{ carregarHistorico(); },[]);
+
   useEffect(()=>{
     let ativo = true;
     const carregar = async ()=>{
@@ -988,6 +1026,7 @@ function TelaChecklist({st, setSt, user, toast}){
       const meu = fila.find(x=>x.idLocal===idLocal);
       if (meu && meu.statusEnvio==='ENVIADO'){
         setUltimoEnvio({protocolo:meu.protocolo, placa:veiculo, quando:meu.dataHoraRecebimento||agoraISO()});
+        await carregarHistorico();
       } else if (!navigator.onLine){
         toast('Sem conexão com a internet. O checklist foi salvo neste aparelho e será enviado quando a conexão retornar.');
       } else {
