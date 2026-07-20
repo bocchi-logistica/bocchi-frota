@@ -956,7 +956,7 @@ function TelaChecklist({st, setSt, user, toast}){
         veiculo: {placa:veiculo, tipo: vSel ? vSel.tipo : ''},
         quilometragem: km,
         combustivel: frotaSel==='leve' ? (extras.combustivel||'') : '',
-        tipoChecklist: frotaSel==='leve' ? 'LEVE' : 'PESADO',
+        tipoChecklist: frotaSel==='leve' ? 'LEVE' : 'PESADA',
         versaoFormulario: CONFIG.VERSAO,
         localizacao: loc,
         respostas: perguntasAtivas.map(p=>{
