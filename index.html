@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Bocchi Frota — Portal do Motorista e ADM Logística (v1 — Edson.B)</title>
+<title>Bocchi Frota — Portal do Motorista e ADM Logística (v2 — Edson.B)</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
@@ -335,6 +335,7 @@ const ApiService = {
      motorista: {
   id: r.motorista.id || 'teste',
   nome: r.motorista.nome || 'MOTORISTA TESTE',
+  login: r.motorista.login || login,
   perfil: (r.motorista.perfil || 'motorista').toLowerCase(),
   veiculoPadrao: r.motorista.veiculoPadrao || '',
   acessos: r.motorista.acessos || {},
@@ -594,7 +595,7 @@ function Login({st, onLogin}){
      onLogin({
   id: 'api' + r.motorista.id,
   nome: r.motorista.nome,
-  login: login.trim().toLowerCase(),
+  login: r.motorista.login || login.trim().toLowerCase(),
   perfil: r.motorista.perfil || 'motorista',
   perms: r.motorista.perms || {
     cargas: true,
@@ -612,7 +613,7 @@ function Login({st, onLogin}){
     <div className="login-wrap">
       <div className="login-card">
         <div className="marca">Bocchi <em>Frota</em></div>
-        <div className="login-sub">Portal do motorista e ADM logística — v1 — Edson.B</div>
+        <div className="login-sub">Portal do motorista e ADM logística — v2 — Edson.B</div>
         <div style={{display:'flex',flexDirection:'column',gap:12}}>
           <div><label>Usuário</label><input value={login} onChange={e=>setLogin(e.target.value)} placeholder="ex.: adelir" autoCapitalize="none"/></div>
           <div><label>Senha</label><input type="password" value={senha} onChange={e=>setSenha(e.target.value)} onKeyDown={e=>e.key==='Enter'&&entrar()} placeholder="••••"/></div>
@@ -1452,7 +1453,7 @@ function AdmChecklist({st, setSt, toast}){
     setSincronizando(true);
     try{
       const r = await ApiService.admListarChecklists();
-      const vindos = (r.itens||[]).map(x=>({
+      const vindos = (r.itens||r.checklists||[]).map(x=>({
         id:x.protocolo, idLocal:x.idLocal, motorista:x.motoristaNome, placa:x.placa,
         frota:(x.tipoChecklist==='LEVE'?'leve':'pesada'), data:(x.dataHoraLocal||'').slice(0,10),
         status:(x.status||'PENDENTE').toLowerCase()==='aprovado'?'aprovado':((x.status||'').toLowerCase()==='reprovado'?'reprovado':'pendente'),
@@ -1496,14 +1497,18 @@ function AdmChecklist({st, setSt, toast}){
     }
   };
 
-  useEffect(()=>{ carregarCatalogo(); },[]);
+  useEffect(()=>{ carregarCatalogo(); sincronizar(); },[]);
 
   const pendentes = st.checklists.filter(c=>c.status==='pendente');
-  const decidir=(ck, status, motivo)=>{
+  const decidir=async(ck, status, motivo)=>{
     /* ALTERAÇÃO V6: em produção a decisão também é gravada no SharePoint via API */
     if (!CONFIG.MODO_DEMONSTRACAO && ck.id && !String(ck.id).startsWith('DEMO-')){
-      ApiService.admStatus(ck.id, status==='aprovado'?'APROVADO':'REPROVADO', motivo||'')
-        .catch(e=>toast('Aviso: falha ao gravar no servidor ('+e.message+').'));
+      try{
+        await ApiService.admStatus(ck.id, status==='aprovado'?'APROVADO':'REPROVADO', motivo||'');
+      }catch(e){
+        toast('Não foi possível gravar a decisão no SharePoint: '+e.message);
+        return;
+      }
     }
     setSt(s=>({...s, checklists:s.checklists.map(x=>x.id===ck.id?{...x, status, motivoReprova:motivo||''}:x)}));
     setVer(null); setReprovando(null); setMotivoRep('');
@@ -1881,6 +1886,20 @@ function AdmApp({st, setSt, user, onSair, toast}){
   const dados = usarDadosMensais(st);
   const [aba,setAba]=useState('painel');
   const abas=[['painel','Painel'],['importar','Importar'],['contest','Contestações'],['check','Check list'],['prem','Premiação'],['cad','Cadastros']];
+  useEffect(()=>{
+    if(CONFIG.MODO_DEMONSTRACAO) return;
+    ApiService.admListarChecklists().then(r=>{
+      const vindos=(r.itens||r.checklists||[]).map(x=>({
+        id:x.protocolo||x.id, idLocal:x.idLocal||'', motorista:x.motoristaNome||'', placa:x.placa||'',
+        frota:String(x.tipoChecklist||'').toUpperCase().includes('LEVE')?'leve':'pesada',
+        data:String(x.dataHoraLocal||'').slice(0,10),
+        status:String(x.status||'PENDENTE').toLowerCase()==='aprovado'?'aprovado':(String(x.status||'').toLowerCase()==='reprovado'?'reprovado':'pendente'),
+        motivoReprova:x.motivoReprova||x.motivoReprovacao||'', km:String(x.quilometragem||''), combustivel:'',
+        respostas:(x.respostas||[]).map(rr=>({pid:String(rr.idPergunta||''),resp:rr.resposta||'NA',obs:rr.observacao||'',foto:rr.linkFoto||null}))
+      }));
+      setSt(s=>({...s,checklists:vindos}));
+    }).catch(e=>toast('Falha ao carregar checklists do SharePoint: '+e.message));
+  },[]);
   return (
     <div className="ashell">
       <div className="atop">
