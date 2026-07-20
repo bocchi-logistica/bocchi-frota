@@ -1429,7 +1429,7 @@ function AdmChecklist({st, setSt, toast}){
   const [ver,setVer]=useState(null);
   const [reprovando,setReprovando]=useState(null);
   const [motivoRep,setMotivoRep]=useState('');
-  const [novaPerg,setNovaPerg]=useState({texto:'', grupo:'', frota:'pesada', obrigatoria:true, fotoNC:false});
+  const [novaPerg,setNovaPerg]=useState({texto:'', grupo:'Anomalias estéticas', frota:'pesada', frequencia:'Diária', obrigatoria:true, fotoNC:false});
   const [fFrota,setFFrota]=useState('pesada');
   const [fMot,setFMot]=useState('todos');
   const pendentes = st.checklists.filter(c=>c.status==='pendente');
@@ -1452,9 +1452,9 @@ function AdmChecklist({st, setSt, toast}){
   try{
     const resposta = await ApiService.criarPergunta({
       texto: novaPerg.texto.trim(),
-      grupo: novaPerg.grupo.trim() || 'Geral',
+      grupo: novaPerg.grupo,
       tipoFrota: novaPerg.frota.toUpperCase(),
-      frequencia: 'DIÁRIA',
+      frequencia: novaPerg.frequencia,
       obrigatoria: novaPerg.obrigatoria,
       fotoObrigatoriaNC: novaPerg.fotoNC,
       observacaoObrigatoriaNC: true,
@@ -1480,8 +1480,9 @@ function AdmChecklist({st, setSt, toast}){
 
     setNovaPerg({
       texto:'',
-      grupo:'',
+      grupo:novaPerg.grupo,
       frota:novaPerg.frota,
+      frequencia:novaPerg.frequencia,
       obrigatoria:true,
       fotoNC:false
     });
@@ -1522,11 +1523,26 @@ function AdmChecklist({st, setSt, toast}){
           <h3 style={{marginBottom:10}}>Nova pergunta</h3>
           <div className="form-grid">
             <div style={{gridColumn:'1/-1'}}><label>Texto</label><input value={novaPerg.texto} onChange={e=>setNovaPerg({...novaPerg, texto:e.target.value})} placeholder="Ex.: Cintas e catracas de amarração em condições"/></div>
-            <div><label>Modelo de check list</label>
+            <div><label>TipoVeículo</label>
               <select value={novaPerg.frota} onChange={e=>setNovaPerg({...novaPerg, frota:e.target.value})}>
-                <option value="pesada">Frota pesada</option><option value="leve">Frota leve</option><option value="ambas">Ambas</option>
-              </select></div>
-            <div><label>Grupo / seção</label><input value={novaPerg.grupo} onChange={e=>setNovaPerg({...novaPerg, grupo:e.target.value})} placeholder="Ex.: Antes da partida"/></div>
+                <option value="leve">FROTA LEVE</option>
+                <option value="pesada">FROTA PESADA</option>
+              </select>
+            </div>
+            <div><label>Grupo</label>
+              <select value={novaPerg.grupo} onChange={e=>setNovaPerg({...novaPerg, grupo:e.target.value})}>
+                <option value="Anomalias estéticas">Anomalias estéticas</option>
+                <option value="Anomalias mecânicas">Anomalias mecânicas</option>
+                <option value="Anomalias elétricas">Anomalias elétricas</option>
+              </select>
+            </div>
+            <div><label>Frequência</label>
+              <select value={novaPerg.frequencia} onChange={e=>setNovaPerg({...novaPerg, frequencia:e.target.value})}>
+                <option value="Diária">Diária</option>
+                <option value="Semanal">Semanal</option>
+                <option value="Mensal">Mensal</option>
+              </select>
+            </div>
             <div><label>Resposta obrigatória?</label><select value={novaPerg.obrigatoria?'s':'n'} onChange={e=>setNovaPerg({...novaPerg, obrigatoria:e.target.value==='s'})}><option value="s">Sim</option><option value="n">Não</option></select></div>
             <div><label>Foto obrigatória se NC?</label><select value={novaPerg.fotoNC?'s':'n'} onChange={e=>setNovaPerg({...novaPerg, fotoNC:e.target.value==='s'})}><option value="n">Não</option><option value="s">Sim</option></select></div>
           </div>
@@ -1538,12 +1554,13 @@ function AdmChecklist({st, setSt, toast}){
         </div>
         <div className="card" style={{overflowX:'auto'}}>
           <table>
-            <thead><tr><th>Pergunta</th><th>Grupo</th><th>Modelo</th><th>Obrigatória</th><th>Foto se NC</th><th>Ativa</th></tr></thead>
+            <thead><tr><th>Pergunta</th><th>Grupo</th><th>TipoVeículo</th><th>Frequência</th><th>Obrigatória</th><th>Foto se NC</th><th>Ativa</th></tr></thead>
             <tbody>{st.perguntas.filter(p=>fFrota==='todas'||p.frota===fFrota||p.frota==='ambas').map(p=>
               <tr key={p.id} style={{opacity:p.ativa?1:.45}}>
                 <td>{p.texto}</td>
                 <td className="muted">{p.grupo}</td>
                 <td><button className="subtab" style={{padding:'4px 10px'}} onClick={()=>cicloFrota(p.id)}>{rotuloFrota[p.frota]}</button></td>
+                <td><span className="tag tag-neutro">{p.frequencia || 'Diária'}</span></td>
                 <td><button className={'subtab'+(p.obrigatoria?' on':'')} style={{padding:'4px 10px'}} onClick={()=>togglePerg(p.id,'obrigatoria')}>{p.obrigatoria?'Sim':'Não'}</button></td>
                 <td><button className={'subtab'+(p.fotoNC?' on':'')} style={{padding:'4px 10px'}} onClick={()=>togglePerg(p.id,'fotoNC')}>{p.fotoNC?'Sim':'Não'}</button></td>
                 <td><button className={'subtab'+(p.ativa?' on':'')} style={{padding:'4px 10px'}} onClick={()=>togglePerg(p.id,'ativa')}>{p.ativa?'Ativa':'Inativa'}</button></td>
