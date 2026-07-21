@@ -625,7 +625,7 @@ function Login({st, onLogin}){
             <label>Senha</label>
             <div className="row" style={{gap:8}}>
               <input className="grow" type={senhaLoginVisivel?'text':'password'} value={senha} onChange={e=>setSenha(e.target.value)} onKeyDown={e=>e.key==='Enter'&&entrar()} placeholder="••••" autoComplete="current-password"/>
-              <button type="button" className="btn btn-s" onClick={()=>setSenhaLoginVisivel(!senhaLoginVisivel)} title={senhaLoginVisivel?'Ocultar senha':'Visualizar senha'} aria-label={senhaLoginVisivel?'Ocultar senha':'Visualizar senha'} style={{minWidth:48,padding:'0 12px',fontSize:20}}>{senhaLoginVisivel?'◉':'👁'}</button>
+              <button type="button" className="btn btn-s btn-sm" onClick={()=>setSenhaLoginVisivel(v=>!v)} title={senhaLoginVisivel?'Ocultar senha':'Visualizar senha'} aria-label={senhaLoginVisivel?'Ocultar senha':'Visualizar senha'} style={{minWidth:72}}>{senhaLoginVisivel?'Ocultar':'Ver'}</button>
             </div>
           </div>
           {erro && <div className="erro-box">{erro}</div>}
