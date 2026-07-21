@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Bocchi Frota — Portal do Motorista e ADM Logística (v1 — Edson.B)</title>
+<title>Bocchi Frota — Portal do Motorista e ADM Logística (v1.2 — Edson.B)</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
@@ -175,7 +175,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 30000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '1.8.8-filtros-relatorios'
+  VERSAO: '1.8.9-perguntas-frequencia'
 };
 
 /* ============================================================================
@@ -392,13 +392,20 @@ const ApiService = {
     return this._req('POST','/admin/checklists/' + encodeURIComponent(protocolo) + '/observacao',{observacao});
 },
 
-obterPerguntas(tipoFrota='TODAS'){
+obterPerguntas(tipoFrota='TODAS', opcoes={}){
     const tipo = String(tipoFrota || 'TODAS').toUpperCase();
-    return this._req('GET','/perguntas?tipoFrota='+encodeURIComponent(tipo));
+    const q = new URLSearchParams({tipoFrota:tipo});
+    if(opcoes.placa) q.set('placa',opcoes.placa);
+    if(opcoes.incluirInativas) q.set('incluirInativas','1');
+    return this._req('GET','/perguntas?'+q.toString());
   },
 
   criarPergunta(dados){
     return this._req('POST','/perguntas',dados);
+  },
+
+  atualizarPergunta(id,dados){
+    return this._req('PATCH','/perguntas/'+encodeURIComponent(id),dados);
   }
 };
 
@@ -603,7 +610,6 @@ function Login({st, onLogin}){
      onLogin({
   id: 'api' + r.motorista.id,
   nome: r.motorista.nome,
-  login: r.motorista.login || login.trim().toLowerCase(),
   perfil: r.motorista.perfil || 'motorista',
   perms: r.motorista.perms || {
     cargas: true,
@@ -621,7 +627,7 @@ function Login({st, onLogin}){
     <div className="login-wrap">
       <div className="login-card">
         <div className="marca">Bocchi <em>Frota</em></div>
-        <div className="login-sub">Portal do motorista e ADM logística — v1 — Edson.B</div>
+        <div className="login-sub">Portal do motorista e ADM logística — v1.2 — Edson.B</div>
         <div style={{display:'flex',flexDirection:'column',gap:12}}>
           <div><label>Usuário</label><input value={login} onChange={e=>setLogin(e.target.value)} placeholder="ex.: adelir" autoCapitalize="none"/></div>
           <div>
@@ -894,7 +900,7 @@ function TelaChecklist({st, setSt, user, toast}){
       setPerguntasAtivas([]);
       try{
         const tipo = frotaSel==='leve' ? 'LEVE' : 'PESADA';
-        const r = await ApiService.obterPerguntas(tipo);
+        const r = await ApiService.obterPerguntas(tipo,{placa:veiculo});
         if(!ativo) return;
         const lista = (r.perguntas || []).map(p=>({
           id:String(p.id),
@@ -917,7 +923,7 @@ function TelaChecklist({st, setSt, user, toast}){
     };
     carregar();
     return ()=>{ ativo=false; };
-  },[frotaSel]);
+  },[frotaSel,veiculo]);
 
   const grupos = [...new Set(perguntasAtivas.map(p=>p.grupo))];
   const chaveRascunho = 'ck_'+user.login+'_'+HOJE;
@@ -967,7 +973,7 @@ function TelaChecklist({st, setSt, user, toast}){
       return;
     }
     if(!perguntasAtivas.length){
-      toast('Nenhuma pergunta ativa cadastrada para este tipo de veículo.');
+      toast('Não há inspeções pendentes para este veículo neste período.');
       return;
     }
     const r = await IDB.lerRascunho(chaveRascunho).catch(()=>null);
@@ -1117,7 +1123,7 @@ function TelaChecklist({st, setSt, user, toast}){
       {!preenchendo && erroPerguntas &&
         <div className="erro-box">Falha ao carregar as perguntas: {erroPerguntas}</div>}
       {!preenchendo && !carregandoPerguntas && !erroPerguntas && perguntasAtivas.length===0 &&
-        <div className="aviso-box">Nenhuma pergunta ativa cadastrada para a {frotaSel==='leve'?'frota leve':'frota pesada'}.</div>}
+        <div className="aviso-box">Não há inspeções pendentes para este veículo neste período.</div>}
       {!preenchendo && carregandoVeiculos && <div className="aviso-box">Carregando veículo vinculado...</div>}
       {!preenchendo && erroVeiculos && <div className="erro-box">Falha ao carregar veículos: {erroVeiculos}</div>}
       {!preenchendo && !carregandoVeiculos && !erroVeiculos && veiculosPermitidos.length===0 && <div className="aviso-box">Nenhum veículo ativo está compartilhado ou vinculado ao seu usuário.</div>}
@@ -1538,7 +1544,9 @@ function AdmChecklist({st, setSt, toast}){
   const [ver,setVer]=useState(null);
   const [reprovando,setReprovando]=useState(null);
   const [motivoRep,setMotivoRep]=useState('');
-  const [novaPerg,setNovaPerg]=useState({texto:'', grupo:'Anomalias estéticas', frota:'pesada', frequencia:'Diária', obrigatoria:true, fotoNC:false});
+  const perguntaVazia={texto:'', grupo:'Anomalias estéticas', frota:'pesada', frequencia:'Diária', ordem:10, obrigatoria:true, fotoNC:false, ativa:true};
+  const [novaPerg,setNovaPerg]=useState(perguntaVazia);
+  const [editandoPergunta,setEditandoPergunta]=useState(null);
   const [fFrota,setFFrota]=useState('pesada');
   const [fMot,setFMot]=useState('todos');
   const mesAtualFiltro = String(HOJE||'').slice(0,7);
@@ -1550,7 +1558,7 @@ function AdmChecklist({st, setSt, toast}){
   const carregarCatalogo = async ()=>{
     setCarregandoCatalogo(true);
     try{
-      const r = await ApiService.obterPerguntas('TODAS');
+      const r = await ApiService.obterPerguntas('TODAS',{incluirInativas:true});
       const lista = (r.perguntas || []).map(p=>({
         id:String(p.id),
         texto:p.texto || '',
@@ -1588,41 +1596,39 @@ function AdmChecklist({st, setSt, toast}){
     setVer(null); setReprovando(null); setMotivoRep('');
     toast(status==='aprovado'?'Check list aprovado.':'Check list reprovado — o motorista deverá refazer.');
   };
-  const addPerg = async()=>{
+  const salvarPergunta = async()=>{
   if(!novaPerg.texto.trim()){
     toast('Escreva o texto da pergunta.');
     return;
   }
+  const ordem=Number(novaPerg.ordem);
+  if(!Number.isFinite(ordem)||ordem<0){toast('Informe uma ordem numérica igual ou maior que zero.');return;}
 
   try{
-    const resposta = await ApiService.criarPergunta({
+    const dados={
       texto: novaPerg.texto.trim(),
       grupo: novaPerg.grupo,
       tipoFrota: novaPerg.frota.toUpperCase(),
       frequencia: novaPerg.frequencia,
+      ordem,
       obrigatoria: novaPerg.obrigatoria,
       fotoObrigatoriaNC: novaPerg.fotoNC,
       observacaoObrigatoriaNC: true,
-      ativa: true,
-      ordem: (st.perguntas.reduce((m,p)=>Math.max(m,Number(p.ordem||0)),0) + 1)
-    });
+      ativa: novaPerg.ativa!==false
+    };
+    if(editandoPergunta) await ApiService.atualizarPergunta(editandoPergunta.id,dados);
+    else await ApiService.criarPergunta(dados);
 
     await carregarCatalogo();
-
-    setNovaPerg({
-      texto:'',
-      grupo:novaPerg.grupo,
-      frota:novaPerg.frota,
-      frequencia:novaPerg.frequencia,
-      obrigatoria:true,
-      fotoNC:false
-    });
-
-    toast('Pergunta salva no SharePoint.');
+    setNovaPerg({...perguntaVazia,grupo:novaPerg.grupo,frota:novaPerg.frota,frequencia:novaPerg.frequencia,ordem:ordem+10});
+    setEditandoPergunta(null);
+    toast(editandoPergunta?'Pergunta atualizada no SharePoint.':'Pergunta salva no SharePoint.');
   }catch(e){
     toast('Erro ao salvar pergunta: '+e.message);
   }
 };
+  const iniciarEdicao=p=>{setEditandoPergunta(p);setNovaPerg({texto:p.texto,grupo:p.grupo,frota:p.frota,frequencia:p.frequencia,ordem:p.ordem,obrigatoria:p.obrigatoria,fotoNC:p.fotoNC,ativa:p.ativa});window.scrollTo({top:0,behavior:'smooth'});};
+  const alternarPergunta=async p=>{try{await ApiService.atualizarPergunta(p.id,{texto:p.texto,grupo:p.grupo,tipoFrota:p.frota.toUpperCase(),frequencia:p.frequencia,ordem:p.ordem,obrigatoria:p.obrigatoria,fotoObrigatoriaNC:p.fotoNC,observacaoObrigatoriaNC:p.observacaoObrigatoriaNC,ativa:!p.ativa});await carregarCatalogo();toast(p.ativa?'Pergunta inativada.':'Pergunta reativada.');}catch(e){toast('Erro ao alterar pergunta: '+e.message);}};
   const motoristas = [...new Set(st.checklists.map(c=>c.motorista).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
   const placas = [...new Set(st.checklists.map(c=>c.placa).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
   const relatorio = st.checklists.filter(c=>(!fMes||String(c.data||'').slice(0,7)===fMes) && (fPlaca==='todas'||c.placa===fPlaca) && (fMot==='todos'||c.motorista===fMot) && (fStatus==='todos'||c.status===fStatus)).sort((a,b)=>b.data.localeCompare(a.data));
@@ -1650,7 +1656,7 @@ function AdmChecklist({st, setSt, toast}){
 
       {sub==='perguntas' && <React.Fragment>
         <div className="card">
-          <h3 style={{marginBottom:10}}>Nova pergunta</h3>
+          <h3 style={{marginBottom:10}}>{editandoPergunta?'Editar pergunta':'Nova pergunta'}</h3>
           <div className="form-grid">
             <div style={{gridColumn:'1/-1'}}><label>Texto</label><input value={novaPerg.texto} onChange={e=>setNovaPerg({...novaPerg, texto:e.target.value})} placeholder="Ex.: Cintas e catracas de amarração em condições"/></div>
             <div><label>TipoVeículo</label>
@@ -1673,10 +1679,11 @@ function AdmChecklist({st, setSt, toast}){
                 <option value="Mensal">Mensal</option>
               </select>
             </div>
+            <div><label>Ordem dentro do grupo</label><input type="number" min="0" step="1" value={novaPerg.ordem} onChange={e=>setNovaPerg({...novaPerg,ordem:e.target.value})}/></div>
             <div><label>Resposta obrigatória?</label><select value={novaPerg.obrigatoria?'s':'n'} onChange={e=>setNovaPerg({...novaPerg, obrigatoria:e.target.value==='s'})}><option value="s">Sim</option><option value="n">Não</option></select></div>
             <div><label>Foto obrigatória se NC?</label><select value={novaPerg.fotoNC?'s':'n'} onChange={e=>setNovaPerg({...novaPerg, fotoNC:e.target.value==='s'})}><option value="n">Não</option><option value="s">Sim</option></select></div>
           </div>
-          <button className="btn btn-p" style={{marginTop:12}} onClick={addPerg}>Adicionar pergunta</button>
+          <div className="row" style={{marginTop:12}}><button className="btn btn-p" onClick={salvarPergunta}>{editandoPergunta?'Salvar alterações':'Adicionar pergunta'}</button>{editandoPergunta&&<button className="btn btn-s" onClick={()=>{setEditandoPergunta(null);setNovaPerg(perguntaVazia);}}>Cancelar edição</button>}</div>
         </div>
         <div className="row" style={{flexWrap:'wrap'}}>
           <div className="subtabs grow">
@@ -1689,16 +1696,18 @@ function AdmChecklist({st, setSt, toast}){
         </div>
         <div className="card" style={{overflowX:'auto'}}>
           <table>
-            <thead><tr><th>Pergunta</th><th>Grupo</th><th>TipoVeículo</th><th>Frequência</th><th>Obrigatória</th><th>Foto se NC</th><th>Ativa</th></tr></thead>
+            <thead><tr><th>Pergunta</th><th>Grupo</th><th>Ordem</th><th>TipoVeículo</th><th>Frequência</th><th>Obrigatória</th><th>Foto se NC</th><th>Ativa</th><th>Ações</th></tr></thead>
             <tbody>{st.perguntas.filter(p=>fFrota==='todas'||p.frota===fFrota||p.frota==='ambas').map(p=>
               <tr key={p.id} style={{opacity:p.ativa?1:.45}}>
                 <td>{p.texto}</td>
                 <td className="muted">{p.grupo}</td>
+                <td><b>{p.ordem}</b></td>
                 <td><span className="tag tag-neutro">{p.frota==='leve'?'Frota leve':'Frota pesada'}</span></td>
                 <td><span className="tag tag-neutro">{p.frequencia || 'Diária'}</span></td>
                 <td>{p.obrigatoria?'Sim':'Não'}</td>
                 <td>{p.fotoNC?'Sim':'Não'}</td>
                 <td><span className={'tag '+(p.ativa?'tag-ok':'tag-neg')}>{p.ativa?'Ativa':'Inativa'}</span></td>
+                <td><div className="row" style={{gap:6,flexWrap:'nowrap'}}><button className="btn btn-s btn-sm" onClick={()=>iniciarEdicao(p)}>Editar</button><button className={'btn btn-sm '+(p.ativa?'btn-s':'btn-p')} onClick={()=>alternarPergunta(p)}>{p.ativa?'Inativar':'Reativar'}</button></div></td>
               </tr>)}</tbody>
           </table>
         </div>
