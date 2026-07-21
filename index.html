@@ -580,6 +580,7 @@ function StatusTag({s}){
 /* ================= LOGIN ================= */
 function Login({st, onLogin}){
   const [login,setLogin]=useState(''); const [senha,setSenha]=useState(''); const [erro,setErro]=useState('');
+  const [senhaLoginVisivel,setSenhaLoginVisivel]=useState(false);
   /* ALTERAÇÃO V6: em produção a autenticação é feita pelo endpoint POST /auth/login
      da API (o token fica só em memória; a senha nunca é gravada no navegador).
      O modo demonstração usa a base local e está claramente separado. */
@@ -620,7 +621,13 @@ function Login({st, onLogin}){
         <div className="login-sub">Portal do motorista e ADM logística — v1 — Edson.B</div>
         <div style={{display:'flex',flexDirection:'column',gap:12}}>
           <div><label>Usuário</label><input value={login} onChange={e=>setLogin(e.target.value)} placeholder="ex.: adelir" autoCapitalize="none"/></div>
-          <div><label>Senha</label><input type="password" value={senha} onChange={e=>setSenha(e.target.value)} onKeyDown={e=>e.key==='Enter'&&entrar()} placeholder="••••"/></div>
+          <div>
+            <label>Senha</label>
+            <div className="row" style={{gap:8}}>
+              <input className="grow" type={senhaLoginVisivel?'text':'password'} value={senha} onChange={e=>setSenha(e.target.value)} onKeyDown={e=>e.key==='Enter'&&entrar()} placeholder="••••" autoComplete="current-password"/>
+              <button type="button" className="btn btn-s" onClick={()=>setSenhaLoginVisivel(!senhaLoginVisivel)} title={senhaLoginVisivel?'Ocultar senha':'Visualizar senha'} aria-label={senhaLoginVisivel?'Ocultar senha':'Visualizar senha'} style={{minWidth:48,padding:'0 12px',fontSize:20}}>{senhaLoginVisivel?'◉':'👁'}</button>
+            </div>
+          </div>
           {erro && <div className="erro-box">{erro}</div>}
           <button className="btn btn-p" disabled={carregando} onClick={entrar}>{carregando?'Entrando...':'Entrar'}</button>
         </div>
