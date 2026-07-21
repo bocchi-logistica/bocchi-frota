@@ -3,7 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Bocchi Frota — Portal do Motorista e ADM Logística (v1.2 — Edson.B)</title>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>Bocchi Logística — Portal do Motorista e ADM Logística (v1.3 — Edson.B)</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
@@ -49,6 +52,7 @@ label{font-size:12.5px; font-weight:600; color:var(--cinza); display:block; marg
 .login-card{width:100%; max-width:400px; background:var(--branco); border-radius:20px; padding:32px 28px; box-shadow:0 20px 60px rgba(0,0,0,.35)}
 .marca{font-family:'Archivo'; font-weight:800; font-size:30px; color:var(--mata); letter-spacing:-.02em}
 .marca em{font-style:normal; color:var(--colheita-escura)}
+.logo-login{display:block;width:170px;max-width:65%;height:auto;margin:0 auto 16px}
 .login-sub{color:var(--cinza); font-size:13.5px; margin:4px 0 24px}
 .hint{background:var(--papel); border:1px dashed var(--linha); border-radius:10px; padding:10px 12px; font-size:12.5px; color:var(--cinza); margin-top:16px}
 
@@ -175,7 +179,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 30000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '1.8.9-perguntas-frequencia'
+  VERSAO: '1.9.1-mobile-autorecuperacao-logo'
 };
 
 /* ============================================================================
@@ -233,6 +237,13 @@ const IDB = {
   listarFila(){
     return this.abrir().then(db=>new Promise((res, rej)=>{
       const rq = db.transaction('fila','readonly').objectStore('fila').getAll();
+      rq.onsuccess = ()=>res(rq.result||[]);
+      rq.onerror = ()=>rej(rq.error);
+    }));
+  },
+  listarRascunhos(){
+    return this.abrir().then(db=>new Promise((res, rej)=>{
+      const rq = db.transaction('rascunho','readonly').objectStore('rascunho').getAll();
       rq.onsuccess = ()=>res(rq.result||[]);
       rq.onerror = ()=>rej(rq.error);
     }));
@@ -451,6 +462,19 @@ const FilaEnvio = {
     if(!login) return [];
     return todos.filter(x=>x.statusEnvio!=='ENVIADO' && this._loginDono(x)===login);
   },
+  async sanear(loginDono){
+    const login = String(loginDono||'').trim().toLowerCase();
+    if(!login) return {removidos:0};
+    const todos = await IDB.listarFila();
+    let removidos = 0;
+    for(const item of todos){
+      if(this._loginDono(item)!==login) continue;
+      const irrecuperavel = this.validar(item).length>0 || item.statusEnvio==='DADOS_INCOMPLETOS';
+      if(irrecuperavel){ await IDB.removerFila(item.idLocal); removidos++; }
+    }
+    if(removidos) this._notificar();
+    return {removidos};
+  },
   async processar(toast, loginDono){
     const login = String(loginDono||'').trim().toLowerCase();
     if(!login) return;
@@ -644,6 +668,7 @@ function Login({st, onLogin}){
      onLogin({
   id: 'api' + r.motorista.id,
   nome: r.motorista.nome,
+  login: r.motorista.login || login.trim().toLowerCase(),
   perfil: r.motorista.perfil || 'motorista',
   perms: r.motorista.perms || {
     cargas: true,
@@ -660,8 +685,8 @@ function Login({st, onLogin}){
   return (
     <div className="login-wrap">
       <div className="login-card">
-        <div className="marca">Bocchi <em>Frota</em></div>
-        <div className="login-sub">Portal do motorista e ADM logística — v1.2 — Edson.B</div>
+        <img src={LOGO} className="logo-login" alt="Bocchi Agrobios"/>
+        <div className="login-sub">Bocchi Logística — Portal do Motorista e ADM Logística — v1.3 — Edson.B</div>
         <div style={{display:'flex',flexDirection:'column',gap:12}}>
           <div><label>Usuário</label><input value={login} onChange={e=>setLogin(e.target.value)} placeholder="ex.: adelir" autoCapitalize="none"/></div>
           <div>
@@ -977,6 +1002,9 @@ function TelaChecklist({st, setSt, user, toast}){
     const on = ()=>{ setOnline(true); FilaEnvio.processar(toast, user.login); };
     const off = ()=>setOnline(false);
     window.addEventListener('online', on); window.addEventListener('offline', off);
+    // Remove automaticamente apenas registros locais impossíveis de recuperar.
+    // Checklists válidos aguardando internet continuam preservados.
+    FilaEnvio.sanear(user.login).then(()=>atualizarFila()).catch(()=>{});
     IDB.lerRascunho(chaveRascunho).then(r=>setTemRascunho(!!r));
     return ()=>{ FilaEnvio.ouvintes.delete(ouv); window.removeEventListener('online', on); window.removeEventListener('offline', off); };
   },[user.login]);
@@ -1325,6 +1353,23 @@ function MotoristaApp({st, setSt, user, onSair, toast}){
   ].filter(Boolean);
   const [aba,setAba]=useState(abas.length?abas[0].id:'');
   const placa = Object.values(st.frota).find(f=>f.motorista===user.nome && f.frota!=='leve');
+  const recuperarAplicativo = async ()=>{
+    const ok = window.confirm(
+      'Usar a recuperação deste aparelho?\n\n'+
+      'Rascunhos e registros incompletos serão apagados. Checklists válidos aguardando internet serão preservados.'
+    );
+    if(!ok) return;
+    try{
+      await FilaEnvio.sanear(user.login);
+      await IDB.apagarRascunho('ck_'+String(user.login||'').toLowerCase()+'_'+HOJE).catch(()=>{});
+      ApiService.sair();
+      const url = new URL(window.location.href);
+      url.searchParams.set('atualizar', CONFIG.VERSAO+'-'+Date.now());
+      window.location.replace(url.toString());
+    }catch(e){
+      toast('Não foi possível recuperar automaticamente. Avise a logística.');
+    }
+  };
   return (
     <div className="mshell">
       <div className="mtop row">
@@ -1340,6 +1385,15 @@ function MotoristaApp({st, setSt, user, onSair, toast}){
         {aba==='cargas' && <TelaCargas st={st} setSt={setSt} user={user} dados={dados} toast={toast}/>}
         {aba==='prem' && <TelaPremiacao st={st} user={user} dados={dados}/>}
         {aba==='check' && <TelaChecklist st={st} setSt={setSt} user={user} toast={toast}/>}
+        <div className="card" style={{padding:12, marginTop:2}}>
+          <div className="row">
+            <div className="grow">
+              <div style={{fontWeight:700, fontSize:13}}>Problema neste aparelho?</div>
+              <div className="muted">Versão {CONFIG.VERSAO}</div>
+            </div>
+            <button className="btn btn-g btn-sm" onClick={recuperarAplicativo}>Limpar dados deste aparelho</button>
+          </div>
+        </div>
       </div>
       <nav className="mtabs">
         {abas.map(a=>
