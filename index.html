@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Bocchi Frota — Portal do Motorista e ADM Logística (v1.8 — Edson.B)</title>
+<title>Bocchi Frota — Portal do Motorista e ADM Logística (v1 — Edson.B)</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
@@ -487,8 +487,6 @@ function estadoInicial(){
   usuarios.push({id:'adm1', nome:'ADM Logística', login:'admin', perfil:'adm', perms:{}});
   const frota = {};
   s.motoristas.forEach(m=>{ if(m.placa) frota[m.placa]={placa:m.placa, tipo:m.tipo, motorista:m.nome, frota:'pesada'}; });
-  frota['IAB1C23']={placa:'IAB1C23', tipo:'GOL', motorista:'', frota:'leve'};
-  frota['IAB4D56']={placa:'IAB4D56', tipo:'KWID', motorista:'', frota:'leve'};
   const cargas = s.cargas.map((c,i)=>({id:'c'+i, data:c[0], motorista:c[1], placa:c[2], origem:c[3], destino:c[4],
     produto:c[5], nota:c[6], peso:c[7], rt:c[8], valor:c[9]}));
   const descontos = s.descontos.map((d,i)=>({id:'d'+i, motorista:d.m, mes:d.mes, item:d.item, valor:d.v, origem:'Importado da planilha'}));
@@ -618,7 +616,7 @@ function Login({st, onLogin}){
     <div className="login-wrap">
       <div className="login-card">
         <div className="marca">Bocchi <em>Frota</em></div>
-        <div className="login-sub">Portal do motorista e ADM logística — v1.8 — Edson.B</div>
+        <div className="login-sub">Portal do motorista e ADM logística — v1 — Edson.B</div>
         <div style={{display:'flex',flexDirection:'column',gap:12}}>
           <div><label>Usuário</label><input value={login} onChange={e=>setLogin(e.target.value)} placeholder="ex.: adelir" autoCapitalize="none"/></div>
           <div>
@@ -805,6 +803,7 @@ function TelaChecklist({st, setSt, user, toast}){
      com idempotência por idLocal). O estado local (setSt) é mantido apenas
      para a demonstração do fluxo de aprovação do ADM. */
   const meus = st.checklists.filter(c=>c.motorista===user.nome).sort((a,b)=>b.data.localeCompare(a.data));
+  const normalizarTexto = valor=>String(valor||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
   const deHoje = meus.find(c=>c.data===HOJE && c.status!=='reprovado');
   const reprovadoHoje = meus.find(c=>c.data===HOJE && c.status==='reprovado');
   const [preenchendo,setPreenchendo]=useState(false);
@@ -817,15 +816,31 @@ function TelaChecklist({st, setSt, user, toast}){
   const [online,setOnline]=useState(navigator.onLine);
   const [temRascunho,setTemRascunho]=useState(false);
   const fileRefs = useRef({});
-  const minhaPlaca = Object.values(st.frota).find(f=>f.motorista===user.nome && f.frota!=='leve');
-  const leves = Object.values(st.frota).filter(f=>f.frota==='leve');
-  const [veiculo,setVeiculo]=useState(minhaPlaca ? minhaPlaca.placa : (leves[0]?leves[0].placa:''));
-  const vSel = st.frota[veiculo];
-  const frotaSel = vSel ? vSel.frota : 'pesada';
+  const veiculosDemo = Object.values(st.frota).filter(f=>f.motorista===user.nome);
+  const [veiculosPermitidos,setVeiculosPermitidos]=useState(CONFIG.MODO_DEMONSTRACAO?veiculosDemo:[]);
+  const [carregandoVeiculos,setCarregandoVeiculos]=useState(!CONFIG.MODO_DEMONSTRACAO);
+  const [erroVeiculos,setErroVeiculos]=useState('');
+  const [veiculo,setVeiculo]=useState(veiculosDemo[0]?.placa||'');
+  const vSel = veiculosPermitidos.find(v=>v.placa===veiculo);
+  const frotaSel = normalizarTexto(vSel?.tipoFrota||vSel?.frota||'').includes('leve') ? 'leve' : 'pesada';
 
   const [perguntasAtivas,setPerguntasAtivas]=useState([]);
   const [carregandoPerguntas,setCarregandoPerguntas]=useState(false);
   const [erroPerguntas,setErroPerguntas]=useState('');
+
+  useEffect(()=>{
+    if(CONFIG.MODO_DEMONSTRACAO) return;
+    let ativo=true;
+    setCarregandoVeiculos(true); setErroVeiculos('');
+    ApiService.obterVeiculos().then(r=>{
+      if(!ativo) return;
+      const lista=r.veiculos||[];
+      setVeiculosPermitidos(lista);
+      setVeiculo(atual=>lista.some(v=>v.placa===atual)?atual:(lista[0]?.placa||''));
+    }).catch(e=>{if(ativo){setVeiculosPermitidos([]);setVeiculo('');setErroVeiculos(e.message||'Não foi possível carregar os veículos.');}})
+      .finally(()=>{if(ativo)setCarregandoVeiculos(false);});
+    return ()=>{ativo=false;};
+  },[user.id,user.login]);
 
   const normalizarStatusChecklist = valor=>{
     const s = String(valor||'pendente').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
@@ -933,6 +948,9 @@ function TelaChecklist({st, setSt, user, toast}){
   },[preenchendo]);
 
   const abrirFormulario = async ()=>{
+    if(carregandoVeiculos){ toast('Aguarde: carregando o veículo vinculado.'); return; }
+    if(erroVeiculos){ toast('Não foi possível abrir o checklist: '+erroVeiculos); return; }
+    if(!veiculo){ toast('Nenhum veículo ativo está compartilhado ou vinculado ao seu usuário.'); return; }
     if(carregandoPerguntas){
       toast('Aguarde: carregando as perguntas do SharePoint.');
       return;
@@ -1095,6 +1113,9 @@ function TelaChecklist({st, setSt, user, toast}){
         <div className="erro-box">Falha ao carregar as perguntas: {erroPerguntas}</div>}
       {!preenchendo && !carregandoPerguntas && !erroPerguntas && perguntasAtivas.length===0 &&
         <div className="aviso-box">Nenhuma pergunta ativa cadastrada para a {frotaSel==='leve'?'frota leve':'frota pesada'}.</div>}
+      {!preenchendo && carregandoVeiculos && <div className="aviso-box">Carregando veículo vinculado...</div>}
+      {!preenchendo && erroVeiculos && <div className="erro-box">Falha ao carregar veículos: {erroVeiculos}</div>}
+      {!preenchendo && !carregandoVeiculos && !erroVeiculos && veiculosPermitidos.length===0 && <div className="aviso-box">Nenhum veículo ativo está compartilhado ou vinculado ao seu usuário.</div>}
 
       {!preenchendo && !deHoje &&
         <div className="card" style={{textAlign:'center', padding:'26px 16px'}}>
@@ -1102,7 +1123,7 @@ function TelaChecklist({st, setSt, user, toast}){
           <h3 style={{margin:'6px 0 2px'}}>{reprovadoHoje ? 'Check list reprovado — refazer' : 'Check list de hoje pendente'}</h3>
           {reprovadoHoje && <div className="erro-box" style={{margin:'8px 0'}}>Motivo: {reprovadoHoje.motivoReprova}</div>}
           <div className="muted" style={{marginBottom:14}}>Inspeção diária — {dataBR(HOJE)}</div>
-          <button className="btn btn-p" onClick={abrirFormulario}>{reprovadoHoje?'Refazer check list':(temRascunho?'Continuar rascunho':'Preencher agora')}</button>
+          <button className="btn btn-p" disabled={carregandoVeiculos||!!erroVeiculos||!veiculo} onClick={abrirFormulario}>{reprovadoHoje?'Refazer check list':(temRascunho?'Continuar rascunho':'Preencher agora')}</button>
         </div>}
       {deHoje &&
         <div className="card row">
@@ -1114,8 +1135,7 @@ function TelaChecklist({st, setSt, user, toast}){
         <div className="card">
           <label>Veículo</label>
           <select value={veiculo} onChange={e=>{setVeiculo(e.target.value); setResps({});}}>
-            {minhaPlaca && <option value={minhaPlaca.placa}>{minhaPlaca.placa} — {minhaPlaca.tipo} (frota pesada)</option>}
-            {leves.map(f=><option key={f.placa} value={f.placa}>{f.placa} — {f.tipo} (frota leve)</option>)}
+            {veiculosPermitidos.map(f=><option key={f.placa} value={f.placa}>{f.placa} — {f.tipoModelo||f.tipo} ({normalizarTexto(f.tipoFrota||f.frota).includes('leve')?'frota leve':'frota pesada'})</option>)}
           </select>
           <div className="form-grid" style={{marginTop:12}}>
             <div><label>KM atual *</label><input type="number" inputMode="numeric" value={extras.km} onChange={e=>setExtras({...extras, km:e.target.value})} placeholder="Ex.: 158420"/></div>
