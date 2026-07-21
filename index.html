@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Bocchi Frota — Portal do Motorista e ADM Logística (v1.2 — Edson.B)</title>
+<title>Bocchi Frota — Portal do Motorista e ADM Logística (v1.3 — Edson.B)</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
@@ -179,7 +179,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 30000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '1.9.1-mobile-autorecuperacao-logo'
+  VERSAO: '1.9.2-cargas-sharepoint'
 };
 
 /* ============================================================================
@@ -358,10 +358,10 @@ const ApiService = {
   perfil: (r.motorista.perfil || 'motorista').toLowerCase(),
   veiculoPadrao: r.motorista.veiculoPadrao || '',
   acessos: r.motorista.acessos || {},
-  perms: {
-    cargas: true,
-    premiacao: true,
-    checklist: true
+  perms: r.motorista.perms || {
+    cargas: false,
+    premiacao: false,
+    checklist: false
   }
 }
     };
@@ -391,6 +391,11 @@ const ApiService = {
   obterConfiguracoes(){ return this._req('GET','/configuracoes'); },
   obterMotoristas(){ return this._req('GET','/motoristas'); },
   obterVeiculos(){ return this._req('GET','/veiculos'); },
+  obterCargas(competencia=''){
+    const q = competencia ? '?competencia='+encodeURIComponent(competencia) : '';
+    return this._req('GET','/cargas/me'+q);
+  },
+  importarCargas(competencia,cargas){ return this._req('POST','/admin/cargas/importar',{competencia,cargas}); },
   admCadastros(){ return this._req('GET','/admin/cadastros'); },
   salvarUsuario(d){ return this._req('POST','/admin/usuarios/salvar',d); },
   salvarVeiculo(d){ return this._req('POST','/admin/veiculos/salvar',d); },
@@ -536,7 +541,7 @@ const QUADS = [
   {id:2, nome:'2° Quadrimestre', meses:['05/2026','06/2026','07/2026','08/2026'], pgto:'até o 5° dia útil de setembro/2026'},
   {id:3, nome:'3° Quadrimestre', meses:['09/2026','10/2026','11/2026','12/2026'], pgto:'até o 5° dia útil de janeiro/2027'},
 ];
-const MES_ATUAL = '06/2026'; // referência da demonstração (último mês com dados)
+const MES_ATUAL = '07/2026';
 const HOJE = new Intl.DateTimeFormat('en-CA', {
   timeZone:'America/Sao_Paulo', year:'numeric', month:'2-digit', day:'2-digit'
 }).format(new Date());
@@ -687,7 +692,7 @@ function Login({st, onLogin}){
     <div className="login-wrap">
       <div className="login-card">
         <img src={LOGO} className="logo-login" alt="Bocchi Agrobios"/>
-        <div className="login-sub">Portal do motorista e ADM logística — v1.2 — Edson.B</div>
+        <div className="login-sub">Portal do motorista e ADM logística — v1.3 — Edson.B</div>
         <div style={{display:'flex',flexDirection:'column',gap:12}}>
           <div><label>Usuário</label><input value={login} onChange={e=>setLogin(e.target.value)} placeholder="ex.: adelir" autoCapitalize="none"/></div>
           <div>
@@ -722,7 +727,7 @@ function TelaCargas({st, setSt, user, dados, toast}){
     setSt(s=>({...s, contestacoes:[...s.contestacoes, {id:'ct'+Date.now(), motorista:user.nome, cargaId:contestar.id, motivo:motivo.trim(), status:'pendente', resposta:'', data:HOJE}]}));
     setContestar(null); setMotivo(''); toast('Contestação enviada para a logística.');
   };
-  const mesesDisp = MESES_2026.slice(0,6);
+  const mesesDisp = MESES_2026.slice(0,7);
   return (
     <React.Fragment>
       <div className="seletor-mes">
@@ -796,7 +801,7 @@ function TelaPremiacao({st, user, dados}){
   return (
     <React.Fragment>
       <div className="seletor-mes">
-        {MESES_2026.slice(0,6).map(m=> <button key={m} className={'mes-pill'+(m===mes?' on':'')} onClick={()=>setMes(m)}>{mesLabel(m)}</button>)}
+        {MESES_2026.slice(0,7).map(m=> <button key={m} className={'mes-pill'+(m===mes?' on':'')} onClick={()=>setMes(m)}>{mesLabel(m)}</button>)}
       </div>
 
       <div className="card regua-wrap">
@@ -1347,6 +1352,16 @@ function ChecklistDetalhe({ck, perguntas, onClose, acoes}){
 /* ================= SHELL MOTORISTA ================= */
 function MotoristaApp({st, setSt, user, onSair, toast}){
   const dados = usarDadosMensais(st);
+  const [carregandoCargas,setCarregandoCargas]=useState(!CONFIG.MODO_DEMONSTRACAO);
+  useEffect(()=>{
+    if(CONFIG.MODO_DEMONSTRACAO) return;
+    let ativo=true;
+    ApiService.obterCargas().then(r=>{
+      if(!ativo) return;
+      setSt(s=>({...s,cargas:Array.isArray(r.cargas)?r.cargas:[]}));
+    }).catch(e=>toast('Não foi possível carregar as cargas: '+e.message)).finally(()=>{if(ativo)setCarregandoCargas(false)});
+    return()=>{ativo=false};
+  },[user.id]);
   const abas = [
     user.perms.cargas && {id:'cargas', ic:'🚛', nome:'Cargas'},
     user.perms.premiacao && {id:'prem', ic:'🏆', nome:'Premiação'},
@@ -1383,7 +1398,8 @@ function MotoristaApp({st, setSt, user, onSair, toast}){
       </div>
       <div className="mbody">
         {abas.length===0 && <div className="card muted">Seu usuário está sem módulos liberados. Fale com a logística.</div>}
-        {aba==='cargas' && <TelaCargas st={st} setSt={setSt} user={user} dados={dados} toast={toast}/>}
+        {aba==='cargas' && carregandoCargas && <div className="card muted">Carregando cargas do SharePoint...</div>}
+        {aba==='cargas' && !carregandoCargas && <TelaCargas st={st} setSt={setSt} user={user} dados={dados} toast={toast}/>}
         {aba==='prem' && <TelaPremiacao st={st} user={user} dados={dados}/>}
         {aba==='check' && <TelaChecklist st={st} setSt={setSt} user={user} toast={toast}/>}
         <div className="card" style={{padding:12, marginTop:2}}>
@@ -1420,7 +1436,7 @@ function AdmPainel({st, dados}){
       <div className="row" style={{flexWrap:'wrap'}}>
         <h2 className="grow">Painel — {mesLabel(mes)}</h2>
         <select style={{width:'auto'}} value={mes} onChange={e=>setMes(e.target.value)}>
-          {MESES_2026.slice(0,6).map(m=><option key={m} value={m}>{mesLabel(m)}</option>)}
+          {MESES_2026.slice(0,7).map(m=><option key={m} value={m}>{mesLabel(m)}</option>)}
         </select>
       </div>
       <div className="cards4">
@@ -1457,10 +1473,8 @@ function AdmImportar({st, setSt, toast}){
   const [resumo,setResumo]=useState(null);
   const [erro,setErro]=useState('');
   const [lendo,setLendo]=useState(false);
+  const [enviando,setEnviando]=useState(false);
   const fileRef = useRef(null);
-
-  const chaveCarga = c => [c.data, c.placa, String(c.nota), c.peso.toFixed(2)].join('|');
-  const existentes = useMemo(()=> new Set(st.cargas.map(chaveCarga)), [st.cargas]);
 
   const processar = (file)=>{
     setErro(''); setResumo(null); setLendo(true);
@@ -1477,10 +1491,9 @@ function AdmImportar({st, setSt, toast}){
         const obrig = ['DATA','PLACA','ORIGEM','DESTINO','PRODUTO','PESO (t)','PREMIAÇÃO'];
         const faltando = obrig.filter(c=>!cols.includes(c));
         if(faltando.length) throw new Error('Colunas não encontradas na aba "'+nomeAba+'": '+faltando.join(', ')+'. Confira se a planilha não foi alterada.');
-        const temMotorista = cols.includes('MATRIZ.MOTORISTA');
         const colNota = cols.includes('N° NOTA') ? 'N° NOTA' : (cols.includes('Nº NOTA') ? 'Nº NOTA' : null);
 
-        const novas=[]; let duplicadas=0, semMotorista=0;
+        const novas=[];
         rows.forEach(r=>{
           if(!r['DATA'] || !r['PLACA']) return;
           let dt;
@@ -1490,16 +1503,11 @@ function AdmImportar({st, setSt, toast}){
             const ut = new Date(d.getTime() + d.getTimezoneOffset()*60000 + 12*3600000);
             dt = ut.getFullYear()+'-'+String(ut.getMonth()+1).padStart(2,'0')+'-'+String(ut.getDate()).padStart(2,'0');
           } else { dt = String(r['DATA']).slice(0,10); }
-          let mot = temMotorista ? r['MATRIZ.MOTORISTA'] : null;
-          if(!mot || mot==='A CONTRATAR'){
-            const f = st.frota[r['PLACA']];
-            mot = f ? f.motorista : null;
-          }
-          if(!mot){ semMotorista++; return; }
-          const c = {data:dt, motorista:mot, placa:r['PLACA'], origem:r['ORIGEM']||'', destino:r['DESTINO']||'',
-            produto:r['PRODUTO']||'', nota:colNota?String(r[colNota]||''):'', peso:Number(r['PESO (t)'])||0,
-            rt:Number(r['R$/t'])||0, valor:Number(r['PREMIAÇÃO'])||0};
-          if(existentes.has(chaveCarga(c))) duplicadas++; else novas.push(c);
+          novas.push({data:dt, placa:String(r['PLACA']||'').trim().toUpperCase(), origem:r['ORIGEM']||'', destino:r['DESTINO']||'',
+            produto:r['PRODUTO']||'', numeroNota:colNota?String(r[colNota]||''):'', valorTon:Number(r['R$/t'])||0,
+            pesoTon:Number(r['PESO (t)'])||0, pesoBruto:Number(r['PESO BRUTO'])||0, freteTotal:Number(r['R$ TOTAL'])||0,
+            premiacao:Number(r['PREMIAÇÃO'])||0, maiorKM:String(r['MAIOR KM?']||''), distancia:Number(r['DISTANCIA'])||0,
+            freteOriginal:Number(r['FRETE ORIGINAL'])||0, diferenca:Number(r['DIFERENÇA'])||0});
         });
 
         // Descontos da aba "Lançamento", se existir
@@ -1515,19 +1523,30 @@ function AdmImportar({st, setSt, toast}){
             if(!jaTem.has([d.motorista,d.mes,d.item,d.valor].join('|'))) descNovos.push(d);
           });
         }
-        setResumo({arquivo:file.name, aba:nomeAba, total:rows.length, novas, duplicadas, semMotorista, descNovos, temMotorista});
+        const porCompetencia={};
+        novas.forEach(c=>{const comp=c.data.slice(0,7);(porCompetencia[comp]||(porCompetencia[comp]=[])).push(c)});
+        setResumo({arquivo:file.name, aba:nomeAba, total:rows.length, novas, porCompetencia, descNovos});
       }catch(e){ setErro(e.message); }
       setLendo(false);
     };
     rd.readAsArrayBuffer(file);
   };
-  const confirmar=()=>{
-    setSt(s=>({...s,
-      cargas:[...s.cargas, ...resumo.novas.map((c,i)=>({...c, id:'ci'+Date.now()+'_'+i}))],
-      descontos:[...s.descontos, ...resumo.descNovos.map((d,i)=>({...d, id:'di'+Date.now()+'_'+i, origem:'Importado de '+resumo.arquivo}))]
-    }));
-    toast(resumo.novas.length+' cargas e '+resumo.descNovos.length+' lançamentos importados.');
-    setResumo(null);
+  const confirmar=async()=>{
+    setEnviando(true); setErro('');
+    try{
+      let gravadas=0;
+      for(const [competencia,cargas] of Object.entries(resumo.porCompetencia)){
+        const r=await ApiService.importarCargas(competencia,cargas);
+        gravadas+=Number(r.gravadas||0);
+      }
+      const atualizadas=await ApiService.obterCargas();
+      setSt(s=>({...s,cargas:Array.isArray(atualizadas.cargas)?atualizadas.cargas:s.cargas}));
+      toast(gravadas+' cargas gravadas no SharePoint.');
+      setResumo(null);
+    }catch(e){
+      const inc=e.detalhe&&e.detalhe.inconsistencias;
+      setErro(e.message+(Array.isArray(inc)&&inc.length?' Primeiros casos: '+inc.slice(0,5).map(x=>x.placa+' em '+dataBR(x.data)+' — '+x.motivo).join('; '):''));
+    }finally{setEnviando(false)}
   };
   return (
     <React.Fragment>
@@ -1548,18 +1567,16 @@ function AdmImportar({st, setSt, toast}){
       {resumo &&
         <div className="card">
           <h3>Conferência antes de importar</h3>
-          <div className="muted" style={{marginBottom:8}}>{resumo.arquivo} · aba "{resumo.aba}"{resumo.temMotorista?' · motorista lido da própria planilha':' · motorista resolvido pelo vínculo da placa'}</div>
+          <div className="muted" style={{marginBottom:8}}>{resumo.arquivo} · aba "{resumo.aba}" · motorista e tipo serão resolvidos pela placa e vigência</div>
           <div className="linha-item"><span>Linhas lidas</span><b className="num">{resumo.total}</b></div>
-          <div className="linha-item"><span>Cargas novas a importar</span><b className="num" style={{color:'var(--mata)'}}>{resumo.novas.length}</b></div>
-          <div className="linha-item"><span>Já existentes (ignoradas)</span><b className="num">{resumo.duplicadas}</b></div>
-          {resumo.semMotorista>0 && <div className="linha-item"><span>Sem motorista identificado (ver vínculo de placas)</span><b className="num" style={{color:'var(--erro)'}}>{resumo.semMotorista}</b></div>}
-          <div className="linha-item"><span>Lançamentos de desconto novos</span><b className="num">{resumo.descNovos.length}</b></div>
+          <div className="linha-item"><span>Cargas a gravar</span><b className="num" style={{color:'var(--mata)'}}>{resumo.novas.length}</b></div>
+          <div className="linha-item"><span>Competências que serão substituídas</span><b className="num">{Object.keys(resumo.porCompetencia).join(', ')}</b></div>
           <div className="row" style={{marginTop:12}}>
-            <button className="btn btn-g" onClick={()=>setResumo(null)}>Cancelar</button>
-            <button className="btn btn-p grow" onClick={confirmar} disabled={!resumo.novas.length && !resumo.descNovos.length}>Confirmar importação</button>
+            <button className="btn btn-g" onClick={()=>setResumo(null)} disabled={enviando}>Cancelar</button>
+            <button className="btn btn-p grow" onClick={confirmar} disabled={enviando||!resumo.novas.length}>{enviando?'Gravando no SharePoint...':'Confirmar importação'}</button>
           </div>
         </div>}
-      <div className="aviso-box">Neste protótipo os dados importados ficam apenas na memória do navegador (somem ao recarregar). Na versão com Supabase, tudo fica gravado no banco.</div>
+      <div className="aviso-box">A importação substitui no SharePoint as cargas das competências presentes no arquivo. Se houver placa sem cadastro ou vínculo inválido, a competência é bloqueada e nenhuma carga daquele mês é alterada.</div>
     </React.Fragment>
   );
 }
