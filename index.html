@@ -1209,7 +1209,7 @@ function TelaChecklist({st, setSt, user, toast}){
           <div style={{fontSize:34}}>📋</div>
           <h3 style={{margin:'6px 0 2px'}}>{reprovadoHoje ? 'Check list reprovado — refazer' : 'Check list de hoje pendente'}</h3>
           {reprovadoHoje && <div className="erro-box" style={{margin:'8px 0'}}>Motivo: {reprovadoHoje.motivoReprova}</div>}
-          <div className="muted" style={{marginBottom:14}}>Inspeção diária — {dataBR(HOJE)}</div>
+          <div className="muted" style={{marginBottom:14}}>Inspeção pendente — {dataBR(HOJE)}</div>
           <button className="btn btn-p" disabled={carregandoVeiculos||!!erroVeiculos||!veiculo} onClick={abrirFormulario}>{reprovadoHoje?'Refazer check list':(temRascunho?'Continuar rascunho':'Preencher agora')}</button>
         </div>}
       {deHoje &&
