@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Bocchi Frota — Portal do Motorista e ADM Logística (v1.2 — Edson.B)</title>
+<title>Bocchi Frota — Portal do Motorista e ADM Logística (v1 — Edson.B)</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
@@ -170,7 +170,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 30000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '7.1.7-placas-ativas'
+  VERSAO: '1.8.0-autenticacao-segura'
 };
 
 /* ============================================================================
@@ -482,9 +482,9 @@ const FOTO_DEMO = 'data:image/svg+xml;utf8,'+encodeURIComponent('<svg xmlns="htt
 
 function estadoInicial(){
   const s = SEED || {motoristas:[],resumos:[],cargas:[],descontos:[]};
-  const usuarios = s.motoristas.map((m,i)=>({id:'u'+i, nome:m.nome, login:m.login, senha:'1234', perfil:'motorista',
+  const usuarios = s.motoristas.map((m,i)=>({id:'u'+i, nome:m.nome, login:m.login, perfil:'motorista',
     perms:{cargas:true, premiacao:true, checklist:true}}));
-  usuarios.push({id:'adm1', nome:'ADM Logística', login:'admin', senha:'admin', perfil:'adm', perms:{}});
+  usuarios.push({id:'adm1', nome:'ADM Logística', login:'admin', perfil:'adm', perms:{}});
   const frota = {};
   s.motoristas.forEach(m=>{ if(m.placa) frota[m.placa]={placa:m.placa, tipo:m.tipo, motorista:m.nome, frota:'pesada'}; });
   frota['IAB1C23']={placa:'IAB1C23', tipo:'GOL', motorista:'', frota:'leve'};
@@ -587,7 +587,7 @@ function Login({st, onLogin}){
   const entrar = async ()=>{
     setErro('');
     if (CONFIG.MODO_DEMONSTRACAO){
-      const u = st.usuarios.find(x=>x.login===login.trim().toLowerCase() && x.senha===senha);
+      const u = st.usuarios.find(x=>x.login===login.trim().toLowerCase());
       if(!u){ setErro('Usuário ou senha incorretos.'); return; }
       onLogin(u);
       return;
@@ -617,7 +617,7 @@ function Login({st, onLogin}){
     <div className="login-wrap">
       <div className="login-card">
         <div className="marca">Bocchi <em>Frota</em></div>
-        <div className="login-sub">Portal do motorista e ADM logística — v1.2 — Edson.B</div>
+        <div className="login-sub">Portal do motorista e ADM logística — v1 — Edson.B</div>
         <div style={{display:'flex',flexDirection:'column',gap:12}}>
           <div><label>Usuário</label><input value={login} onChange={e=>setLogin(e.target.value)} placeholder="ex.: adelir" autoCapitalize="none"/></div>
           <div><label>Senha</label><input type="password" value={senha} onChange={e=>setSenha(e.target.value)} onKeyDown={e=>e.key==='Enter'&&entrar()} placeholder="••••"/></div>
@@ -625,7 +625,7 @@ function Login({st, onLogin}){
           <button className="btn btn-p" disabled={carregando} onClick={entrar}>{carregando?'Entrando...':'Entrar'}</button>
         </div>
         {CONFIG.MODO_DEMONSTRACAO && <div className="hint">
-          <b>MODO DEMONSTRAÇÃO ativo</b> (não usar em produção) — motorista: <b>adelir</b>, <b>diego</b>, <b>jorge</b>... senha <b>1234</b> · ADM: <b>admin</b> / <b>admin</b>
+          <b>MODO DEMONSTRAÇÃO ativo</b> — selecione um usuário cadastrado para navegar sem gravar no SharePoint.
         </div>}
       </div>
     </div>
@@ -1778,12 +1778,39 @@ function AdmCadastros({st, setSt, toast}){
   const [edit,setEdit]=useState(null);
   const [editPlaca,setEditPlaca]=useState(null);
   const [editVinculo,setEditVinculo]=useState(null);
+  const [senhaVisivel,setSenhaVisivel]=useState(false);
   const [cad,setCad]=useState({usuarios:[],veiculos:[],vinculos:[]});
   const carregar=async()=>{try{const r=await ApiService.admCadastros();setCad({usuarios:r.usuarios||[],veiculos:r.veiculos||[],vinculos:r.vinculos||[]});}catch(e){toast('Erro ao carregar cadastros: '+e.message);}};
   useEffect(()=>{carregar();},[]);
   const salvarUser=async()=>{
-    if(!edit.nome.trim()||!edit.login.trim()){ toast('Nome e usuário são obrigatórios.'); return; }
-    try{await ApiService.salvarUsuario({...edit,acessoCargas:edit.perms.cargas,acessoPremiacao:edit.perms.premiacao,acessoChecklist:edit.perms.checklist,acessoHistorico:edit.perms.historico,acessoAdministracao:edit.perms.administracao});setEdit(null);await carregar();toast('Usuário salvo no SharePoint.');}catch(e){toast('Erro ao salvar usuário: '+e.message);}
+    const login=String(edit.login||'').trim().toLowerCase(), usuarioId=String(edit.usuarioId||'').trim().toUpperCase();
+    if(!String(edit.nome||'').trim()||!login||!usuarioId){ toast('Nome, UsuarioID e usuário são obrigatórios.'); return; }
+    if(cad.usuarios.some(u=>u.itemId!==edit.itemId&&String(u.login||'').trim().toLowerCase()===login)){toast('O usuário '+login+' já está cadastrado.');return;}
+    if(cad.usuarios.some(u=>u.itemId!==edit.itemId&&String(u.usuarioId||'').trim().toUpperCase()===usuarioId)){toast('O UsuarioID '+usuarioId+' já está cadastrado.');return;}
+    const novaSenha=String(edit.novaSenha||'');
+    if(!edit.itemId&&!novaSenha){toast('Digite ou gere a senha inicial.');return;}
+    if(novaSenha&&edit.perfil==='MOTORISTA'&&!/^\d{6}$/.test(novaSenha)){toast('Motorista deve usar PIN com exatamente 6 números.');return;}
+    if(novaSenha&&edit.perfil!=='MOTORISTA'&&novaSenha.length<8){toast('Administrador e visualizador devem usar ao menos 8 caracteres.');return;}
+    try{await ApiService.salvarUsuario({...edit,login,usuarioId,acessoCargas:edit.perms.cargas,acessoPremiacao:edit.perms.premiacao,acessoChecklist:edit.perms.checklist,acessoHistorico:edit.perms.historico,acessoAdministracao:edit.perms.administracao});setEdit(null);await carregar();if(novaSenha)window.alert('Acesso salvo com sucesso.\n\nUsuário: '+login+'\nSenha temporária: '+novaSenha+'\n\nCopie agora: ela não poderá ser visualizada novamente.');else toast('Usuário salvo no SharePoint.');}catch(e){toast('Erro ao salvar usuário: '+e.message);}
+  };
+  const gerarSenha=()=>{
+    if(edit.perfil==='MOTORISTA'){
+      const n=crypto.getRandomValues(new Uint32Array(1))[0]%1000000;
+      setEdit({...edit,novaSenha:String(n).padStart(6,'0')});
+    }else{
+      const chars='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#';
+      const rnd=crypto.getRandomValues(new Uint8Array(12));
+      setEdit({...edit,novaSenha:Array.from(rnd,b=>chars[b%chars.length]).join('')});
+    }
+    setSenhaVisivel(true);
+  };
+  const alterarStatusUsuario=async(u)=>{
+    if(!window.confirm((u.ativo?'Inativar':'Reativar')+' o usuário '+u.nome+'?')) return;
+    try{
+      await ApiService.salvarUsuario({...u,ativo:!u.ativo});
+      await carregar();
+      toast('Usuário '+u.nome+' '+(u.ativo?'inativado':'reativado')+' com sucesso.');
+    }catch(e){toast('Erro ao alterar status do usuário: '+e.message);}
   };
   const salvarPlaca=async()=>{
     const placa=String(editPlaca.placa||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
@@ -1815,19 +1842,22 @@ function AdmCadastros({st, setSt, toast}){
       </div>
 
       {sub==='usuarios' && <React.Fragment>
-        <div><button className="btn btn-p" onClick={()=>setEdit({nome:'',usuarioId:'USU-'+String(cad.usuarios.length+1).padStart(3,'0'),login:'',telefone:'',perfil:'MOTORISTA',tipoFrotaAcesso:'FROTA PESADA',ativo:true,perms:{cargas:true,premiacao:true,checklist:true,historico:true,administracao:false}})}>+ Novo usuário</button></div>
+        <div><button className="btn btn-p" onClick={()=>{setSenhaVisivel(false);setEdit({nome:'',usuarioId:'USU-'+String(cad.usuarios.length+1).padStart(3,'0'),login:'',telefone:'',perfil:'MOTORISTA',tipoFrotaAcesso:'FROTA PESADA',ativo:true,novaSenha:'',perms:{cargas:true,premiacao:true,checklist:true,historico:true,administracao:false}})}}>+ Novo usuário</button></div>
         <div className="card" style={{overflowX:'auto'}}>
           <table>
-            <thead><tr><th>Nome</th><th>Usuário</th><th>Perfil</th><th>Cargas</th><th>Premiação</th><th>Check list</th><th></th></tr></thead>
+            <thead><tr><th>Nome</th><th>UsuarioID</th><th>Usuário</th><th>Perfil</th><th>Senha</th><th>Cargas</th><th>Premiação</th><th>Check list</th><th>Status</th><th>Ações</th></tr></thead>
             <tbody>{cad.usuarios.map(u=>
               <tr key={u.itemId}>
                 <td><b>{u.nome}</b></td>
+                <td className="muted">{u.usuarioId}</td>
                 <td className="muted">{u.login}</td>
                 <td><span className="tag tag-ok">{u.perfil}</span></td>
+                <td>{u.senhaCadastrada?'Cadastrada':'Pendente'}</td>
                 {u.perfil==='ADMINISTRADOR' ? <td colSpan="3" className="muted">acesso administrativo</td> : <React.Fragment>
                   <td>{u.acessoCargas?'✓':'—'}</td><td>{u.acessoPremiacao?'✓':'—'}</td><td>{u.acessoChecklist?'✓':'—'}</td>
                 </React.Fragment>}
-                <td><button className="btn btn-s btn-sm" onClick={()=>setEdit({...u,perms:{cargas:u.acessoCargas,premiacao:u.acessoPremiacao,checklist:u.acessoChecklist,historico:u.acessoHistorico,administracao:u.acessoAdministracao}})}>Editar</button></td>
+                <td><span className={'tag '+(u.ativo?'tag-ok':'tag-neutro')}>{u.ativo?'Ativo':'Inativo'}</span></td>
+                <td><div className="row" style={{gap:6,flexWrap:'nowrap'}}><button className="btn btn-s btn-sm" onClick={()=>{setSenhaVisivel(false);setEdit({...u,novaSenha:'',perms:{cargas:u.acessoCargas,premiacao:u.acessoPremiacao,checklist:u.acessoChecklist,historico:u.acessoHistorico,administracao:u.acessoAdministracao}})}}>Editar</button><button className={'btn btn-sm '+(u.ativo?'btn-s':'btn-p')} onClick={()=>alterarStatusUsuario(u)}>{u.ativo?'Inativar':'Reativar'}</button></div></td>
               </tr>)}</tbody>
           </table>
         </div>
@@ -1870,6 +1900,16 @@ function AdmCadastros({st, setSt, toast}){
                 <option>MOTORISTA</option><option>ADMINISTRADOR</option><option>VISUALIZADOR</option>
               </select></div>
             <div><label>Acesso à frota</label><select value={edit.tipoFrotaAcesso} onChange={e=>setEdit({...edit,tipoFrotaAcesso:e.target.value})}><option>FROTA PESADA</option><option>FROTA LEVE</option><option>AMBAS</option></select></div>
+            <div><label>Status do usuário</label><select value={edit.ativo?'s':'n'} onChange={e=>setEdit({...edit,ativo:e.target.value==='s'})}><option value="s">Ativo</option><option value="n">Inativo</option></select></div>
+            <div>
+              <label>{edit.itemId?(edit.senhaCadastrada?'Redefinir senha (deixe vazio para manter)':'Definir senha'):'Senha inicial'}</label>
+              <div className="row" style={{gap:8}}>
+                <input className="grow" type={senhaVisivel?'text':'password'} value={edit.novaSenha||''} onChange={e=>setEdit({...edit,novaSenha:e.target.value})} placeholder={edit.perfil==='MOTORISTA'?'6 números':'mínimo 8 caracteres'}/>
+                <button type="button" className="btn btn-s btn-sm" onClick={()=>setSenhaVisivel(!senhaVisivel)}>{senhaVisivel?'Ocultar':'Ver'}</button>
+                <button type="button" className="btn btn-s btn-sm" onClick={gerarSenha}>Gerar</button>
+              </div>
+              <div className="muted" style={{fontSize:12,marginTop:5}}>A senha aparece somente agora. Depois de salva, será possível apenas redefini-la.</div>
+            </div>
             {edit.perfil!=='ADMINISTRADOR' && <div>
               <label>Módulos liberados</label>
               <div className="subtabs">
