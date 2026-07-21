@@ -53,13 +53,13 @@ label{font-size:12.5px; font-weight:600; color:var(--cinza); display:block; marg
 .hint{background:var(--papel); border:1px dashed var(--linha); border-radius:10px; padding:10px 12px; font-size:12.5px; color:var(--cinza); margin-top:16px}
 
 /* ---------- SHELL MOTORISTA ---------- */
-.mshell{max-width:520px; margin:0 auto; min-height:100vh; display:flex; flex-direction:column; background:var(--papel)}
+.mshell{max-width:520px; margin:0 auto; min-height:100vh; min-height:100dvh; display:flex; flex-direction:column; background:var(--papel)}
 .mtop{background:var(--mata); color:#fff; padding:14px 16px 12px; position:sticky; top:0; z-index:20}
 .mtop .nome{font-family:'Archivo'; font-weight:700; font-size:17px}
 .mtop .sub{font-size:12px; opacity:.75}
 .chip-placa{background:rgba(255,255,255,.14); border-radius:8px; padding:4px 10px; font-family:'Archivo'; font-weight:700; font-size:13px; letter-spacing:.06em}
-.mbody{flex:1; padding:14px 14px 90px; display:flex; flex-direction:column; gap:12px}
-.mtabs{position:fixed; bottom:0; left:0; right:0; margin:0 auto; max-width:520px; background:var(--branco); border-top:1px solid var(--linha); display:flex; z-index:30; padding-bottom:env(safe-area-inset-bottom)}
+.mbody{flex:0 0 auto; padding:14px; display:flex; flex-direction:column; gap:12px}
+.mtabs{position:sticky; bottom:0; margin-top:0; width:100%; max-width:520px; background:var(--branco); border-top:1px solid var(--linha); display:flex; z-index:30; padding-bottom:env(safe-area-inset-bottom)}
 .mtab{flex:1; padding:10px 4px 12px; text-align:center; color:var(--cinza); font-size:11.5px; font-weight:600}
 .mtab .ic{font-size:21px; display:block; margin-bottom:2px}
 .mtab.on{color:var(--mata)}
@@ -292,8 +292,10 @@ function comprimirImagem(arquivo){
    Em MODO_DEMONSTRACAO as funções simulam o servidor localmente.
    ========================================================================== */
 let _token = null; // token de sessão em memória (nunca gravar senha no navegador)
+let _loginSessao = null; // identifica o proprietário do token atual
 const ApiService = {
   get token(){ return _token; },
+  get loginAtual(){ return _loginSessao; },
   _headers(){
     const h = {'Content-Type':'application/json'};
     if (_token) h['Authorization'] = 'Bearer ' + _token;
@@ -333,6 +335,7 @@ const ApiService = {
 
   if (r && r.ok) {
     _token = r.token;
+    _loginSessao = String(r.motorista.login || login || '').trim().toLowerCase();
 
     return {
       sucesso: true,
@@ -358,7 +361,7 @@ const ApiService = {
     erro: r?.erro || 'Login ou PIN inválido.'
   };
 },
-  sair(){ _token = null; },
+  sair(){ _token = null; _loginSessao = null; },
   enviarChecklist(registro){
     if (CONFIG.MODO_DEMONSTRACAO){
       // Simula o servidor com prefixo DEMO, sem confundir com protocolos reais
@@ -419,22 +422,53 @@ const FilaEnvio = {
   _processando: false,
   ouvintes: new Set(),
   _notificar(){ this.ouvintes.forEach(f=>{ try{f();}catch(e){} }); },
+  validar(registro){
+    const faltando = [];
+    if(!String(registro?.idLocal||'').trim()) faltando.push('identificador');
+    if(!String(registro?.motorista?.nome||'').trim()) faltando.push('motorista');
+    if(!String(registro?.motorista?.login||'').trim()) faltando.push('login');
+    if(!String(registro?.veiculo?.placa||'').trim()) faltando.push('placa');
+    if(!Array.isArray(registro?.respostas) || !registro.respostas.length) faltando.push('respostas');
+    return faltando;
+  },
+  _loginDono(registro){
+    return String(registro?.donoLogin || registro?.motorista?.login || '').trim().toLowerCase();
+  },
   async adicionar(registro){
+    const faltando = this.validar(registro);
+    if(faltando.length) throw new Error('Não foi possível salvar: faltam '+faltando.join(', ')+'.');
+    // Vincula definitivamente o registro ao usuário que o criou neste aparelho.
+    // Isso impede que outro motorista veja ou envie a fila após uma troca de login.
+    registro.donoLogin = this._loginDono(registro);
     registro.statusEnvio = 'PENDENTE';
     registro.tentativas = 0;
     await IDB.salvarFila(registro);
     this._notificar();
   },
-  async pendentes(){
+  async pendentes(loginDono){
     const todos = await IDB.listarFila();
-    return todos.filter(x=>x.statusEnvio!=='ENVIADO');
+    const login = String(loginDono||'').trim().toLowerCase();
+    if(!login) return [];
+    return todos.filter(x=>x.statusEnvio!=='ENVIADO' && this._loginDono(x)===login);
   },
-  async processar(toast){
+  async processar(toast, loginDono){
+    const login = String(loginDono||'').trim().toLowerCase();
+    if(!login) return;
+    // Um temporizador de uma sessão anterior pode disparar depois da troca de
+    // motorista. Nesse caso ele é encerrado sem acessar nem enviar o registro.
+    if(!CONFIG.MODO_DEMONSTRACAO && ApiService.loginAtual!==login) return;
     if (this._processando) return; // evita tentativas simultâneas
     this._processando = true;
     try{
-      const fila = await this.pendentes();
+      const fila = await this.pendentes(login);
       for (const item of fila){
+        const faltando = this.validar(item);
+        if(faltando.length){
+          item.statusEnvio = 'DADOS_INCOMPLETOS';
+          item.ultimoErro = 'Registro antigo incompleto: faltam '+faltando.join(', ')+'. Exclua e refaça o checklist.';
+          await IDB.salvarFila(item); this._notificar();
+          continue;
+        }
         item.statusEnvio = 'ENVIANDO';
         await IDB.salvarFila(item); this._notificar();
         try{
@@ -456,7 +490,7 @@ const FilaEnvio = {
           // Agenda nova tentativa com intervalo crescente
           if (item.statusEnvio==='PENDENTE'){
             const delay = CONFIG.RETRY_DELAYS_MS[Math.min(item.tentativas, CONFIG.RETRY_DELAYS_MS.length-1)];
-            setTimeout(()=>this.processar(toast), delay);
+            setTimeout(()=>this.processar(toast, login), delay);
           }
         }
         this._notificar();
@@ -466,8 +500,8 @@ const FilaEnvio = {
     }
   }
 };
-// Quando a internet voltar, tenta enviar os pendentes automaticamente
-window.addEventListener('online', ()=>FilaEnvio.processar());
+// O reenvio automático é registrado dentro da tela do motorista, onde o login
+// atual está disponível. Nunca processar uma fila sem identificar o proprietário.
 
 
 /* ================= DADOS / HELPERS ================= */
@@ -935,17 +969,17 @@ function TelaChecklist({st, setSt, user, toast}){
   const mesFiltroLabel = filtroMesHistorico ? mesLabel(filtroMesHistorico.slice(5,7)+'/'+filtroMesHistorico.slice(0,4)) : 'todos os meses';
 
   /* ALTERAÇÃO V6: monitorar fila local e estado da conexão */
-  const atualizarFila = ()=>{ FilaEnvio.pendentes().then(setPendentes).catch(()=>{}); };
+  const atualizarFila = ()=>{ FilaEnvio.pendentes(user.login).then(setPendentes).catch(()=>{}); };
   useEffect(()=>{
     atualizarFila();
     const ouv = ()=>atualizarFila();
     FilaEnvio.ouvintes.add(ouv);
-    const on = ()=>{ setOnline(true); FilaEnvio.processar(toast); };
+    const on = ()=>{ setOnline(true); FilaEnvio.processar(toast, user.login); };
     const off = ()=>setOnline(false);
     window.addEventListener('online', on); window.addEventListener('offline', off);
     IDB.lerRascunho(chaveRascunho).then(r=>setTemRascunho(!!r));
     return ()=>{ FilaEnvio.ouvintes.delete(ouv); window.removeEventListener('online', on); window.removeEventListener('offline', off); };
-  },[]);
+  },[user.login]);
 
   /* ALTERAÇÃO V6: salvamento automático do rascunho + aviso ao sair da página */
   useEffect(()=>{
@@ -1012,6 +1046,12 @@ function TelaChecklist({st, setSt, user, toast}){
   /* ALTERAÇÃO V6: validações, payload padronizado, fila IndexedDB e envio à API */
   const enviar = async ()=>{
     if (enviando) return; // prevenção contra clique duplo
+    if(!String(user?.nome||'').trim() || !String(user?.login||'').trim()){
+      toast('Sua sessão está incompleta. Saia, entre novamente e refaça o checklist.'); return;
+    }
+    if(!String(veiculo||'').trim()){
+      toast('Selecione um veículo antes de enviar.'); return;
+    }
     // Quilometragem obrigatória e válida para qualquer frota
     const km = parseInt(extras.km, 10);
     if (!extras.km || isNaN(km) || km<=0){ toast('Informe a quilometragem atual do veículo (somente números).'); return; }
@@ -1064,7 +1104,7 @@ function TelaChecklist({st, setSt, user, toast}){
       }
 
       // 2) tenta enviar agora; só marca ENVIADO com confirmação real da API
-      await FilaEnvio.processar(toast);
+      await FilaEnvio.processar(toast, user.login);
       const fila = await IDB.listarFila();
       const meu = fila.find(x=>x.idLocal===idLocal);
       if (meu && meu.statusEnvio==='ENVIADO'){
@@ -1083,8 +1123,13 @@ function TelaChecklist({st, setSt, user, toast}){
     }
   };
 
-  const reenviarPendentes = ()=>{ toast('Tentando enviar novamente...'); FilaEnvio.processar(toast); };
-  const rotuloStatusEnvio = {RASCUNHO:'Rascunho', PENDENTE:'Aguardando envio', ENVIANDO:'Enviando...', ENVIADO:'Enviado', ERRO:'Falha no envio'};
+  const reenviarPendentes = ()=>{ toast('Tentando enviar novamente...'); FilaEnvio.processar(toast, user.login); };
+  const excluirRegistroInvalido = async idLocal=>{
+    if(!window.confirm('Excluir este envio incompleto deste aparelho? Depois será necessário refazer o checklist.')) return;
+    await IDB.removerFila(idLocal); atualizarFila();
+    toast('Registro incompleto removido. Refaça o checklist.');
+  };
+  const rotuloStatusEnvio = {RASCUNHO:'Rascunho', PENDENTE:'Aguardando envio', ENVIANDO:'Enviando...', ENVIADO:'Enviado', ERRO:'Falha no envio', DADOS_INCOMPLETOS:'Precisa ser refeito'};
 
   return (
     <React.Fragment>
@@ -1095,9 +1140,11 @@ function TelaChecklist({st, setSt, user, toast}){
         <div className="card" style={{borderLeft:'4px solid var(--colheita)'}}>
           <div className="row">
             <div className="grow"><b>{pendentes.length} checklist(s) aguardando envio</b>
-              <div className="muted">{pendentes.map(p=>dataBR(p.dataHoraLocal.slice(0,10))+' · '+p.veiculo.placa+' · '+(rotuloStatusEnvio[p.statusEnvio]||p.statusEnvio)+(p.ultimoErro?' ('+p.ultimoErro+')':'')).join(' — ')}</div>
+              <div className="muted">{pendentes.map(p=>dataBR(String(p.dataHoraLocal||'').slice(0,10))+' · '+(p.veiculo?.placa||'placa não informada')+' · '+(rotuloStatusEnvio[p.statusEnvio]||p.statusEnvio)+(p.ultimoErro?' ('+p.ultimoErro+')':'')).join(' — ')}</div>
             </div>
-            <button className="btn btn-s btn-sm" onClick={reenviarPendentes}>Tentar enviar novamente</button>
+            {pendentes.some(p=>p.statusEnvio==='DADOS_INCOMPLETOS')
+              ? <button className="btn btn-d btn-sm" onClick={()=>excluirRegistroInvalido(pendentes.find(p=>p.statusEnvio==='DADOS_INCOMPLETOS').idLocal)}>Excluir e refazer</button>
+              : <button className="btn btn-s btn-sm" onClick={reenviarPendentes}>Tentar enviar novamente</button>}
           </div>
         </div>}
       {ultimoEnvio &&
@@ -2095,8 +2142,8 @@ function App(){
   return (
     <React.Fragment>
       {!userAtual && <Login st={st} onLogin={setUser}/>}
-      {userAtual && ehMotorista && <MotoristaApp st={st} setSt={setSt} user={userAtual} onSair={()=>setUser(null)} toast={toast}/>}
-      {userAtual && (ehAdministrador || ehVisualizador) && <AdmApp st={st} setSt={setSt} user={userAtual} onSair={()=>setUser(null)} toast={toast}/>}
+      {userAtual && ehMotorista && <MotoristaApp st={st} setSt={setSt} user={userAtual} onSair={()=>{ApiService.sair();setUser(null);}} toast={toast}/>}
+      {userAtual && (ehAdministrador || ehVisualizador) && <AdmApp st={st} setSt={setSt} user={userAtual} onSair={()=>{ApiService.sair();setUser(null);}} toast={toast}/>}
       {userAtual && !ehMotorista && !ehAdministrador && !ehVisualizador && (
         <div className="login-wrap"><div className="login-card">
           <div className="marca">Bocchi <em>Frota</em></div>
