@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Bocchi Frota — Portal do Motorista e ADM Logística (v1 — Edson.B)</title>
+<title>Bocchi Frota — Portal do Motorista e ADM Logística (v1.2 — Edson.B)</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
@@ -170,7 +170,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 30000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '7.1.3-cadastros-sharepoint'
+  VERSAO: '7.1.7-placas-ativas'
 };
 
 /* ============================================================================
@@ -617,7 +617,7 @@ function Login({st, onLogin}){
     <div className="login-wrap">
       <div className="login-card">
         <div className="marca">Bocchi <em>Frota</em></div>
-        <div className="login-sub">Portal do motorista e ADM logística — v1 — Edson.B</div>
+        <div className="login-sub">Portal do motorista e ADM logística — v1.2 — Edson.B</div>
         <div style={{display:'flex',flexDirection:'column',gap:12}}>
           <div><label>Usuário</label><input value={login} onChange={e=>setLogin(e.target.value)} placeholder="ex.: adelir" autoCapitalize="none"/></div>
           <div><label>Senha</label><input type="password" value={senha} onChange={e=>setSenha(e.target.value)} onKeyDown={e=>e.key==='Enter'&&entrar()} placeholder="••••"/></div>
@@ -1786,7 +1786,20 @@ function AdmCadastros({st, setSt, toast}){
     try{await ApiService.salvarUsuario({...edit,acessoCargas:edit.perms.cargas,acessoPremiacao:edit.perms.premiacao,acessoChecklist:edit.perms.checklist,acessoHistorico:edit.perms.historico,acessoAdministracao:edit.perms.administracao});setEdit(null);await carregar();toast('Usuário salvo no SharePoint.');}catch(e){toast('Erro ao salvar usuário: '+e.message);}
   };
   const salvarPlaca=async()=>{
-    try{await ApiService.salvarVeiculo(editPlaca);setEditPlaca(null);await carregar();toast('Veículo salvo no SharePoint.');}catch(e){toast('Erro ao salvar veículo: '+e.message);}
+    const placa=String(editPlaca.placa||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+    if(!placa){toast('Informe a placa do veículo.');return;}
+    const repetida=cad.veiculos.some(v=>v.itemId!==editPlaca.itemId&&String(v.placa||'').toUpperCase().replace(/[^A-Z0-9]/g,'')===placa);
+    if(repetida){toast('A placa '+placa+' já está cadastrada.');return;}
+    try{await ApiService.salvarVeiculo({...editPlaca,placa});setEditPlaca(null);await carregar();toast('Veículo salvo no SharePoint.');}catch(e){toast('Erro ao salvar veículo: '+e.message);}
+  };
+  const alterarStatusPlaca=async(f)=>{
+    const acao=f.ativo?'inativar':'reativar';
+    if(!window.confirm((f.ativo?'Inativar':'Reativar')+' a placa '+f.placa+'?')) return;
+    try{
+      await ApiService.salvarVeiculo({...f,ativo:!f.ativo});
+      await carregar();
+      toast('Placa '+f.placa+' '+(f.ativo?'inativada':'reativada')+' com sucesso.');
+    }catch(e){toast('Erro ao '+acao+' placa: '+e.message);}
   };
   const salvarVinculo=async()=>{const u=cad.usuarios.find(x=>x.itemId===editVinculo.usuarioItemId),v=cad.veiculos.find(x=>x.itemId===editVinculo.veiculoItemId);if(!u||!v){toast('Selecione usuário e veículo.');return;}try{await ApiService.salvarVinculo({...editVinculo,usuarioId:u.usuarioId,titulo:u.usuarioId+' - '+v.placa});setEditVinculo(null);await carregar();toast('Vínculo salvo no SharePoint.');}catch(e){toast('Erro ao salvar vínculo: '+e.message);}};
   const tipos=['CAÇAMBA 4º EIXO','CARRO','CAÇAMBA VANDERLEIA','BICAÇAMBA','BITRUCK','TOCO'];
@@ -1824,14 +1837,15 @@ function AdmCadastros({st, setSt, toast}){
         <div><button className="btn btn-p" onClick={()=>setEditPlaca({placa:'',tipoFrota:'FROTA PESADA',tipoModelo:'CAÇAMBA 4º EIXO',ativo:true,usoCompartilhado:false})}>+ Novo veículo</button></div>
         <div className="card" style={{overflowX:'auto'}}>
           <table>
-            <thead><tr><th>Placa</th><th>Frota</th><th>Tipo / modelo</th><th>Uso</th><th>Ativo</th><th></th></tr></thead>
+            <thead><tr><th>Placa</th><th>Frota</th><th>Tipo / modelo</th><th>Uso</th><th>Status</th><th>Ações</th></tr></thead>
             <tbody>{cad.veiculos.map(f=>
               <tr key={f.placa}>
                 <td><b className="num">{f.placa}</b></td>
                 <td><span className="tag tag-ok">{f.tipoFrota}</span></td>
                 <td>{f.tipoModelo}</td>
-                <td>{f.usoCompartilhado?'Compartilhado':'Por vínculo'}</td><td>{f.ativo?'✓':'—'}</td>
-                <td><button className="btn btn-s btn-sm" onClick={()=>setEditPlaca({...f})}>Editar</button></td>
+                <td>{f.usoCompartilhado?'Compartilhado':'Por vínculo'}</td>
+                <td><span className={'tag '+(f.ativo?'tag-ok':'tag-neutro')}>{f.ativo?'Ativo':'Inativo'}</span></td>
+                <td><div className="row" style={{gap:6,flexWrap:'nowrap'}}><button className="btn btn-s btn-sm" onClick={()=>setEditPlaca({...f})}>Editar</button><button className={'btn btn-sm '+(f.ativo?'btn-s':'btn-p')} onClick={()=>alterarStatusPlaca(f)}>{f.ativo?'Inativar':'Reativar'}</button></div></td>
               </tr>)}</tbody>
           </table>
         </div>
@@ -1878,6 +1892,7 @@ function AdmCadastros({st, setSt, toast}){
                 <select value={editPlaca.tipoModelo} onChange={e=>setEditPlaca({...editPlaca, tipoModelo:e.target.value})}>
                   {tipos.map(t=><option key={t}>{t}</option>)}
                 </select></div><div><label>Uso compartilhado?</label><select value={editPlaca.usoCompartilhado?'s':'n'} onChange={e=>setEditPlaca({...editPlaca,usoCompartilhado:e.target.value==='s'})}><option value="n">Não — exige vínculo</option><option value="s">Sim</option></select></div>
+            <div><label>Status do veículo</label><select value={editPlaca.ativo?'s':'n'} onChange={e=>setEditPlaca({...editPlaca,ativo:e.target.value==='s'})}><option value="s">Ativo</option><option value="n">Inativo</option></select></div>
             <button className="btn btn-p" onClick={salvarPlaca}>Salvar placa</button>
           </div>
         </Modal>}
