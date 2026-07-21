@@ -103,6 +103,11 @@ label{font-size:12.5px; font-weight:600; color:var(--cinza); display:block; marg
 .resp-btn.na.on{background:#EDEDE5; border-color:var(--cinza); color:var(--tinta)}
 .foto-thumb{width:74px; height:74px; object-fit:cover; border-radius:10px; border:1.5px solid var(--linha)}
 .foto-add{width:74px; height:74px; border-radius:10px; border:1.5px dashed var(--linha); display:flex; align-items:center; justify-content:center; color:var(--cinza); font-size:24px; background:var(--branco)}
+.foto-clicavel{cursor:zoom-in; transition:transform .15s, box-shadow .15s}
+.foto-clicavel:hover{transform:scale(1.03); box-shadow:0 4px 14px #0002}
+.visualizador-foto{position:fixed; inset:0; z-index:3000; background:#111e; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:18px}
+.visualizador-foto img{max-width:min(1100px,96vw); max-height:78vh; object-fit:contain; background:#fff; border-radius:10px; box-shadow:0 12px 40px #0008}
+.visualizador-foto-acoes{display:flex; gap:10px; margin-top:14px; flex-wrap:wrap; justify-content:center}
 
 /* ---------- SHELL ADM ---------- */
 .ashell{min-height:100vh; display:flex; flex-direction:column}
@@ -170,7 +175,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 30000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '1.8.5-usuarioid-corrigido'
+  VERSAO: '1.8.8-filtros-relatorios'
 };
 
 /* ============================================================================
@@ -809,6 +814,9 @@ function TelaChecklist({st, setSt, user, toast}){
   const [preenchendo,setPreenchendo]=useState(false);
   const [resps,setResps]=useState({});
   const [ver,setVer]=useState(null);
+  const mesAtualFiltro = String(HOJE||'').slice(0,7);
+  const [filtroMesHistorico,setFiltroMesHistorico]=useState(mesAtualFiltro);
+  const [filtroStatusHistorico,setFiltroStatusHistorico]=useState('todos');
   const [extras,setExtras]=useState({km:'', combustivel:''});
   const [enviando,setEnviando]=useState(false);
   const [ultimoEnvio,setUltimoEnvio]=useState(null);   // confirmação real da API (protocolo)
@@ -914,12 +922,11 @@ function TelaChecklist({st, setSt, user, toast}){
   const grupos = [...new Set(perguntasAtivas.map(p=>p.grupo))];
   const chaveRascunho = 'ck_'+user.login+'_'+HOJE;
 
-  // contadores do mês corrente (referência da demonstração)
-  const mesRef = mesDaData(HOJE);
-  const doMes = meus.filter(c=>mesDaData(c.data)===mesRef);
-  const mesAnt = meus.filter(c=>mesDaData(c.data)==='06/2026');
+  // Histórico e indicadores respeitam o mês/status escolhidos pelo motorista.
+  const historicoFiltrado = meus.filter(c=>(!filtroMesHistorico || String(c.data||'').slice(0,7)===filtroMesHistorico) && (filtroStatusHistorico==='todos' || c.status===filtroStatusHistorico));
   const cont = lista => ({tot:lista.length, ap:lista.filter(c=>c.status==='aprovado').length, rep:lista.filter(c=>c.status==='reprovado').length, pen:lista.filter(c=>c.status==='pendente').length});
-  const cM = cont(doMes), cA = cont(mesAnt);
+  const cM = cont(historicoFiltrado);
+  const mesFiltroLabel = filtroMesHistorico ? mesLabel(filtroMesHistorico.slice(5,7)+'/'+filtroMesHistorico.slice(0,4)) : 'todos os meses';
 
   /* ALTERAÇÃO V6: monitorar fila local e estado da conexão */
   const atualizarFila = ()=>{ FilaEnvio.pendentes().then(setPendentes).catch(()=>{}); };
@@ -1098,13 +1105,11 @@ function TelaChecklist({st, setSt, user, toast}){
 
       {!preenchendo && <React.Fragment>
         <div className="totais">
-          <div className="card"><div className="v num">{cM.tot}</div><div className="l">Feitos em {mesLabel(mesRef)}</div></div>
+          <div className="card"><div className="v num">{cM.tot}</div><div className="l">Checklists em {mesFiltroLabel}</div></div>
           <div className="card"><div className="v num" style={{color:'var(--mata)'}}>{cM.ap}</div><div className="l">Aprovados</div></div>
           <div className="card"><div className="v num" style={{color:cM.rep?'var(--erro)':'var(--mata)'}}>{cM.rep}</div><div className="l">Reprovados</div></div>
         </div>
-        <div className="muted" style={{textAlign:'center', marginTop:-4}}>
-          {mesLabel('06/2026')}: {cA.tot} preenchidos · {cA.ap} aprovados · {cA.rep} reprovado(s){cM.pen>0 ? ' · '+cM.pen+' aguardando aprovação em '+mesLabel(mesRef) : ''}
-        </div>
+        {cM.pen>0 && <div className="muted" style={{textAlign:'center', marginTop:-4}}>{cM.pen} checklist(s) aguardando análise nos filtros selecionados.</div>}
       </React.Fragment>}
 
       {!preenchendo && carregandoPerguntas &&
@@ -1186,8 +1191,16 @@ function TelaChecklist({st, setSt, user, toast}){
       </React.Fragment>}
 
       {!preenchendo && meus.length>0 && <React.Fragment>
-        <h3 style={{marginTop:4}}>Histórico</h3>
-        {meus.map(c=>
+        <div className="row" style={{marginTop:4,flexWrap:'wrap'}}>
+          <h3 className="grow" style={{margin:0}}>Histórico</h3>
+          <input type="month" aria-label="Filtrar histórico por mês" style={{width:'auto'}} value={filtroMesHistorico} onChange={e=>setFiltroMesHistorico(e.target.value)}/>
+          <select aria-label="Filtrar histórico por status" style={{width:'auto'}} value={filtroStatusHistorico} onChange={e=>setFiltroStatusHistorico(e.target.value)}>
+            <option value="todos">Todos os status</option><option value="pendente">Aguardando análise</option><option value="aprovado">Aprovados</option><option value="reprovado">Reprovados</option>
+          </select>
+          <button className="btn btn-g btn-sm" onClick={()=>{setFiltroMesHistorico(mesAtualFiltro);setFiltroStatusHistorico('todos')}}>Limpar filtros</button>
+        </div>
+        {historicoFiltrado.length===0 && <div className="card muted">Nenhum checklist encontrado nos filtros selecionados.</div>}
+        {historicoFiltrado.map(c=>
           <div className="card row" key={c.id}>
             <div className="grow"><b>{dataBR(c.data)}</b><div className="muted">{c.placa} · {c.respostas.filter(r=>r.resp==='NC').length} NC</div></div>
             <StatusTag s={c.status}/>
@@ -1199,8 +1212,26 @@ function TelaChecklist({st, setSt, user, toast}){
   );
 }
 function ChecklistDetalhe({ck, perguntas, onClose, acoes}){
+  const [fotoAberta,setFotoAberta]=useState(null);
+  const escHtml=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const escAttr=escHtml;
+  const imprimir=()=>{
+    const statusTexto = ck.status==='aprovado'?'Aprovado':ck.status==='reprovado'?'Reprovado':'Aguardando análise';
+    const linhas = ck.respostas.map(r=>{
+      const p=perguntas.find(x=>x.id===r.pid); if(!p) return '';
+      const resposta=r.resp==='C'?'Conforme':r.resp==='NC'?'Não conforme':'N/A';
+      return `<section class="item"><div class="item-top"><strong>${escHtml(p.texto)}</strong><span class="resp ${r.resp}">${resposta}</span></div>${r.obs?`<div class="obs"><b>Observação:</b> ${escHtml(r.obs)}</div>`:''}${r.foto?`<img src="${escAttr(r.foto)}" alt="Foto da não conformidade">`:''}</section>`;
+    }).join('');
+    const w=window.open('','_blank','width=900,height=700');
+    if(!w){ alert('O navegador bloqueou a janela de impressão. Permita pop-ups para este site.'); return; }
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Checklist ${escHtml(ck.placa||'')}</title><style>
+      @page{size:A4;margin:14mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#20231f;margin:0;font-size:11px}.cab{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #234b3b;padding-bottom:10px;margin-bottom:12px}.marca{color:#234b3b;font-size:18px;font-weight:700}.titulo{font-size:20px;margin:0 0 4px}.status{display:inline-block;border:1px solid #bbb;border-radius:5px;padding:4px 8px;font-weight:bold}.dados{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;border:1px solid #d8dcd8;border-radius:7px;padding:10px;margin-bottom:12px}.dados div span{display:block;color:#68716b;font-size:9px;text-transform:uppercase;margin-bottom:2px}.item{border:1px solid #d8dcd8;border-radius:6px;padding:9px;margin-bottom:7px;break-inside:avoid;page-break-inside:avoid}.item-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.resp{white-space:nowrap;border-radius:10px;padding:3px 7px;font-size:9px;font-weight:bold}.resp.C{background:#dff1e7;color:#215a40}.resp.NC{background:#fde5dc;color:#9b3b20}.resp.NA{background:#eee;color:#555}.obs{margin-top:6px;color:#4d554f}.item img{display:block;max-width:100%;max-height:95mm;object-fit:contain;margin-top:8px;border:1px solid #ddd;border-radius:5px}.motivo{border:1px solid #e7a08c;background:#fff4ef;padding:9px;border-radius:6px;margin-bottom:12px}.assinaturas{display:grid;grid-template-columns:1fr 1fr;gap:35px;margin-top:24px;break-inside:avoid}.linha{border-top:1px solid #333;padding-top:5px;color:#555}.rodape{border-top:1px solid #ddd;margin-top:18px;padding-top:6px;color:#777;font-size:9px}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+    </style></head><body><header class="cab"><div><h1 class="titulo">Registro de Checklist</h1><div>Inspeção veicular</div></div><div class="marca">Bocchi Agrobios</div></header><div class="dados"><div><span>Motorista</span><b>${escHtml(ck.motorista||'—')}</b></div><div><span>Placa</span><b>${escHtml(ck.placa||'—')}</b></div><div><span>Data</span><b>${dataBR(ck.data)}</b></div><div><span>Tipo de frota</span><b>${ck.frota==='leve'?'Frota leve':'Frota pesada'}</b></div><div><span>Status</span><b>${statusTexto}</b></div><div><span>Protocolo</span><b>${escHtml(ck.id||'—')}</b></div>${ck.frota==='leve'?`<div><span>Quilometragem</span><b>${escHtml(ck.km||'—')}</b></div>`:''}</div>${ck.status==='reprovado'&&ck.motivoReprova?`<div class="motivo"><b>Motivo da reprovação:</b> ${escHtml(ck.motivoReprova)}</div>`:''}${linhas}<div class="assinaturas"><div class="linha">Motorista — nome/data</div><div class="linha">Responsável pela análise — nome/data</div></div><footer class="rodape">Documento gerado pelo Sistema de Gestão de Frota · ${new Date().toLocaleString('pt-BR')}</footer><script>window.onload=()=>setTimeout(()=>window.print(),350)<\/script></body></html>`);
+    w.document.close();
+  };
   return (
     <Modal titulo={'Check list — '+dataBR(ck.data)} onClose={onClose}>
+      <div className="row" style={{justifyContent:'flex-end',marginBottom:10}}><button className="btn btn-s btn-sm" onClick={imprimir}>🖨 Imprimir</button></div>
       <div className="muted" style={{marginBottom:10}}>{primeiroNome(ck.motorista)} · {ck.placa} · {ck.frota==='leve'?'Frota leve':'Frota pesada'} · <StatusTag s={ck.status}/></div>
       {ck.frota==='leve' && (ck.km || ck.combustivel) &&
         <div className="muted" style={{marginBottom:10}}>KM: <b className="num">{ck.km||'—'}</b> · Combustível: <b>{ck.combustivel||'—'}</b></div>}
@@ -1214,11 +1245,19 @@ function ChecklistDetalhe({ck, perguntas, onClose, acoes}){
               <span className={'tag '+(r.resp==='C'?'tag-ok':r.resp==='NC'?'tag-neg':'tag-neutro')}>{r.resp==='C'?'Conforme':r.resp==='NC'?'NC':'N/A'}</span>
             </div>
             {r.obs && <div className="muted" style={{marginTop:4}}>{r.obs}</div>}
-            {r.foto && <img className="foto-thumb" style={{marginTop:6, width:110, height:110}} src={r.foto} alt="Foto anexada"/>}
+            {r.foto && <img className="foto-thumb foto-clicavel" style={{marginTop:6, width:110, height:110}} src={r.foto} alt="Foto anexada — clique para ampliar" title="Clique para ampliar" onClick={()=>setFotoAberta(r.foto)}/>} 
           </div>
         );
       })}
       {acoes && <div style={{marginTop:14}}>{acoes}</div>}
+      {fotoAberta && <div className="visualizador-foto" onClick={e=>{if(e.target===e.currentTarget)setFotoAberta(null)}}>
+        <img src={fotoAberta} alt="Foto ampliada do checklist"/>
+        <div className="visualizador-foto-acoes">
+          <a className="btn btn-p" href={fotoAberta} download={'checklist-'+(ck.placa||'foto')+'.jpg'} target="_blank" rel="noopener">⬇ Baixar foto</a>
+          <a className="btn btn-s" href={fotoAberta} target="_blank" rel="noopener">Abrir original</a>
+          <button className="btn btn-g" onClick={()=>setFotoAberta(null)}>Fechar</button>
+        </div>
+      </div>}
     </Modal>
   );
 }
@@ -1502,6 +1541,10 @@ function AdmChecklist({st, setSt, toast}){
   const [novaPerg,setNovaPerg]=useState({texto:'', grupo:'Anomalias estéticas', frota:'pesada', frequencia:'Diária', obrigatoria:true, fotoNC:false});
   const [fFrota,setFFrota]=useState('pesada');
   const [fMot,setFMot]=useState('todos');
+  const mesAtualFiltro = String(HOJE||'').slice(0,7);
+  const [fMes,setFMes]=useState(mesAtualFiltro);
+  const [fPlaca,setFPlaca]=useState('todas');
+  const [fStatus,setFStatus]=useState('todos');
   const [carregandoCatalogo,setCarregandoCatalogo]=useState(false);
 
   const carregarCatalogo = async ()=>{
@@ -1580,8 +1623,10 @@ function AdmChecklist({st, setSt, toast}){
     toast('Erro ao salvar pergunta: '+e.message);
   }
 };
-  const motoristas = [...new Set(st.checklists.map(c=>c.motorista))];
-  const relatorio = st.checklists.filter(c=>fMot==='todos'||c.motorista===fMot).sort((a,b)=>b.data.localeCompare(a.data));
+  const motoristas = [...new Set(st.checklists.map(c=>c.motorista).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  const placas = [...new Set(st.checklists.map(c=>c.placa).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  const relatorio = st.checklists.filter(c=>(!fMes||String(c.data||'').slice(0,7)===fMes) && (fPlaca==='todas'||c.placa===fPlaca) && (fMot==='todos'||c.motorista===fMot) && (fStatus==='todos'||c.status===fStatus)).sort((a,b)=>b.data.localeCompare(a.data));
+  const totaisRelatorio={total:relatorio.length,aprovados:relatorio.filter(c=>c.status==='aprovado').length,reprovados:relatorio.filter(c=>c.status==='reprovado').length,pendentes:relatorio.filter(c=>c.status==='pendente').length};
   return (
     <React.Fragment>
       <div className="row" style={{flexWrap:'wrap'}}>
@@ -1660,13 +1705,28 @@ function AdmChecklist({st, setSt, toast}){
       </React.Fragment>}
 
       {sub==='relatorio' && <React.Fragment>
-        <div className="row">
+        <div className="row" style={{flexWrap:'wrap'}}>
+          <input type="month" aria-label="Filtrar relatório por mês" style={{width:'auto'}} value={fMes} onChange={e=>setFMes(e.target.value)}/>
+          <select style={{width:'auto'}} value={fPlaca} onChange={e=>setFPlaca(e.target.value)}>
+            <option value="todas">Todas as placas</option>
+            {placas.map(p=><option key={p} value={p}>{p}</option>)}
+          </select>
           <select style={{width:'auto'}} value={fMot} onChange={e=>setFMot(e.target.value)}>
             <option value="todos">Todos os motoristas</option>
             {motoristas.map(m=><option key={m} value={m}>{primeiroNome(m)}</option>)}
           </select>
+          <select style={{width:'auto'}} value={fStatus} onChange={e=>setFStatus(e.target.value)}>
+            <option value="todos">Todos os status</option><option value="pendente">Aguardando análise</option><option value="aprovado">Aprovados</option><option value="reprovado">Reprovados</option>
+          </select>
+          <button className="btn btn-g btn-sm" onClick={()=>{setFMes(mesAtualFiltro);setFPlaca('todas');setFMot('todos');setFStatus('todos')}}>Limpar filtros</button>
         </div>
-        {relatorio.length===0 && <div className="card muted">Nenhum check list registrado.</div>}
+        <div className="totais">
+          <div className="card"><div className="v num">{totaisRelatorio.total}</div><div className="l">Checklists</div></div>
+          <div className="card"><div className="v num" style={{color:'var(--mata)'}}>{totaisRelatorio.aprovados}</div><div className="l">Aprovados</div></div>
+          <div className="card"><div className="v num" style={{color:totaisRelatorio.reprovados?'var(--erro)':'var(--mata)'}}>{totaisRelatorio.reprovados}</div><div className="l">Reprovados</div></div>
+          <div className="card"><div className="v num">{totaisRelatorio.pendentes}</div><div className="l">Aguardando</div></div>
+        </div>
+        {relatorio.length===0 && <div className="card muted">Nenhum checklist encontrado nos filtros selecionados.</div>}
         {relatorio.map(ck=>
           <div className="card row" key={ck.id}>
             <div className="grow"><b>{primeiroNome(ck.motorista)}</b> <span className="muted">· {dataBR(ck.data)} · {ck.placa}</span>
