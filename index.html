@@ -170,7 +170,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 30000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '1.8.4-tela-branca-corrigida'
+  VERSAO: '1.8.5-usuarioid-corrigido'
 };
 
 /* ============================================================================
@@ -1787,6 +1787,7 @@ function AdmCadastros({st, setSt, toast}){
   const [editVinculo,setEditVinculo]=useState(null);
   const [senhaVisivel,setSenhaVisivel]=useState(false);
   const [cad,setCad]=useState({usuarios:[],veiculos:[],vinculos:[]});
+  const proximoUsuarioId=()=>{const maior=cad.usuarios.reduce((m,u)=>{const x=String(u.usuarioId||'').match(/^USU-(\d+)$/i);return x?Math.max(m,Number(x[1])):m;},0);return 'USU-'+String(maior+1).padStart(3,'0');};
   const carregar=async()=>{try{const r=await ApiService.admCadastros();setCad({usuarios:r.usuarios||[],veiculos:r.veiculos||[],vinculos:r.vinculos||[]});}catch(e){toast('Erro ao carregar cadastros: '+e.message);}};
   useEffect(()=>{carregar();},[]);
   const salvarUser=async()=>{
@@ -1849,7 +1850,7 @@ function AdmCadastros({st, setSt, toast}){
       </div>
 
       {sub==='usuarios' && <React.Fragment>
-        <div><button className="btn btn-p" onClick={()=>{setSenhaVisivel(false);setEdit({nome:'',usuarioId:'USU-'+String(cad.usuarios.length+1).padStart(3,'0'),login:'',telefone:'',perfil:'MOTORISTA',tipoFrotaAcesso:'FROTA PESADA',ativo:true,novaSenha:'',perms:{cargas:true,premiacao:true,checklist:true,historico:true,administracao:false}})}}>+ Novo usuário</button></div>
+        <div><button className="btn btn-p" onClick={()=>{setSenhaVisivel(false);setEdit({nome:'',usuarioId:proximoUsuarioId(),login:'',telefone:'',perfil:'MOTORISTA',tipoFrotaAcesso:'FROTA PESADA',ativo:true,novaSenha:'',perms:{cargas:true,premiacao:true,checklist:true,historico:true,administracao:false}})}}>+ Novo usuário</button></div>
         <div className="card" style={{overflowX:'auto'}}>
           <table>
             <thead><tr><th>Nome</th><th>UsuarioID</th><th>Usuário</th><th>Perfil</th><th>Senha</th><th>Cargas</th><th>Premiação</th><th>Check list</th><th>Status</th><th>Ações</th></tr></thead>
