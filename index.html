@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Bocchi Frota — Portal do Motorista e ADM Logística (v1 — Edson.B)</title>
+<title>Bocchi Frota — Portal do Motorista e ADM Logística (v1.8 — Edson.B)</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
@@ -170,7 +170,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 30000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '1.8.0-autenticacao-segura'
+  VERSAO: '1.8.4-tela-branca-corrigida'
 };
 
 /* ============================================================================
@@ -618,7 +618,7 @@ function Login({st, onLogin}){
     <div className="login-wrap">
       <div className="login-card">
         <div className="marca">Bocchi <em>Frota</em></div>
-        <div className="login-sub">Portal do motorista e ADM logística — v1 — Edson.B</div>
+        <div className="login-sub">Portal do motorista e ADM logística — v1.8 — Edson.B</div>
         <div style={{display:'flex',flexDirection:'column',gap:12}}>
           <div><label>Usuário</label><input value={login} onChange={e=>setLogin(e.target.value)} placeholder="ex.: adelir" autoCapitalize="none"/></div>
           <div>
@@ -1998,11 +1998,22 @@ function App(){
   const tRef = useRef(null);
   const toast=(m)=>{ setToastMsg(m); clearTimeout(tRef.current); tRef.current=setTimeout(()=>setToastMsg(''),3200); };
   const userAtual = user ? st.usuarios.find(u=>u.id===user.id) || user : null;
+  const perfilAtual = String(userAtual?.perfil||'').trim().toLowerCase();
+  const ehMotorista = perfilAtual==='motorista';
+  const ehAdministrador = perfilAtual==='adm' || perfilAtual==='administrador';
+  const ehVisualizador = perfilAtual==='visualizador';
   return (
     <React.Fragment>
       {!userAtual && <Login st={st} onLogin={setUser}/>}
-      {userAtual && userAtual.perfil==='motorista' && <MotoristaApp st={st} setSt={setSt} user={userAtual} onSair={()=>setUser(null)} toast={toast}/>}
-      {userAtual && userAtual.perfil==='adm' && <AdmApp st={st} setSt={setSt} user={userAtual} onSair={()=>setUser(null)} toast={toast}/>}
+      {userAtual && ehMotorista && <MotoristaApp st={st} setSt={setSt} user={userAtual} onSair={()=>setUser(null)} toast={toast}/>}
+      {userAtual && (ehAdministrador || ehVisualizador) && <AdmApp st={st} setSt={setSt} user={userAtual} onSair={()=>setUser(null)} toast={toast}/>}
+      {userAtual && !ehMotorista && !ehAdministrador && !ehVisualizador && (
+        <div className="login-wrap"><div className="login-card">
+          <div className="marca">Bocchi <em>Frota</em></div>
+          <div className="erro-box">O perfil “{userAtual.perfil||'não informado'}” não está configurado para acesso.</div>
+          <button className="btn btn-p" onClick={()=>setUser(null)}>Voltar ao login</button>
+        </div></div>
+      )}
       <Toast msg={toastMsg}/>
     </React.Fragment>
   );
