@@ -1546,8 +1546,8 @@ function AdmImportar({st, setSt, toast}){
           throw e;
         }
       }
-      const atualizadas=await ApiService.obterCargas();
-      setSt(s=>({...s,cargas:Array.isArray(atualizadas.cargas)?atualizadas.cargas:s.cargas}));
+      const cargasAtualizadas=await ApiService.obterCargas();
+      setSt(s=>({...s,cargas:Array.isArray(cargasAtualizadas.cargas)?cargasAtualizadas.cargas:s.cargas}));
       toast(novas+' novas, '+atualizadas+' atualizadas e '+semAlteracao+' já estavam iguais.');
       setResumo(null);
     }catch(e){
