@@ -179,7 +179,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 30000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '1.9.2-cargas-sharepoint'
+  VERSAO: '1.9.3-importacao-em-lotes'
 };
 
 /* ============================================================================
@@ -1474,6 +1474,7 @@ function AdmImportar({st, setSt, toast}){
   const [erro,setErro]=useState('');
   const [lendo,setLendo]=useState(false);
   const [enviando,setEnviando]=useState(false);
+  const [progresso,setProgresso]=useState(null);
   const fileRef = useRef(null);
 
   const processar = (file)=>{
@@ -1532,24 +1533,37 @@ function AdmImportar({st, setSt, toast}){
     rd.readAsArrayBuffer(file);
   };
   const confirmar=async()=>{
-    setEnviando(true); setErro('');
+    setEnviando(true); setErro(''); setProgresso({processadas:0,total:resumo.novas.length,lote:0,totalLotes:Math.ceil(resumo.novas.length/50)});
     try{
       let novas=0, atualizadas=0, semAlteracao=0;
-      for(const [competencia,cargas] of Object.entries(resumo.porCompetencia)){
-        try{
-          const r=await ApiService.importarCargas(competencia,cargas);
-          novas+=Number(r.novas??r.gravadas??0);
-          atualizadas+=Number(r.atualizadas||0);
-          semAlteracao+=Number(r.semAlteracao||0);
-        }catch(e){
-          e.message='Falha na competência '+competencia+': '+e.message;
-          throw e;
+      const lotes=[];
+      Object.entries(resumo.porCompetencia).forEach(([competencia,cargas])=>{
+        for(let inicio=0;inicio<cargas.length;inicio+=50) lotes.push({competencia,cargas:cargas.slice(inicio,inicio+50)});
+      });
+      let processadas=0;
+      for(let indice=0;indice<lotes.length;indice++){
+        const {competencia,cargas}=lotes[indice];
+        let r=null;
+        for(let tentativa=1;tentativa<=4;tentativa++){
+          try{ r=await ApiService.importarCargas(competencia,cargas); break; }
+          catch(e){
+            if(tentativa===4 || ![429,500,502,503,504].includes(Number(e.status))){
+              e.message='Falha no lote '+(indice+1)+' de '+lotes.length+' ('+competencia+'): '+e.message;
+              throw e;
+            }
+            await new Promise(resolve=>setTimeout(resolve, tentativa*2000));
+          }
         }
+        novas+=Number(r.novas??r.gravadas??0);
+        atualizadas+=Number(r.atualizadas||0);
+        semAlteracao+=Number(r.semAlteracao||0);
+        processadas+=cargas.length;
+        setProgresso({processadas,total:resumo.novas.length,lote:indice+1,totalLotes:lotes.length});
       }
       const cargasAtualizadas=await ApiService.obterCargas();
       setSt(s=>({...s,cargas:Array.isArray(cargasAtualizadas.cargas)?cargasAtualizadas.cargas:s.cargas}));
       toast(novas+' novas, '+atualizadas+' atualizadas e '+semAlteracao+' já estavam iguais.');
-      setResumo(null);
+      setResumo(null); setProgresso(null);
     }catch(e){
       const inc=e.detalhe&&e.detalhe.inconsistencias;
       setErro(e.message+(Array.isArray(inc)&&inc.length?' Primeiros casos: '+inc.slice(0,5).map(x=>x.placa+' em '+dataBR(x.data)+' — '+x.motivo).join('; '):''));
@@ -1578,12 +1592,13 @@ function AdmImportar({st, setSt, toast}){
           <div className="linha-item"><span>Linhas lidas</span><b className="num">{resumo.total}</b></div>
           <div className="linha-item"><span>Cargas a comparar</span><b className="num" style={{color:'var(--mata)'}}>{resumo.novas.length}</b></div>
           <div className="linha-item"><span>Competências analisadas</span><b className="num">{Object.keys(resumo.porCompetencia).join(', ')}</b></div>
+          {enviando && progresso && <div className="aviso-box" style={{marginTop:12}}><b>Importando: {progresso.processadas} de {progresso.total} cargas</b><div className="muted">Lote {progresso.lote} de {progresso.totalLotes}. Não feche esta tela.</div><div style={{height:8,background:'#dfe7e2',borderRadius:8,marginTop:8,overflow:'hidden'}}><div style={{height:'100%',width:Math.round((progresso.processadas/Math.max(1,progresso.total))*100)+'%',background:'var(--mata)',transition:'width .2s'}}/></div></div>}
           <div className="row" style={{marginTop:12}}>
             <button className="btn btn-g" onClick={()=>setResumo(null)} disabled={enviando}>Cancelar</button>
-            <button className="btn btn-p grow" onClick={confirmar} disabled={enviando||!resumo.novas.length}>{enviando?'Gravando no SharePoint...':'Confirmar importação'}</button>
+            <button className="btn btn-p grow" onClick={confirmar} disabled={enviando||!resumo.novas.length}>{enviando?'Importando em lotes...':'Confirmar importação'}</button>
           </div>
         </div>}
-      <div className="aviso-box">A importação é incremental: mantém cargas já salvas e iguais, atualiza somente as que tiveram algum valor alterado e inclui apenas as novas. Cargas antigas ausentes no arquivo não são excluídas. Se houver placa sem cadastro ou vínculo inválido, a competência é bloqueada.</div>
+      <div className="aviso-box">A importação é incremental e dividida automaticamente em lotes: mantém cargas já salvas e iguais, atualiza somente as alteradas e inclui apenas as novas. Você pode selecionar a planilha completa; não é necessário separar por mês.</div>
     </React.Fragment>
   );
 }
