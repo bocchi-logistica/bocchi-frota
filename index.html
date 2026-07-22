@@ -1534,14 +1534,21 @@ function AdmImportar({st, setSt, toast}){
   const confirmar=async()=>{
     setEnviando(true); setErro('');
     try{
-      let gravadas=0;
+      let novas=0, atualizadas=0, semAlteracao=0;
       for(const [competencia,cargas] of Object.entries(resumo.porCompetencia)){
-        const r=await ApiService.importarCargas(competencia,cargas);
-        gravadas+=Number(r.gravadas||0);
+        try{
+          const r=await ApiService.importarCargas(competencia,cargas);
+          novas+=Number(r.novas??r.gravadas??0);
+          atualizadas+=Number(r.atualizadas||0);
+          semAlteracao+=Number(r.semAlteracao||0);
+        }catch(e){
+          e.message='Falha na competência '+competencia+': '+e.message;
+          throw e;
+        }
       }
       const atualizadas=await ApiService.obterCargas();
       setSt(s=>({...s,cargas:Array.isArray(atualizadas.cargas)?atualizadas.cargas:s.cargas}));
-      toast(gravadas+' cargas gravadas no SharePoint.');
+      toast(novas+' novas, '+atualizadas+' atualizadas e '+semAlteracao+' já estavam iguais.');
       setResumo(null);
     }catch(e){
       const inc=e.detalhe&&e.detalhe.inconsistencias;
@@ -1569,14 +1576,14 @@ function AdmImportar({st, setSt, toast}){
           <h3>Conferência antes de importar</h3>
           <div className="muted" style={{marginBottom:8}}>{resumo.arquivo} · aba "{resumo.aba}" · motorista e tipo serão resolvidos pela placa e vigência</div>
           <div className="linha-item"><span>Linhas lidas</span><b className="num">{resumo.total}</b></div>
-          <div className="linha-item"><span>Cargas a gravar</span><b className="num" style={{color:'var(--mata)'}}>{resumo.novas.length}</b></div>
-          <div className="linha-item"><span>Competências que serão substituídas</span><b className="num">{Object.keys(resumo.porCompetencia).join(', ')}</b></div>
+          <div className="linha-item"><span>Cargas a comparar</span><b className="num" style={{color:'var(--mata)'}}>{resumo.novas.length}</b></div>
+          <div className="linha-item"><span>Competências analisadas</span><b className="num">{Object.keys(resumo.porCompetencia).join(', ')}</b></div>
           <div className="row" style={{marginTop:12}}>
             <button className="btn btn-g" onClick={()=>setResumo(null)} disabled={enviando}>Cancelar</button>
             <button className="btn btn-p grow" onClick={confirmar} disabled={enviando||!resumo.novas.length}>{enviando?'Gravando no SharePoint...':'Confirmar importação'}</button>
           </div>
         </div>}
-      <div className="aviso-box">A importação substitui no SharePoint as cargas das competências presentes no arquivo. Se houver placa sem cadastro ou vínculo inválido, a competência é bloqueada e nenhuma carga daquele mês é alterada.</div>
+      <div className="aviso-box">A importação é incremental: mantém cargas já salvas e iguais, atualiza somente as que tiveram algum valor alterado e inclui apenas as novas. Cargas antigas ausentes no arquivo não são excluídas. Se houver placa sem cadastro ou vínculo inválido, a competência é bloqueada.</div>
     </React.Fragment>
   );
 }
