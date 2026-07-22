@@ -1471,6 +1471,10 @@ function AdmPainel({st, dados}){
 /* ================= ADM: IMPORTAÇÃO ================= */
 function AdmImportar({st, setSt, toast}){
   const [resumo,setResumo]=useState(null);
+  const [competenciasSelecionadas,setCompetenciasSelecionadas]=useState([]);
+  const [placaSelecionada,setPlacaSelecionada]=useState('');
+  const [dataInicial,setDataInicial]=useState('');
+  const [dataFinal,setDataFinal]=useState('');
   const [erro,setErro]=useState('');
   const [lendo,setLendo]=useState(false);
   const [enviando,setEnviando]=useState(false);
@@ -1526,20 +1530,35 @@ function AdmImportar({st, setSt, toast}){
         }
         const porCompetencia={};
         novas.forEach(c=>{const comp=c.data.slice(0,7);(porCompetencia[comp]||(porCompetencia[comp]=[])).push(c)});
+        const competencias=Object.keys(porCompetencia).sort();
+        const atual=new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0');
+        setCompetenciasSelecionadas([competencias.includes(atual)?atual:competencias[competencias.length-1]].filter(Boolean));
+        setPlacaSelecionada(''); setDataInicial(''); setDataFinal('');
         setResumo({arquivo:file.name, aba:nomeAba, total:rows.length, novas, porCompetencia, descNovos});
       }catch(e){ setErro(e.message); }
       setLendo(false);
     };
     rd.readAsArrayBuffer(file);
   };
+  const competenciasDisponiveis=resumo?Object.keys(resumo.porCompetencia).sort():[];
+  const placasDisponiveis=resumo?[...new Set(resumo.novas.map(c=>c.placa))].sort():[];
+  const cargasFiltradas=resumo?resumo.novas.filter(c=>
+    competenciasSelecionadas.includes(c.data.slice(0,7)) &&
+    (!placaSelecionada || c.placa===placaSelecionada) &&
+    (!dataInicial || c.data>=dataInicial) && (!dataFinal || c.data<=dataFinal)
+  ):[];
+  const porCompetenciaFiltrada={};
+  cargasFiltradas.forEach(c=>{const comp=c.data.slice(0,7);(porCompetenciaFiltrada[comp]||(porCompetenciaFiltrada[comp]=[])).push(c)});
+  const alternarCompetencia=comp=>setCompetenciasSelecionadas(atual=>atual.includes(comp)?atual.filter(x=>x!==comp):[...atual,comp].sort());
   const confirmar=async()=>{
     const TAMANHO_LOTE=20;
     const MAX_TENTATIVAS_LOTE=6;
-    setEnviando(true); setErro(''); setProgresso({processadas:0,total:resumo.novas.length,lote:0,totalLotes:Math.ceil(resumo.novas.length/TAMANHO_LOTE)});
+    if(!cargasFiltradas.length){setErro('Selecione ao menos uma competência com cargas para importar.');return;}
+    setEnviando(true); setErro(''); setProgresso({processadas:0,total:cargasFiltradas.length,lote:0,totalLotes:Math.ceil(cargasFiltradas.length/TAMANHO_LOTE)});
     try{
-      let novas=0, atualizadas=0, semAlteracao=0;
+      let novas=0, atualizadas=0, semAlteracao=0, duplicadasRemovidas=0;
       const lotes=[];
-      Object.entries(resumo.porCompetencia).forEach(([competencia,cargas])=>{
+      Object.entries(porCompetenciaFiltrada).forEach(([competencia,cargas])=>{
         for(let inicio=0;inicio<cargas.length;inicio+=TAMANHO_LOTE) lotes.push({competencia,cargas:cargas.slice(inicio,inicio+TAMANHO_LOTE)});
       });
       let processadas=0;
@@ -1563,13 +1582,14 @@ function AdmImportar({st, setSt, toast}){
         novas+=Number(r.novas??r.gravadas??0);
         atualizadas+=Number(r.atualizadas||0);
         semAlteracao+=Number(r.semAlteracao||0);
+        duplicadasRemovidas+=Number(r.duplicadasRemovidas||0);
         processadas+=cargas.length;
-        setProgresso({processadas,total:resumo.novas.length,lote:indice+1,totalLotes:lotes.length});
+        setProgresso({processadas,total:cargasFiltradas.length,lote:indice+1,totalLotes:lotes.length});
         await new Promise(resolve=>setTimeout(resolve,1200));
       }
       const cargasAtualizadas=await ApiService.obterCargas();
       setSt(s=>({...s,cargas:Array.isArray(cargasAtualizadas.cargas)?cargasAtualizadas.cargas:s.cargas}));
-      toast(novas+' novas, '+atualizadas+' atualizadas e '+semAlteracao+' já estavam iguais.');
+      toast(novas+' novas, '+atualizadas+' atualizadas, '+semAlteracao+' já estavam iguais'+(duplicadasRemovidas?' e '+duplicadasRemovidas+' duplicadas removidas.':'.'));
       setResumo(null); setProgresso(null);
     }catch(e){
       const inc=e.detalhe&&e.detalhe.inconsistencias;
@@ -1597,15 +1617,24 @@ function AdmImportar({st, setSt, toast}){
           <h3>Conferência antes de importar</h3>
           <div className="muted" style={{marginBottom:8}}>{resumo.arquivo} · aba "{resumo.aba}" · motorista e tipo serão resolvidos pela placa e vigência</div>
           <div className="linha-item"><span>Linhas lidas</span><b className="num">{resumo.total}</b></div>
-          <div className="linha-item"><span>Cargas a comparar</span><b className="num" style={{color:'var(--mata)'}}>{resumo.novas.length}</b></div>
-          <div className="linha-item"><span>Competências analisadas</span><b className="num">{Object.keys(resumo.porCompetencia).join(', ')}</b></div>
+          <div style={{marginTop:14}}><b>Competências a importar</b></div>
+          <div className="row" style={{gap:8,marginTop:8,flexWrap:'wrap'}}>
+            {competenciasDisponiveis.map(comp=><label key={comp} className="btn btn-s btn-sm" style={{cursor:'pointer',background:competenciasSelecionadas.includes(comp)?'var(--mata)':'white',color:competenciasSelecionadas.includes(comp)?'white':'inherit'}}><input type="checkbox" checked={competenciasSelecionadas.includes(comp)} onChange={()=>alternarCompetencia(comp)} style={{display:'none'}}/>{comp}</label>)}
+          </div>
+          <div className="row" style={{gap:10,marginTop:12,alignItems:'end',flexWrap:'wrap'}}>
+            <label style={{minWidth:170,flex:1}}>Placa (opcional)<select value={placaSelecionada} onChange={e=>setPlacaSelecionada(e.target.value)} disabled={enviando}><option value="">Todas as placas</option>{placasDisponiveis.map(p=><option key={p} value={p}>{p}</option>)}</select></label>
+            <label style={{minWidth:145}}>Data inicial<input type="date" value={dataInicial} onChange={e=>setDataInicial(e.target.value)} disabled={enviando}/></label>
+            <label style={{minWidth:145}}>Data final<input type="date" value={dataFinal} onChange={e=>setDataFinal(e.target.value)} disabled={enviando}/></label>
+          </div>
+          <div className="linha-item" style={{marginTop:12}}><span>Cargas que serão comparadas</span><b className="num" style={{color:'var(--mata)'}}>{cargasFiltradas.length}</b></div>
+          <div className="linha-item"><span>Competências selecionadas</span><b className="num">{competenciasSelecionadas.join(', ')||'Nenhuma'}</b></div>
           {enviando && progresso && <div className="aviso-box" style={{marginTop:12}}><b>Importando: {progresso.processadas} de {progresso.total} cargas</b><div className="muted">Lote {progresso.lote} de {progresso.totalLotes}. Não feche esta tela.</div><div style={{height:8,background:'#dfe7e2',borderRadius:8,marginTop:8,overflow:'hidden'}}><div style={{height:'100%',width:Math.round((progresso.processadas/Math.max(1,progresso.total))*100)+'%',background:'var(--mata)',transition:'width .2s'}}/></div></div>}
           <div className="row" style={{marginTop:12}}>
             <button className="btn btn-g" onClick={()=>setResumo(null)} disabled={enviando}>Cancelar</button>
-            <button className="btn btn-p grow" onClick={confirmar} disabled={enviando||!resumo.novas.length}>{enviando?'Importando em lotes...':'Confirmar importação'}</button>
+            <button className="btn btn-p grow" onClick={confirmar} disabled={enviando||!cargasFiltradas.length}>{enviando?'Importando em lotes...':'Confirmar importação'}</button>
           </div>
         </div>}
-      <div className="aviso-box">A importação é incremental e dividida automaticamente em lotes: mantém cargas já salvas e iguais, atualiza somente as alteradas e inclui apenas as novas. Você pode selecionar a planilha completa; não é necessário separar por mês.</div>
+      <div className="aviso-box">A planilha completa é lida apenas no navegador. Somente as competências, placa e período selecionados são enviados à API. Cargas iguais são mantidas, alteradas são atualizadas e novas são incluídas.</div>
     </React.Fragment>
   );
 }
