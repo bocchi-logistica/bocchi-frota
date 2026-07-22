@@ -176,10 +176,10 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   MAX_FOTO_MB: 2,
   QUALIDADE_FOTO: 0.7,
   FOTO_MAX_PX: 1600,
-  TIMEOUT_MS: 30000,
+  TIMEOUT_MS: 90000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '1.9.3-importacao-em-lotes'
+  VERSAO: '1.9.4-importacao-retomavel'
 };
 
 /* ============================================================================
@@ -1547,11 +1547,14 @@ function AdmImportar({st, setSt, toast}){
         for(let tentativa=1;tentativa<=4;tentativa++){
           try{ r=await ApiService.importarCargas(competencia,cargas); break; }
           catch(e){
-            if(tentativa===4 || ![429,500,502,503,504].includes(Number(e.status))){
+            const status=Number(e.status||0);
+            const falhaTemporaria=!status || [408,425,429,500,502,503,504].includes(status) || e.name==='AbortError' || /failed to fetch|network|timeout|aborted/i.test(String(e.message||''));
+            if(tentativa===4 || !falhaTemporaria){
               e.message='Falha no lote '+(indice+1)+' de '+lotes.length+' ('+competencia+'): '+e.message;
               throw e;
             }
-            await new Promise(resolve=>setTimeout(resolve, tentativa*2000));
+            setErro('Instabilidade no lote '+(indice+1)+'. Nova tentativa automática '+(tentativa+1)+' de 4...');
+            await new Promise(resolve=>setTimeout(resolve, tentativa*3000));
           }
         }
         novas+=Number(r.novas??r.gravadas??0);
