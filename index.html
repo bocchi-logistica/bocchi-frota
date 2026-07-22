@@ -1533,28 +1533,31 @@ function AdmImportar({st, setSt, toast}){
     rd.readAsArrayBuffer(file);
   };
   const confirmar=async()=>{
-    setEnviando(true); setErro(''); setProgresso({processadas:0,total:resumo.novas.length,lote:0,totalLotes:Math.ceil(resumo.novas.length/50)});
+    const TAMANHO_LOTE=20;
+    const MAX_TENTATIVAS_LOTE=6;
+    setEnviando(true); setErro(''); setProgresso({processadas:0,total:resumo.novas.length,lote:0,totalLotes:Math.ceil(resumo.novas.length/TAMANHO_LOTE)});
     try{
       let novas=0, atualizadas=0, semAlteracao=0;
       const lotes=[];
       Object.entries(resumo.porCompetencia).forEach(([competencia,cargas])=>{
-        for(let inicio=0;inicio<cargas.length;inicio+=50) lotes.push({competencia,cargas:cargas.slice(inicio,inicio+50)});
+        for(let inicio=0;inicio<cargas.length;inicio+=TAMANHO_LOTE) lotes.push({competencia,cargas:cargas.slice(inicio,inicio+TAMANHO_LOTE)});
       });
       let processadas=0;
       for(let indice=0;indice<lotes.length;indice++){
         const {competencia,cargas}=lotes[indice];
         let r=null;
-        for(let tentativa=1;tentativa<=4;tentativa++){
+        for(let tentativa=1;tentativa<=MAX_TENTATIVAS_LOTE;tentativa++){
           try{ r=await ApiService.importarCargas(competencia,cargas); break; }
           catch(e){
             const status=Number(e.status||0);
             const falhaTemporaria=!status || [408,425,429,500,502,503,504].includes(status) || e.name==='AbortError' || /failed to fetch|network|timeout|aborted/i.test(String(e.message||''));
-            if(tentativa===4 || !falhaTemporaria){
+            if(tentativa===MAX_TENTATIVAS_LOTE || !falhaTemporaria){
               e.message='Falha no lote '+(indice+1)+' de '+lotes.length+' ('+competencia+'): '+e.message;
               throw e;
             }
-            setErro('Instabilidade no lote '+(indice+1)+'. Nova tentativa automática '+(tentativa+1)+' de 4...');
-            await new Promise(resolve=>setTimeout(resolve, tentativa*3000));
+            const espera=Math.min(60000,5000*Math.pow(2,tentativa-1));
+            setErro('Instabilidade no lote '+(indice+1)+'. Nova tentativa automática '+(tentativa+1)+' de '+MAX_TENTATIVAS_LOTE+' em '+Math.ceil(espera/1000)+'s...');
+            await new Promise(resolve=>setTimeout(resolve,espera));
           }
         }
         novas+=Number(r.novas??r.gravadas??0);
@@ -1562,6 +1565,7 @@ function AdmImportar({st, setSt, toast}){
         semAlteracao+=Number(r.semAlteracao||0);
         processadas+=cargas.length;
         setProgresso({processadas,total:resumo.novas.length,lote:indice+1,totalLotes:lotes.length});
+        await new Promise(resolve=>setTimeout(resolve,1200));
       }
       const cargasAtualizadas=await ApiService.obterCargas();
       setSt(s=>({...s,cargas:Array.isArray(cargasAtualizadas.cargas)?cargasAtualizadas.cargas:s.cargas}));
