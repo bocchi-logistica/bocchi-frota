@@ -1973,7 +1973,7 @@ function AdmPremiacao({st, setSt, toast}){
   const [edit,setEdit]=useState(null);
   const [competencia,setCompetencia]=useState(MES_ATUAL.slice(3)+'-'+MES_ATUAL.slice(0,2));
   const [fMotorista,setFMotorista]=useState('');
-  const [painel,setPainel]=useState({metas:[],descontos:[],elegiveis:[],pendencias:{}});
+  const [painel,setPainel]=useState({metas:[],tiposVeiculo:[],descontos:[],elegiveis:[],pendencias:{}});
   const [novoDesc,setNovoDesc]=useState({motoristaId:'',motoristaNome:'',categoria:'Multas',situacao:'Sem ocorrência',quantidade:0,valor:0,percentual:0,dataOcorrencia:'',motivo:'',exibir:true});
   const categorias=['Notificação / Advertência','Multas','Auditoria Interna'];
   const carregar=async()=>{try{const r=await ApiService.admPremiacao(competencia);setPainel(r);setSt(s=>({...s,metas:r.metas||s.metas}));}catch(e){toast('Erro ao carregar premiação: '+e.message)}};
@@ -2078,7 +2078,12 @@ function AdmPremiacao({st, setSt, toast}){
       {edit &&
         <Modal titulo={edit.itemId?'Editar meta':'Incluir meta'} onClose={()=>setEdit(null)}>
           <div className="form-grid">
-            <div style={{gridColumn:'1/-1'}}><label>Tipo de veículo</label><input value={edit.tipo} onChange={e=>setEdit({...edit,tipo:e.target.value})}/></div>
+            <div style={{gridColumn:'1/-1'}}><label>Tipo de veículo</label>
+              <select value={edit.tipo} onChange={e=>setEdit({...edit,tipo:e.target.value})}>
+                <option value="">Selecionar...</option>
+                {(painel.tiposVeiculo||[]).map(tipo=><option key={tipo} value={tipo}>{tipo}</option>)}
+              </select>
+            </div>
             <div><label>Start (R$)</label><input type="number" value={edit.start} onChange={e=>setEdit({...edit, start:Number(e.target.value)})}/></div>
             <div><label>Meta (R$)</label><input type="number" value={edit.meta} onChange={e=>setEdit({...edit, meta:Number(e.target.value)})}/></div>
             <div><label>Valor na meta (R$)</label><input type="number" value={edit.valorMeta} onChange={e=>setEdit({...edit, valorMeta:Number(e.target.value)})}/></div>
