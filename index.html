@@ -2339,7 +2339,7 @@ function AdmCadastros({st, setSt, toast}){
                 <select value={editPlaca.tipoModelo} onChange={e=>setEditPlaca({...editPlaca, tipoModelo:e.target.value})}>
                   <option value="">Selecionar...</option>
                   {editPlaca.tipoModelo&&!tiposAtivos.some(t=>chaveTipo(t.nome)===chaveTipo(editPlaca.tipoModelo))&&<option value={editPlaca.tipoModelo}>{editPlaca.tipoModelo} (histórico)</option>}
-                  {tiposAtivos.filter(t=>!t.tipoFrota||t.tipoFrota===editPlaca.tipoFrota).map(t=><option key={t.itemId} value={t.nome}>{t.nome}</option>)}
+                  {tiposAtivos.filter(t=>!t.tipoFrota||chaveTipo(t.tipoFrota)===chaveTipo(editPlaca.tipoFrota)).map(t=><option key={t.itemId} value={t.nome}>{t.nome}</option>)}
                 </select></div><div><label>Uso compartilhado?</label><select value={editPlaca.usoCompartilhado?'s':'n'} onChange={e=>setEditPlaca({...editPlaca,usoCompartilhado:e.target.value==='s'})}><option value="n">Não — exige vínculo</option><option value="s">Sim</option></select></div>
             <div><label>Status do veículo</label><select value={editPlaca.ativo?'s':'n'} onChange={e=>setEditPlaca({...editPlaca,ativo:e.target.value==='s'})}><option value="s">Ativo</option><option value="n">Inativo</option></select></div>
             <button className="btn btn-p" onClick={salvarPlaca}>Salvar placa</button>
