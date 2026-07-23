@@ -1973,6 +1973,7 @@ function AdmPremiacao({st, setSt, toast}){
   const [edit,setEdit]=useState(null);
   const [competencia,setCompetencia]=useState(MES_ATUAL.slice(3)+'-'+MES_ATUAL.slice(0,2));
   const [fMotorista,setFMotorista]=useState('');
+  const [fTipoMeta,setFTipoMeta]=useState('');
   const [painel,setPainel]=useState({metas:[],tiposVeiculo:[],descontos:[],elegiveis:[],pendencias:{}});
   const [novoDesc,setNovoDesc]=useState({motoristaId:'',motoristaNome:'',categoria:'Multas',situacao:'Sem ocorrência',quantidade:0,valor:0,percentual:0,dataOcorrencia:'',motivo:'',exibir:true});
   const categorias=['Notificação / Advertência','Multas','Auditoria Interna'];
@@ -1993,10 +1994,11 @@ function AdmPremiacao({st, setSt, toast}){
   const addDesc=async()=>{
     if(!novoDesc.motoristaId){toast('Selecione o motorista.');return;}
     if(novoDesc.situacao==='Com ocorrência'&&!Number(novoDesc.valor)&&!Number(novoDesc.percentual)){toast('Informe o valor ou percentual do desconto.');return;}
-    try{await ApiService.salvarDesconto({...novoDesc,competencia});await carregar();setNovoDesc({...novoDesc,situacao:'Sem ocorrência',quantidade:0,valor:0,percentual:0,dataOcorrencia:'',motivo:''});toast('Conferência salva no SharePoint.');}
+    try{await ApiService.salvarDesconto({...novoDesc,competencia});await carregar();setNovoDesc({motoristaId:'',motoristaNome:'',categoria:'Multas',situacao:'Sem ocorrência',quantidade:0,valor:0,percentual:0,dataOcorrencia:'',motivo:'',exibir:true});toast(novoDesc.itemId?'Lançamento atualizado no SharePoint.':'Conferência salva no SharePoint.');}
     catch(e){toast('Erro ao salvar conferência: '+e.message)}
   };
-  const metas=painel.metas||[];
+  const tiposMeta=[...new Set([...(painel.tiposVeiculo||[]),...(painel.metas||[]).map(m=>m.tipo)].filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  const metas=(painel.metas||[]).filter(m=>!fTipoMeta||m.tipo===fTipoMeta);
   const elegiveis=(painel.elegiveis||[]).filter(u=>!fMotorista||u.motoristaId===fMotorista);
   return (
     <React.Fragment>
@@ -2009,7 +2011,12 @@ function AdmPremiacao({st, setSt, toast}){
       </div>
 
       {sub==='metas' && <React.Fragment>
-        <div className="row" style={{marginBottom:12}}><div className="grow"></div>
+        <div className="row" style={{marginBottom:12,flexWrap:'wrap'}}>
+          <select style={{width:'auto'}} value={fTipoMeta} onChange={e=>setFTipoMeta(e.target.value)}>
+            <option value="">Todos os tipos de veículo</option>
+            {tiposMeta.map(tipo=><option key={tipo} value={tipo}>{tipo}</option>)}
+          </select>
+          <div className="grow"></div>
           <button className="btn btn-p" onClick={()=>setEdit({tipo:'',start:0,meta:0,valorMeta:0,pctStart:0,pctMeta:0,teto:0,vigIni:HOJE,vigFim:HOJE.slice(0,4)+'-12-31',status:'Ativa',ativo:true,observacao:''})}>+ Incluir meta</button>
         </div>
         <div className="card" style={{overflowX:'auto'}}>
@@ -2043,6 +2050,7 @@ function AdmPremiacao({st, setSt, toast}){
         </div>
         <div className="card">
           <h3 style={{marginBottom:10}}>Conferir desconto</h3>
+          {novoDesc.itemId&&<div className="aviso-box" style={{marginBottom:12}}>Editando lançamento existente. Ao salvar, o registro será atualizado sem criar duplicidade.</div>}
           <div className="form-grid">
             <div><label>Motorista</label>
               <select value={novoDesc.motoristaId} onChange={e=>{const u=(painel.elegiveis||[]).find(x=>x.motoristaId===e.target.value);setNovoDesc({...novoDesc,motoristaId:e.target.value,motoristaNome:u?.nome||''})}}>
@@ -2059,7 +2067,10 @@ function AdmPremiacao({st, setSt, toast}){
               <div style={{gridColumn:'1/-1'}}><label>Motivo</label><textarea value={novoDesc.motivo} onChange={e=>setNovoDesc({...novoDesc,motivo:e.target.value})}/></div>
             </React.Fragment>}
           </div>
-          <button className="btn btn-p" style={{marginTop:12}} onClick={addDesc}>Salvar conferência</button>
+          <div className="row" style={{marginTop:12}}>
+            <button className="btn btn-p" onClick={addDesc}>{novoDesc.itemId?'Salvar edição':'Salvar conferência'}</button>
+            {novoDesc.itemId&&<button className="btn btn-s" onClick={()=>setNovoDesc({motoristaId:'',motoristaNome:'',categoria:'Multas',situacao:'Sem ocorrência',quantidade:0,valor:0,percentual:0,dataOcorrencia:'',motivo:'',exibir:true})}>Cancelar edição</button>}
+          </div>
         </div>
         <div className="card" style={{overflowX:'auto'}}>
           <table>
@@ -2069,7 +2080,13 @@ function AdmPremiacao({st, setSt, toast}){
                 <td><b>{d.motoristaNome}</b></td>
                 <td>{competencia.slice(5,7)+'/'+competencia.slice(0,4)}</td><td>{d.categoria}</td>
                 <td className="td-num num" style={{color:d.valor?'var(--erro)':'var(--cinza)'}}>{brl(-Math.abs(d.valor||0))}</td>
-                <td className="muted">{d.situacao}</td><td></td>
+                <td className="muted">{d.situacao}</td>
+                <td><button className="btn btn-s btn-sm" onClick={()=>setNovoDesc({
+                  itemId:d.itemId,motoristaId:d.motoristaId,motoristaNome:d.motoristaNome,
+                  categoria:d.categoria,situacao:d.situacao||'Sem ocorrência',
+                  quantidade:d.quantidade||0,valor:d.valor||0,percentual:d.percentual||0,
+                  dataOcorrencia:d.dataOcorrencia||'',motivo:d.motivo||'',exibir:d.exibir!==false
+                })}>Editar</button></td>
               </tr>)}</tbody>
           </table>
         </div>
@@ -2081,7 +2098,8 @@ function AdmPremiacao({st, setSt, toast}){
             <div style={{gridColumn:'1/-1'}}><label>Tipo de veículo</label>
               <select value={edit.tipo} onChange={e=>setEdit({...edit,tipo:e.target.value})}>
                 <option value="">Selecionar...</option>
-                {(painel.tiposVeiculo||[]).map(tipo=><option key={tipo} value={tipo}>{tipo}</option>)}
+                {edit.tipo&&!tiposMeta.includes(edit.tipo)&&<option value={edit.tipo}>{edit.tipo}</option>}
+                {tiposMeta.map(tipo=><option key={tipo} value={tipo}>{tipo}</option>)}
               </select>
             </div>
             <div><label>Start (R$)</label><input type="number" value={edit.start} onChange={e=>setEdit({...edit, start:Number(e.target.value)})}/></div>
