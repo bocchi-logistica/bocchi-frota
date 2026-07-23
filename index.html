@@ -401,6 +401,7 @@ const ApiService = {
     return this._req('GET','/admin/premiacao'+q);
   },
   salvarMeta(d){ return this._req('POST','/admin/premiacao/metas/salvar',d); },
+  diagnosticoMetas(){ return this._req('GET','/admin/premiacao/metas/diagnostico'); },
   salvarDesconto(d){ return this._req('POST','/admin/premiacao/descontos/salvar',d); },
   importarCargas(competencia,cargas){ return this._req('POST','/admin/cargas/importar',{competencia,cargas}); },
   admCadastros(){ return this._req('GET','/admin/cadastros'); },
@@ -1995,7 +1996,12 @@ function AdmPremiacao({st, setSt, toast}){
   };
   const salvarMeta=async()=>{
     if(!edit.tipo||!edit.vigIni||!edit.vigFim){toast('Preencha tipo de veículo e vigência.');return;}
-    try{await ApiService.salvarMeta(edit);setEdit(null);await carregar();toast('Meta salva no SharePoint.');}
+    try{
+      const r=await ApiService.salvarMeta(edit);
+      setEdit(null);await carregar();
+      const avisos=(r&&r.avisos)||[];
+      toast(avisos.length?('Meta salva com ressalvas: '+avisos.join(' ')):'Meta salva no SharePoint.');
+    }
     catch(e){toast('Erro ao salvar meta: '+e.message)}
   };
   const addDesc=async()=>{
@@ -2047,6 +2053,14 @@ function AdmPremiacao({st, setSt, toast}){
             {tiposMeta.map(tipo=><option key={tipo} value={tipo}>{tipo}</option>)}
           </select>
           <div className="grow"></div>
+          <button className="btn" onClick={async()=>{
+            try{
+              const d=await ApiService.diagnosticoMetas();
+              const linhas=(d.colunas||[]).map(c=>c.nomeInterno+'  <-  '+c.nomeVisivel).join('\n');
+              console.log('DIAGNOSTICO Metas_Premiacao',d);
+              alert('Nomes internos das colunas de Metas_Premiacao:\n\n'+linhas+'\n\n(detalhe completo no console F12)');
+            }catch(e){toast('Falha no diagnóstico: '+e.message)}
+          }}>Diagnóstico de colunas</button>
           <button className="btn btn-p" onClick={()=>setEdit({tipo:'',start:0,meta:0,valorMeta:0,pctStart:0,pctMeta:0,teto:0,vigIni:HOJE,vigFim:HOJE.slice(0,4)+'-12-31',status:'Ativa',ativo:true,observacao:''})}>+ Incluir meta</button>
         </div>
         <div className="card" style={{overflowX:'auto'}}>
