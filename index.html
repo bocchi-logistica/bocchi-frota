@@ -2226,7 +2226,12 @@ function AdmCadastros({st, setSt, toast}){
     }catch(e){toast('Erro ao '+acao+' placa: '+e.message);}
   };
   const salvarVinculo=async()=>{const u=cad.usuarios.find(x=>x.itemId===editVinculo.usuarioItemId),v=cad.veiculos.find(x=>x.itemId===editVinculo.veiculoItemId);if(!u||!v){toast('Selecione usuário e veículo.');return;}try{await ApiService.salvarVinculo({...editVinculo,usuarioId:u.usuarioId,titulo:u.usuarioId+' - '+v.placa});setEditVinculo(null);await carregar();toast('Vínculo salvo no SharePoint.');}catch(e){toast('Erro ao salvar vínculo: '+e.message);}};
-  const tiposAtivos=cad.tiposVeiculo.filter(t=>t.ativo);
+  /* A edição da placa deve sempre exibir o cadastro central. O status ou a
+     classificação da frota não podem apagar as opções do seletor; o valor
+     antigo continua identificado separadamente como histórico. */
+  const tiposAtivos=cad.tiposVeiculo
+    .filter(t=>String(t.nome||'').trim() && t.ativo!==false)
+    .sort((a,b)=>String(a.nome).localeCompare(String(b.nome),'pt-BR'));
   return (
     <React.Fragment>
       <div className="row" style={{flexWrap:'wrap'}}>
@@ -2339,7 +2344,7 @@ function AdmCadastros({st, setSt, toast}){
                 <select value={editPlaca.tipoModelo} onChange={e=>setEditPlaca({...editPlaca, tipoModelo:e.target.value})}>
                   <option value="">Selecionar...</option>
                   {editPlaca.tipoModelo&&!tiposAtivos.some(t=>chaveTipo(t.nome)===chaveTipo(editPlaca.tipoModelo))&&<option value={editPlaca.tipoModelo}>{editPlaca.tipoModelo} (histórico)</option>}
-                  {tiposAtivos.filter(t=>!t.tipoFrota||chaveTipo(t.tipoFrota)===chaveTipo(editPlaca.tipoFrota)).map(t=><option key={t.itemId} value={t.nome}>{t.nome}</option>)}
+                  {tiposAtivos.map(t=><option key={t.itemId} value={t.nome}>{t.nome}</option>)}
                 </select></div><div><label>Uso compartilhado?</label><select value={editPlaca.usoCompartilhado?'s':'n'} onChange={e=>setEditPlaca({...editPlaca,usoCompartilhado:e.target.value==='s'})}><option value="n">Não — exige vínculo</option><option value="s">Sim</option></select></div>
             <div><label>Status do veículo</label><select value={editPlaca.ativo?'s':'n'} onChange={e=>setEditPlaca({...editPlaca,ativo:e.target.value==='s'})}><option value="s">Ativo</option><option value="n">Inativo</option></select></div>
             <button className="btn btn-p" onClick={salvarPlaca}>Salvar placa</button>
