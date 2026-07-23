@@ -179,7 +179,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 90000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '1.9.4-importacao-retomavel'
+  VERSAO: '1.9.23-premiacao-motorista-banco'
 };
 
 /* ============================================================================
@@ -549,10 +549,11 @@ const QUADS = [
   {id:2, nome:'2° Quadrimestre', meses:['05/2026','06/2026','07/2026','08/2026'], pgto:'até o 5° dia útil de setembro/2026'},
   {id:3, nome:'3° Quadrimestre', meses:['09/2026','10/2026','11/2026','12/2026'], pgto:'até o 5° dia útil de janeiro/2027'},
 ];
-const MES_ATUAL = '07/2026';
 const HOJE = new Intl.DateTimeFormat('en-CA', {
   timeZone:'America/Sao_Paulo', year:'numeric', month:'2-digit', day:'2-digit'
 }).format(new Date());
+const MES_ATUAL = HOJE.slice(5,7)+'/'+HOJE.slice(0,4);
+const mesesAteHoje = () => MESES_2026.filter(m=>m.slice(3)<HOJE.slice(0,4) || (m.slice(3)===HOJE.slice(0,4) && m.slice(0,2)<=HOJE.slice(5,7)));
 
 const brl = v => (v==null||isNaN(v)) ? '—' : v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const brn = (v,d=2) => (v==null||isNaN(v)) ? '—' : v.toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d});
@@ -632,6 +633,22 @@ function usarDadosMensais(st){
   },[st.resumos, st.cargas]);
 }
 function apuracaoMes(st, dados, motNome, mes){
+  const calculada=(st.apuracoes||[]).find(a=>a.mes===mes);
+  if(calculada){
+    return {
+      fat:Number(calculada.realizado||0),
+      prod:Number(calculada.premioBruto||0),
+      descs:Array.isArray(calculada.descontos)?calculada.descontos:[],
+      totDesc:Number(calculada.totalDescontos||0),
+      apurado:Number(calculada.apurado||0),
+      meta:calculada.meta||null,
+      tipo:String(calculada.tipoVeiculo||""),
+      temDados:Number(calculada.quantidadeCargas||0)>0,
+      nCargas:Number(calculada.quantidadeCargas||0),
+      peso:Number(calculada.pesoTon||0),
+      detalhe:true
+    };
+  }
   const u = st.usuarios.find(x=>x.nome===motNome);
   const placa = Object.values(st.frota).find(f=>f.motorista===motNome && f.frota!=='leve');
   const cargaComTipo = [...st.cargas].reverse().find(c=>c.motorista===motNome && c.tipoVeiculo);
@@ -794,7 +811,7 @@ function TelaCargas({st, setSt, user, dados, toast}){
 /* ================= MOTORISTA: PREMIAÇÃO ================= */
 function Regua({fat, meta}){
   if(!meta) return null;
-  const fim = meta.meta * 1.25;
+  const fim = Math.max(meta.meta * 1.25, meta.start * 1.35, 1);
   const pct = Math.max(0, Math.min(100, fat/fim*100));
   const pStart = meta.start/fim*100, pMeta = meta.meta/fim*100;
   return (
@@ -809,16 +826,19 @@ function Regua({fat, meta}){
 function TelaPremiacao({st, user, dados}){
   const [mes,setMes]=useState(MES_ATUAL);
   const ap = apuracaoMes(st, dados, user.nome, mes);
-  const quad = QUADS.find(q=>q.meses.includes(mes));
+  const quad = QUADS.find(q=>q.meses.includes(mes)) || QUADS[0];
   const apsQuad = quad.meses.map(m=>({mes:m, ...apuracaoMes(st, dados, user.nome, m)}));
   const somaQuad = apsQuad.reduce((s,a)=>s+a.apurado,0);
   const pctStart = ap.meta ? Math.min(100, ap.fat/ap.meta.start*100) : 0;
   const pctMeta = ap.meta ? Math.min(100, ap.fat/ap.meta.meta*100) : 0;
   const faltaStart = ap.meta ? Math.max(0, ap.meta.start - ap.fat) : 0;
+  const ganhoStartMil = ap.meta ? ap.meta.pctStart*10 : 0;
+  const ganhoMetaMil = ap.meta ? ap.meta.pctMeta*10 : 0;
+  const mesesVisiveis = mesesAteHoje();
   return (
     <React.Fragment>
       <div className="seletor-mes">
-        {MESES_2026.slice(0,7).map(m=> <button key={m} className={'mes-pill'+(m===mes?' on':'')} onClick={()=>setMes(m)}>{mesLabel(m)}</button>)}
+        {mesesVisiveis.map(m=> <button key={m} className={'mes-pill'+(m===mes?' on':'')} onClick={()=>setMes(m)}>{mesLabel(m)}</button>)}
       </div>
 
       <div className="card regua-wrap">
@@ -837,8 +857,8 @@ function TelaPremiacao({st, user, dados}){
         <Regua fat={ap.fat} meta={ap.meta}/>
         <div className="muted" style={{textAlign:'center'}}>
           {!ap.meta ? 'Sem meta cadastrada para o tipo de veículo.' :
-           ap.fat>=ap.meta.meta ? 'Meta batida! Cada R$ 1.000 acima da meta soma R$ 70 (teto '+brl(ap.meta.teto)+').' :
-           ap.fat>=ap.meta.start ? 'Start atingido — cada R$ 1.000 a mais soma R$ 50 até a meta.' :
+           ap.fat>=ap.meta.meta ? 'Meta batida! Cada R$ 1.000 acima da meta soma '+brl(ganhoMetaMil)+' (teto '+brl(ap.meta.teto)+').' :
+           ap.fat>=ap.meta.start ? 'Start atingido — cada R$ 1.000 a mais soma '+brl(ganhoStartMil)+' até a meta.' :
            'Faltam '+brl(faltaStart)+' de frete para começar a pontuar.'}
         </div>
       </div>
@@ -885,7 +905,10 @@ function TelaPremiacao({st, user, dados}){
         {apsQuad.map(a=>{
           const futuro = a.mes > MES_ATUAL;
           return (
-            <div className={'quad-mes'+(a.mes===mes?' on':'')} key={a.mes}>
+            <div className={'quad-mes'+(a.mes===mes?' on':'')} key={a.mes}
+              role="button" tabIndex="0" style={{cursor:'pointer'}}
+              onClick={()=>setMes(a.mes)}
+              onKeyDown={e=>{if(e.key==='Enter'||e.key===' ')setMes(a.mes)}}>
               <span style={{fontWeight:600}}>{mesLabel(a.mes)}</span>
               {futuro ? <span className="muted">em andamento</span> :
                 <b className="num" style={{color: a.apurado<0?'var(--erro)':'var(--mata)'}}>{brl(a.apurado)}</b>}
@@ -1382,6 +1405,7 @@ function ChecklistDetalhe({ck, perguntas, onClose, acoes}){
 function MotoristaApp({st, setSt, user, onSair, toast}){
   const dados = usarDadosMensais(st);
   const [carregandoCargas,setCarregandoCargas]=useState(!CONFIG.MODO_DEMONSTRACAO);
+  const [carregandoPremiacao,setCarregandoPremiacao]=useState(!CONFIG.MODO_DEMONSTRACAO);
   useEffect(()=>{
     if(CONFIG.MODO_DEMONSTRACAO) return;
     let ativo=true;
@@ -1391,9 +1415,12 @@ function MotoristaApp({st, setSt, user, onSair, toast}){
         ...s,
         cargas:Array.isArray(r.cargas)?r.cargas:[],
         metas:Array.isArray(p.metas)?p.metas:s.metas,
-        descontos:Array.isArray(p.descontos)?p.descontos:s.descontos
+        descontos:Array.isArray(p.descontos)?p.descontos:s.descontos,
+        apuracoes:Array.isArray(p.apuracoes)?p.apuracoes:[]
       }));
-    }).catch(e=>toast('Não foi possível carregar as cargas: '+e.message)).finally(()=>{if(ativo)setCarregandoCargas(false)});
+    }).catch(e=>toast('Não foi possível carregar os dados do motorista: '+e.message)).finally(()=>{
+      if(ativo){setCarregandoCargas(false);setCarregandoPremiacao(false);}
+    });
     return()=>{ativo=false};
   },[user.id]);
   const abas = [
@@ -1434,7 +1461,8 @@ function MotoristaApp({st, setSt, user, onSair, toast}){
         {abas.length===0 && <div className="card muted">Seu usuário está sem módulos liberados. Fale com a logística.</div>}
         {aba==='cargas' && carregandoCargas && <div className="card muted">Carregando cargas do SharePoint...</div>}
         {aba==='cargas' && !carregandoCargas && <TelaCargas st={st} setSt={setSt} user={user} dados={dados} toast={toast}/>}
-        {aba==='prem' && <TelaPremiacao st={st} user={user} dados={dados}/>}
+        {aba==='prem' && carregandoPremiacao && <div className="card muted">Carregando metas, apuração e descontos do SharePoint...</div>}
+        {aba==='prem' && !carregandoPremiacao && <TelaPremiacao st={st} user={user} dados={dados}/>}
         {aba==='check' && <TelaChecklist st={st} setSt={setSt} user={user} toast={toast}/>}
         <div className="card" style={{padding:12, marginTop:2}}>
           <div className="row">
