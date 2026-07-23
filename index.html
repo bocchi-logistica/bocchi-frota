@@ -3,7 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Bocchi Frota — Portal do Motorista e ADM Logística (v1.2 — Edson.B)</title>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>Bocchi Frota — Portal do Motorista e ADM Logística (v1.3 — Edson.B)</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
@@ -49,17 +52,18 @@ label{font-size:12.5px; font-weight:600; color:var(--cinza); display:block; marg
 .login-card{width:100%; max-width:400px; background:var(--branco); border-radius:20px; padding:32px 28px; box-shadow:0 20px 60px rgba(0,0,0,.35)}
 .marca{font-family:'Archivo'; font-weight:800; font-size:30px; color:var(--mata); letter-spacing:-.02em}
 .marca em{font-style:normal; color:var(--colheita-escura)}
+.logo-login{display:block;width:170px;max-width:65%;height:auto;margin:0 auto 16px}
 .login-sub{color:var(--cinza); font-size:13.5px; margin:4px 0 24px}
 .hint{background:var(--papel); border:1px dashed var(--linha); border-radius:10px; padding:10px 12px; font-size:12.5px; color:var(--cinza); margin-top:16px}
 
 /* ---------- SHELL MOTORISTA ---------- */
-.mshell{max-width:520px; margin:0 auto; min-height:100vh; display:flex; flex-direction:column; background:var(--papel)}
+.mshell{max-width:520px; margin:0 auto; min-height:100vh; min-height:100dvh; display:flex; flex-direction:column; background:var(--papel)}
 .mtop{background:var(--mata); color:#fff; padding:14px 16px 12px; position:sticky; top:0; z-index:20}
 .mtop .nome{font-family:'Archivo'; font-weight:700; font-size:17px}
 .mtop .sub{font-size:12px; opacity:.75}
 .chip-placa{background:rgba(255,255,255,.14); border-radius:8px; padding:4px 10px; font-family:'Archivo'; font-weight:700; font-size:13px; letter-spacing:.06em}
-.mbody{flex:1; padding:14px 14px 90px; display:flex; flex-direction:column; gap:12px}
-.mtabs{position:fixed; bottom:0; left:0; right:0; margin:0 auto; max-width:520px; background:var(--branco); border-top:1px solid var(--linha); display:flex; z-index:30; padding-bottom:env(safe-area-inset-bottom)}
+.mbody{flex:0 0 auto; padding:14px; display:flex; flex-direction:column; gap:12px}
+.mtabs{position:sticky; bottom:0; margin-top:0; width:100%; max-width:520px; background:var(--branco); border-top:1px solid var(--linha); display:flex; z-index:30; padding-bottom:env(safe-area-inset-bottom)}
 .mtab{flex:1; padding:10px 4px 12px; text-align:center; color:var(--cinza); font-size:11.5px; font-weight:600}
 .mtab .ic{font-size:21px; display:block; margin-bottom:2px}
 .mtab.on{color:var(--mata)}
@@ -90,18 +94,6 @@ label{font-size:12.5px; font-weight:600; color:var(--cinza); display:block; marg
 .grande{font-family:'Archivo'; font-weight:800; font-size:30px; letter-spacing:-.01em}
 .linha-item{display:flex; justify-content:space-between; padding:9px 0; border-bottom:1px solid var(--linha); font-size:14px}
 .linha-item:last-child{border-bottom:none}
-.linha-ocorrencia{display:block; border-bottom:1px solid var(--linha)}
-.linha-ocorrencia .linha-item{border-bottom:none}
-.linha-ocorrencia-btn{width:100%; text-align:left; color:inherit}
-.linha-ocorrencia-btn:focus-visible{outline:2px solid var(--folha); outline-offset:2px; border-radius:8px}
-.linha-ocorrencia-resumo{display:flex; align-items:center; gap:8px; min-width:0}
-.ocorrencia-seta{display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; flex:0 0 20px; border-radius:50%; background:var(--folha-clara); color:var(--mata); font-size:13px; font-weight:800; transition:transform .18s ease}
-.ocorrencia-seta.aberta{transform:rotate(180deg)}
-.ocorrencia-detalhes{margin:0 0 10px 28px; padding:10px 12px; border-left:3px solid var(--colheita); border-radius:0 9px 9px 0; background:var(--papel); display:grid; gap:8px}
-.ocorrencia-registro{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:4px 12px; padding-bottom:8px; border-bottom:1px dashed var(--linha)}
-.ocorrencia-registro:last-child{padding-bottom:0; border-bottom:none}
-.ocorrencia-motivo{font-weight:600}
-.ocorrencia-meta{font-size:12px; color:var(--cinza)}
 .quad-mes{display:flex; justify-content:space-between; align-items:center; padding:10px 12px; border-radius:10px; background:var(--papel); margin-bottom:6px}
 .quad-mes.on{outline:2px solid var(--folha)}
 
@@ -145,16 +137,6 @@ th.td-num{text-align:right}
 .kpi .v{font-family:'Archivo'; font-weight:800; font-size:24px; color:var(--mata); margin-top:2px}
 .drop{border:2px dashed var(--linha); border-radius:var(--r); padding:34px 20px; text-align:center; color:var(--cinza); background:var(--branco)}
 .form-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px}
-.filtros-cadastro{display:grid; grid-template-columns:minmax(180px,1.4fr) repeat(2,minmax(145px,1fr)) auto; gap:10px; align-items:end; margin:12px 0}
-.filtros-cadastro.veiculos{grid-template-columns:repeat(3,minmax(145px,1fr)) minmax(150px,1fr) auto}
-.filtros-cadastro.vinculos{grid-template-columns:repeat(3,minmax(145px,1fr)) minmax(150px,1fr) auto}
-.sort-btn{min-width:122px; height:44px}
-.vazio-tabela{text-align:center; color:var(--cinza); padding:24px 12px}
-@media(max-width:780px){
-  .filtros-cadastro,.filtros-cadastro.veiculos,.filtros-cadastro.vinculos{grid-template-columns:1fr 1fr}
-  .filtros-cadastro>div:first-child{grid-column:1/-1}
-  .sort-btn{width:100%}
-}
 
 /* ---------- MODAL / TOAST ---------- */
 .overlay{position:fixed; inset:0; background:rgba(20,30,24,.55); display:flex; align-items:flex-end; justify-content:center; z-index:100; padding:0}
@@ -194,10 +176,10 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   MAX_FOTO_MB: 2,
   QUALIDADE_FOTO: 0.7,
   FOTO_MAX_PX: 1600,
-  TIMEOUT_MS: 30000,
+  TIMEOUT_MS: 90000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '1.8.9-perguntas-frequencia'
+  VERSAO: '1.9.27-saldo-negativo-quadrimestre'
 };
 
 /* ============================================================================
@@ -259,6 +241,13 @@ const IDB = {
       rq.onerror = ()=>rej(rq.error);
     }));
   },
+  listarRascunhos(){
+    return this.abrir().then(db=>new Promise((res, rej)=>{
+      const rq = db.transaction('rascunho','readonly').objectStore('rascunho').getAll();
+      rq.onsuccess = ()=>res(rq.result||[]);
+      rq.onerror = ()=>rej(rq.error);
+    }));
+  },
   salvarRascunho(chave, dados){ return this._tx('rascunho','readwrite', st=>st.put({chave, dados, quando: agoraISO()})); },
   lerRascunho(chave){
     return this.abrir().then(db=>new Promise((res)=>{
@@ -314,8 +303,10 @@ function comprimirImagem(arquivo){
    Em MODO_DEMONSTRACAO as funções simulam o servidor localmente.
    ========================================================================== */
 let _token = null; // token de sessão em memória (nunca gravar senha no navegador)
+let _loginSessao = null; // identifica o proprietário do token atual
 const ApiService = {
   get token(){ return _token; },
+  get loginAtual(){ return _loginSessao; },
   _headers(){
     const h = {'Content-Type':'application/json'};
     if (_token) h['Authorization'] = 'Bearer ' + _token;
@@ -355,6 +346,7 @@ const ApiService = {
 
   if (r && r.ok) {
     _token = r.token;
+    _loginSessao = String(r.motorista.login || login || '').trim().toLowerCase();
 
     return {
       sucesso: true,
@@ -366,10 +358,10 @@ const ApiService = {
   perfil: (r.motorista.perfil || 'motorista').toLowerCase(),
   veiculoPadrao: r.motorista.veiculoPadrao || '',
   acessos: r.motorista.acessos || {},
-  perms: {
-    cargas: true,
-    premiacao: true,
-    checklist: true
+  perms: r.motorista.perms || {
+    cargas: false,
+    premiacao: false,
+    checklist: false
   }
 }
     };
@@ -380,7 +372,7 @@ const ApiService = {
     erro: r?.erro || 'Login ou PIN inválido.'
   };
 },
-  sair(){ _token = null; },
+  sair(){ _token = null; _loginSessao = null; },
   enviarChecklist(registro){
     if (CONFIG.MODO_DEMONSTRACAO){
       // Simula o servidor com prefixo DEMO, sem confundir com protocolos reais
@@ -399,8 +391,21 @@ const ApiService = {
   obterConfiguracoes(){ return this._req('GET','/configuracoes'); },
   obterMotoristas(){ return this._req('GET','/motoristas'); },
   obterVeiculos(){ return this._req('GET','/veiculos'); },
+  obterCargas(competencia=''){
+    const q = competencia ? '?competencia='+encodeURIComponent(competencia) : '';
+    return this._req('GET','/cargas/me'+q);
+  },
+  obterPremiacao(){ return this._req('GET','/premiacao/me'); },
+  admPremiacao(competencia=''){
+    const q=competencia?'?competencia='+encodeURIComponent(competencia):'';
+    return this._req('GET','/admin/premiacao'+q);
+  },
+  salvarMeta(d){ return this._req('POST','/admin/premiacao/metas/salvar',d); },
+  salvarDesconto(d){ return this._req('POST','/admin/premiacao/descontos/salvar',d); },
+  importarCargas(competencia,cargas){ return this._req('POST','/admin/cargas/importar',{competencia,cargas}); },
   admCadastros(){ return this._req('GET','/admin/cadastros'); },
   salvarUsuario(d){ return this._req('POST','/admin/usuarios/salvar',d); },
+  salvarTipoVeiculo(d){ return this._req('POST','/admin/tipos-veiculo/salvar',d); },
   salvarVeiculo(d){ return this._req('POST','/admin/veiculos/salvar',d); },
   salvarVinculo(d){ return this._req('POST','/admin/vinculos/salvar',d); },
   // Painel administrativo (a API valida o perfil pelo token)
@@ -441,22 +446,66 @@ const FilaEnvio = {
   _processando: false,
   ouvintes: new Set(),
   _notificar(){ this.ouvintes.forEach(f=>{ try{f();}catch(e){} }); },
+  validar(registro){
+    const faltando = [];
+    if(!String(registro?.idLocal||'').trim()) faltando.push('identificador');
+    if(!String(registro?.motorista?.nome||'').trim()) faltando.push('motorista');
+    if(!String(registro?.motorista?.login||'').trim()) faltando.push('login');
+    if(!String(registro?.veiculo?.placa||'').trim()) faltando.push('placa');
+    if(!Array.isArray(registro?.respostas) || !registro.respostas.length) faltando.push('respostas');
+    return faltando;
+  },
+  _loginDono(registro){
+    return String(registro?.donoLogin || registro?.motorista?.login || '').trim().toLowerCase();
+  },
   async adicionar(registro){
+    const faltando = this.validar(registro);
+    if(faltando.length) throw new Error('Não foi possível salvar: faltam '+faltando.join(', ')+'.');
+    // Vincula definitivamente o registro ao usuário que o criou neste aparelho.
+    // Isso impede que outro motorista veja ou envie a fila após uma troca de login.
+    registro.donoLogin = this._loginDono(registro);
     registro.statusEnvio = 'PENDENTE';
     registro.tentativas = 0;
     await IDB.salvarFila(registro);
     this._notificar();
   },
-  async pendentes(){
+  async pendentes(loginDono){
     const todos = await IDB.listarFila();
-    return todos.filter(x=>x.statusEnvio!=='ENVIADO');
+    const login = String(loginDono||'').trim().toLowerCase();
+    if(!login) return [];
+    return todos.filter(x=>x.statusEnvio!=='ENVIADO' && this._loginDono(x)===login);
   },
-  async processar(toast){
+  async sanear(loginDono){
+    const login = String(loginDono||'').trim().toLowerCase();
+    if(!login) return {removidos:0};
+    const todos = await IDB.listarFila();
+    let removidos = 0;
+    for(const item of todos){
+      if(this._loginDono(item)!==login) continue;
+      const irrecuperavel = this.validar(item).length>0 || item.statusEnvio==='DADOS_INCOMPLETOS';
+      if(irrecuperavel){ await IDB.removerFila(item.idLocal); removidos++; }
+    }
+    if(removidos) this._notificar();
+    return {removidos};
+  },
+  async processar(toast, loginDono){
+    const login = String(loginDono||'').trim().toLowerCase();
+    if(!login) return;
+    // Um temporizador de uma sessão anterior pode disparar depois da troca de
+    // motorista. Nesse caso ele é encerrado sem acessar nem enviar o registro.
+    if(!CONFIG.MODO_DEMONSTRACAO && ApiService.loginAtual!==login) return;
     if (this._processando) return; // evita tentativas simultâneas
     this._processando = true;
     try{
-      const fila = await this.pendentes();
+      const fila = await this.pendentes(login);
       for (const item of fila){
+        const faltando = this.validar(item);
+        if(faltando.length){
+          item.statusEnvio = 'DADOS_INCOMPLETOS';
+          item.ultimoErro = 'Registro antigo incompleto: faltam '+faltando.join(', ')+'. Exclua e refaça o checklist.';
+          await IDB.salvarFila(item); this._notificar();
+          continue;
+        }
         item.statusEnvio = 'ENVIANDO';
         await IDB.salvarFila(item); this._notificar();
         try{
@@ -478,7 +527,7 @@ const FilaEnvio = {
           // Agenda nova tentativa com intervalo crescente
           if (item.statusEnvio==='PENDENTE'){
             const delay = CONFIG.RETRY_DELAYS_MS[Math.min(item.tentativas, CONFIG.RETRY_DELAYS_MS.length-1)];
-            setTimeout(()=>this.processar(toast), delay);
+            setTimeout(()=>this.processar(toast, login), delay);
           }
         }
         this._notificar();
@@ -488,8 +537,8 @@ const FilaEnvio = {
     }
   }
 };
-// Quando a internet voltar, tenta enviar os pendentes automaticamente
-window.addEventListener('online', ()=>FilaEnvio.processar());
+// O reenvio automático é registrado dentro da tela do motorista, onde o login
+// atual está disponível. Nunca processar uma fila sem identificar o proprietário.
 
 
 /* ================= DADOS / HELPERS ================= */
@@ -500,10 +549,11 @@ const QUADS = [
   {id:2, nome:'2° Quadrimestre', meses:['05/2026','06/2026','07/2026','08/2026'], pgto:'até o 5° dia útil de setembro/2026'},
   {id:3, nome:'3° Quadrimestre', meses:['09/2026','10/2026','11/2026','12/2026'], pgto:'até o 5° dia útil de janeiro/2027'},
 ];
-const MES_ATUAL = '06/2026'; // referência da demonstração (último mês com dados)
 const HOJE = new Intl.DateTimeFormat('en-CA', {
   timeZone:'America/Sao_Paulo', year:'numeric', month:'2-digit', day:'2-digit'
 }).format(new Date());
+const MES_ATUAL = HOJE.slice(5,7)+'/'+HOJE.slice(0,4);
+const mesesAteHoje = () => MESES_2026.filter(m=>m.slice(3)<HOJE.slice(0,4) || (m.slice(3)===HOJE.slice(0,4) && m.slice(0,2)<=HOJE.slice(5,7)));
 
 const brl = v => (v==null||isNaN(v)) ? '—' : v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const brn = (v,d=2) => (v==null||isNaN(v)) ? '—' : v.toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d});
@@ -511,6 +561,12 @@ const mesLabel = m => NOME_MES[m.slice(0,2)] + '/' + m.slice(5);
 const dataBR = d => d ? d.slice(8,10)+'/'+d.slice(5,7)+'/'+d.slice(0,4) : '—';
 const mesDaData = d => d.slice(5,7)+'/'+d.slice(0,4);
 const primeiroNome = n => { const p=n.split(' '); return p[0].charAt(0)+p[0].slice(1).toLowerCase()+(p[1]?' '+p[1].charAt(0)+p[1].slice(1).toLowerCase():''); };
+const chaveTipo = v => String(v||'')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g,'')
+  .replace(/[º°]/g,'O')
+  .trim()
+  .toUpperCase();
 
 const FOTO_DEMO = 'data:image/svg+xml;utf8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="#D8D6C9"/><text x="100" y="95" font-family="sans-serif" font-size="16" fill="#6B7267" text-anchor="middle">FOTO ANEXADA</text><text x="100" y="118" font-family="sans-serif" font-size="12" fill="#9A9F94" text-anchor="middle">(exemplo)</text></svg>');
 
@@ -553,7 +609,9 @@ function calcProdutividade(fat, meta){
 function metaDoTipo(metas, tipo, mes){
   // mes 'MM/AAAA' -> usa vigência
   const ref = mes ? mes.slice(3)+'-'+mes.slice(0,2)+'-15' : '2026-06-15';
-  return metas.find(m => m.tipo===tipo && m.vigIni<=ref && m.vigFim>=ref) || metas.find(m=>m.tipo===tipo);
+  const tipoBusca=chaveTipo(tipo);
+  return metas.find(m => chaveTipo(m.tipo)===tipoBusca && m.vigIni<=ref && m.vigFim>=ref) ||
+         metas.find(m=>chaveTipo(m.tipo)===tipoBusca);
 }
 
 /* Faturamento por motorista/mês: resumos (jan–abr) + cargas detalhadas (mai em diante) */
@@ -575,9 +633,30 @@ function usarDadosMensais(st){
   },[st.resumos, st.cargas]);
 }
 function apuracaoMes(st, dados, motNome, mes){
+  const calculada=(st.apuracoes||[]).find(a=>a.mes===mes);
+  if(calculada){
+    return {
+      fat:Number(calculada.faturamento ?? calculada.realizadoInformado ?? calculada.realizado ?? 0),
+      realizadoElegivel:Number(calculada.realizadoElegivel ?? calculada.realizado ?? 0),
+      prod:Number(calculada.premioBruto||0),
+      descs:Array.isArray(calculada.descontos)?calculada.descontos:[],
+      totDesc:Number(calculada.totalDescontos||0),
+      apurado:Number(calculada.apurado||0),
+      meta:calculada.meta||null,
+      tipo:String(calculada.tipoVeiculo||""),
+      temDados:Number(calculada.quantidadeCargas||0)>0,
+      nCargas:Number(calculada.quantidadeCargas||0),
+      peso:Number(calculada.pesoTon||0),
+      detalhe:true
+      ,detalhesVigencia:Array.isArray(calculada.detalhesVigencia)?calculada.detalhesVigencia:[]
+      ,inconsistencias:Array.isArray(calculada.inconsistencias)?calculada.inconsistencias:[]
+      ,nCargasValidas:Number(calculada.quantidadeCargasValidas||0)
+    };
+  }
   const u = st.usuarios.find(x=>x.nome===motNome);
   const placa = Object.values(st.frota).find(f=>f.motorista===motNome && f.frota!=='leve');
-  const tipo = placa ? placa.tipo : null;
+  const cargaComTipo = [...st.cargas].reverse().find(c=>c.motorista===motNome && c.tipoVeiculo);
+  const tipo = cargaComTipo ? cargaComTipo.tipoVeiculo : (placa ? placa.tipo : null);
   const meta = tipo ? metaDoTipo(st.metas, tipo, mes) : null;
   const d = (dados[motNome]||{})[mes];
   const fat = d ? d.fat : 0;
@@ -610,6 +689,7 @@ function StatusTag({s}){
 }
 
 /* ================= LOGIN ================= */
+const LOGO='data:image/png;base64,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';
 function Login({st, onLogin}){
   const [login,setLogin]=useState(''); const [senha,setSenha]=useState(''); const [erro,setErro]=useState('');
   const [senhaLoginVisivel,setSenhaLoginVisivel]=useState(false);
@@ -632,6 +712,7 @@ function Login({st, onLogin}){
      onLogin({
   id: 'api' + r.motorista.id,
   nome: r.motorista.nome,
+  login: r.motorista.login || login.trim().toLowerCase(),
   perfil: r.motorista.perfil || 'motorista',
   perms: r.motorista.perms || {
     cargas: true,
@@ -648,8 +729,8 @@ function Login({st, onLogin}){
   return (
     <div className="login-wrap">
       <div className="login-card">
-        <div className="marca">Bocchi <em>Frota</em></div>
-        <div className="login-sub">Portal do motorista e ADM logística — v1.2 — Edson.B</div>
+        <img src={LOGO} className="logo-login" alt="Bocchi Agrobios"/>
+        <div className="login-sub">Portal do motorista e ADM logística — v1.3 — Edson.B</div>
         <div style={{display:'flex',flexDirection:'column',gap:12}}>
           <div><label>Usuário</label><input value={login} onChange={e=>setLogin(e.target.value)} placeholder="ex.: adelir" autoCapitalize="none"/></div>
           <div>
@@ -684,7 +765,7 @@ function TelaCargas({st, setSt, user, dados, toast}){
     setSt(s=>({...s, contestacoes:[...s.contestacoes, {id:'ct'+Date.now(), motorista:user.nome, cargaId:contestar.id, motivo:motivo.trim(), status:'pendente', resposta:'', data:HOJE}]}));
     setContestar(null); setMotivo(''); toast('Contestação enviada para a logística.');
   };
-  const mesesDisp = MESES_2026.slice(0,6);
+  const mesesDisp = MESES_2026.slice(0,7);
   return (
     <React.Fragment>
       <div className="seletor-mes">
@@ -733,8 +814,17 @@ function TelaCargas({st, setSt, user, dados, toast}){
 
 /* ================= MOTORISTA: PREMIAÇÃO ================= */
 function Regua({fat, meta}){
-  if(!meta) return null;
-  const fim = meta.meta * 1.25;
+  if(!meta) {
+    return (
+      <div className="regua" style={{opacity:.55}}>
+        <div className="fill" style={{width:'0%'}}></div>
+        <div className="marco" style={{left:'35%'}}><span className="flag">START</span></div>
+        <div className="marco meta" style={{left:'78%'}}><span className="flag">META</span></div>
+        <span className="caminhao" style={{left:'3%'}}>🚛</span>
+      </div>
+    );
+  }
+  const fim = Math.max(meta.meta * 1.25, meta.start * 1.35, 1);
   const pct = Math.max(0, Math.min(100, fat/fim*100));
   const pStart = meta.start/fim*100, pMeta = meta.meta/fim*100;
   return (
@@ -748,18 +838,20 @@ function Regua({fat, meta}){
 }
 function TelaPremiacao({st, user, dados}){
   const [mes,setMes]=useState(MES_ATUAL);
-  const [ocorrenciasAbertas,setOcorrenciasAbertas]=useState({});
   const ap = apuracaoMes(st, dados, user.nome, mes);
-  const quad = QUADS.find(q=>q.meses.includes(mes));
+  const quad = QUADS.find(q=>q.meses.includes(mes)) || QUADS[0];
   const apsQuad = quad.meses.map(m=>({mes:m, ...apuracaoMes(st, dados, user.nome, m)}));
   const somaQuad = apsQuad.reduce((s,a)=>s+a.apurado,0);
   const pctStart = ap.meta ? Math.min(100, ap.fat/ap.meta.start*100) : 0;
   const pctMeta = ap.meta ? Math.min(100, ap.fat/ap.meta.meta*100) : 0;
   const faltaStart = ap.meta ? Math.max(0, ap.meta.start - ap.fat) : 0;
+  const ganhoStartMil = ap.meta ? ap.meta.pctStart*10 : 0;
+  const ganhoMetaMil = ap.meta ? ap.meta.pctMeta*10 : 0;
+  const mesesVisiveis = mesesAteHoje();
   return (
     <React.Fragment>
       <div className="seletor-mes">
-        {MESES_2026.slice(0,6).map(m=> <button key={m} className={'mes-pill'+(m===mes?' on':'')} onClick={()=>setMes(m)}>{mesLabel(m)}</button>)}
+        {mesesVisiveis.map(m=> <button key={m} className={'mes-pill'+(m===mes?' on':'')} onClick={()=>setMes(m)}>{mesLabel(m)}</button>)}
       </div>
 
       <div className="card regua-wrap">
@@ -778,63 +870,56 @@ function TelaPremiacao({st, user, dados}){
         <Regua fat={ap.fat} meta={ap.meta}/>
         <div className="muted" style={{textAlign:'center'}}>
           {!ap.meta ? 'Sem meta cadastrada para o tipo de veículo.' :
-           ap.fat>=ap.meta.meta ? 'Meta batida! Cada R$ 1.000 acima da meta soma R$ 70 (teto '+brl(ap.meta.teto)+').' :
-           ap.fat>=ap.meta.start ? 'Start atingido — cada R$ 1.000 a mais soma R$ 50 até a meta.' :
+           ap.fat>=ap.meta.meta ? 'Meta batida! Cada R$ 1.000 acima da meta soma '+brl(ganhoMetaMil)+' (teto '+brl(ap.meta.teto)+').' :
+           ap.fat>=ap.meta.start ? 'Start atingido — cada R$ 1.000 a mais soma '+brl(ganhoStartMil)+' até a meta.' :
            'Faltam '+brl(faltaStart)+' de frete para começar a pontuar.'}
         </div>
       </div>
 
       <div className="card">
         <h3 style={{marginBottom:6}}>Apuração de {mesLabel(mes)}</h3>
+        {ap.inconsistencias && ap.inconsistencias.length>0 &&
+          <div className="aviso-box" style={{marginBottom:10,borderColor:'var(--erro)'}}>
+            <b>{ap.inconsistencias.length} carga(s) não considerada(s)</b><br/>
+            Falta ou divergência no vínculo Motorista × Veículo vigente na data. A logística deve corrigir o histórico de vínculos.
+          </div>}
+        {ap.detalhesVigencia && ap.detalhesVigencia.length>1 &&
+          <div className="aviso-box" style={{marginBottom:10}}>
+            <b>Troca de veículo/tipo no mês.</b> A apuração foi separada por vigência e as metas foram proporcionais aos dias de cada período.
+          </div>}
+        {ap.detalhesVigencia && ap.detalhesVigencia.map((v,idx)=>
+          <div className="linha-item" key={(v.vinculoId||idx)+'-'+(v.meta&&v.meta.id||'')}>
+            <span>
+              <b>{v.placa} · {v.tipoVeiculo}</b>
+              <span className="muted"> — {dataBR(v.inicio)} a {dataBR(v.fim)} · {v.diasVigencia} dia(s)</span>
+            </span>
+            <span style={{textAlign:'right'}}>
+              <b className="num">{brl(v.realizado)}</b>
+              <span className="muted" style={{display:'block'}}>Meta proporcional: {brl(v.metaRateada&&v.metaRateada.meta||0)}</span>
+            </span>
+          </div>)}
         <div className="linha-item">
-          <span>R$ Frete realizado — premiação <span className="muted">(estimativa)</span></span>
+          <span>Premiação pelo frete realizado <span className="muted">(estimativa)</span></span>
           <b className="num" style={{color:'var(--mata)'}}>{brl(ap.prod)}</b>
         </div>
-        {['Multas','Notificação / Advertencia','Check List'].map(item=>{
-          const doItem = ap.descs.filter(d=>d.item===item);
+        {[
+          {rotulo:'Notificação / Advertência', aliases:['Notificação / Advertência','Notificação / Advertencia']},
+          {rotulo:'Multas', aliases:['Multas']},
+          {rotulo:'Auditoria Interna', aliases:['Auditoria Interna','Check List']}
+        ].map(grupo=>{
+          const doItem = ap.descs.filter(d=>grupo.aliases.includes(d.item));
           const tot = doItem.reduce((s,d)=>s+d.valor,0);
-          const aberta=!!ocorrenciasAbertas[item];
-          const titulo=item==='Check List'?'Auditoria interna (check list abaixo de 85%)':item;
           return (
-            <div className="linha-ocorrencia" key={item}>
-              <button
-                type="button"
-                className="linha-ocorrencia-btn"
-                disabled={doItem.length===0}
-                aria-expanded={doItem.length?aberta:undefined}
-                onClick={()=>doItem.length&&setOcorrenciasAbertas(a=>({...a,[item]:!a[item]}))}
-              >
-                <div className="linha-item">
-                  <span className="linha-ocorrencia-resumo">
-                    {doItem.length>0&&<span className={'ocorrencia-seta'+(aberta?' aberta':'')} aria-hidden="true">⌄</span>}
-                    <span>{titulo}
-                      <span className="muted"> — {doItem.length===0 ? 'nenhuma ocorrência' : doItem.length+' ocorrência'+(doItem.length>1?'s':'')}</span>
-                    </span>
-                  </span>
-                  <b className="num" style={{color: tot<0?'var(--erro)':'var(--cinza)'}}>{tot<0 ? brl(tot) : brl(0)}</b>
-                </div>
-              </button>
-              {aberta&&doItem.length>0&&
-                <div className="ocorrencia-detalhes">
-                  {doItem.map((d,i)=>{
-                    const motivo=d.motivo||d.descricao||d.observacao||d.detalhe||'Motivo não informado';
-                    const data=d.data||d.dataOcorrencia||d.criadoEm||'';
-                    const status=d.status||'Registrada';
-                    return <div className="ocorrencia-registro" key={d.id||d.itemId||i}>
-                      <div>
-                        <div className="ocorrencia-motivo">{motivo}</div>
-                        <div className="ocorrencia-meta">{data?(dataBR(String(data).slice(0,10))+' · '):''}{status}</div>
-                      </div>
-                      <b className="num" style={{color:'var(--erro)'}}>{brl(d.valor)}</b>
-                    </div>;
-                  })}
-                </div>}
+            <div className="linha-item" key={grupo.rotulo}>
+              <span>{grupo.rotulo}
+                <span className="muted"> — {doItem.length===0 ? 'nenhuma ocorrência' : doItem.length+' ocorrência'+(doItem.length>1?'s':'')}</span></span>
+              <b className="num" style={{color: tot<0?'var(--erro)':'var(--cinza)'}}>{tot<0 ? brl(tot) : brl(0)}</b>
             </div>
           );
         })}
         <div className="linha-item" style={{fontSize:15.5}}><b>Apurado no mês</b>
           <b className="num" style={{color: ap.apurado<0?'var(--erro)':'var(--mata)'}}>{brl(ap.apurado)}</b></div>
-        <div className="aviso-box" style={{marginTop:10}}>Valores estimados conforme POL 4.1.1 e sujeitos a conferência. O pagamento é a soma dos meses do quadrimestre, via folha.</div>
+        <div className="aviso-box" style={{marginTop:10}}>Valores estimados conforme POL 4.1.1 e sujeitos a conferência. O apurado mensal pode ficar negativo e será compensado pelos demais meses do quadrimestre. Nunca haverá desconto em folha se o acumulado final ficar negativo.</div>
       </div>
 
       <div className="card">
@@ -845,7 +930,10 @@ function TelaPremiacao({st, user, dados}){
         {apsQuad.map(a=>{
           const futuro = a.mes > MES_ATUAL;
           return (
-            <div className={'quad-mes'+(a.mes===mes?' on':'')} key={a.mes}>
+            <div className={'quad-mes'+(a.mes===mes?' on':'')} key={a.mes}
+              role="button" tabIndex="0" style={{cursor:'pointer'}}
+              onClick={()=>setMes(a.mes)}
+              onKeyDown={e=>{if(e.key==='Enter'||e.key===' ')setMes(a.mes)}}>
               <span style={{fontWeight:600}}>{mesLabel(a.mes)}</span>
               {futuro ? <span className="muted">em andamento</span> :
                 <b className="num" style={{color: a.apurado<0?'var(--erro)':'var(--mata)'}}>{brl(a.apurado)}</b>}
@@ -989,17 +1077,20 @@ function TelaChecklist({st, setSt, user, toast}){
   const mesFiltroLabel = filtroMesHistorico ? mesLabel(filtroMesHistorico.slice(5,7)+'/'+filtroMesHistorico.slice(0,4)) : 'todos os meses';
 
   /* ALTERAÇÃO V6: monitorar fila local e estado da conexão */
-  const atualizarFila = ()=>{ FilaEnvio.pendentes().then(setPendentes).catch(()=>{}); };
+  const atualizarFila = ()=>{ FilaEnvio.pendentes(user.login).then(setPendentes).catch(()=>{}); };
   useEffect(()=>{
     atualizarFila();
     const ouv = ()=>atualizarFila();
     FilaEnvio.ouvintes.add(ouv);
-    const on = ()=>{ setOnline(true); FilaEnvio.processar(toast); };
+    const on = ()=>{ setOnline(true); FilaEnvio.processar(toast, user.login); };
     const off = ()=>setOnline(false);
     window.addEventListener('online', on); window.addEventListener('offline', off);
+    // Remove automaticamente apenas registros locais impossíveis de recuperar.
+    // Checklists válidos aguardando internet continuam preservados.
+    FilaEnvio.sanear(user.login).then(()=>atualizarFila()).catch(()=>{});
     IDB.lerRascunho(chaveRascunho).then(r=>setTemRascunho(!!r));
     return ()=>{ FilaEnvio.ouvintes.delete(ouv); window.removeEventListener('online', on); window.removeEventListener('offline', off); };
-  },[]);
+  },[user.login]);
 
   /* ALTERAÇÃO V6: salvamento automático do rascunho + aviso ao sair da página */
   useEffect(()=>{
@@ -1066,6 +1157,12 @@ function TelaChecklist({st, setSt, user, toast}){
   /* ALTERAÇÃO V6: validações, payload padronizado, fila IndexedDB e envio à API */
   const enviar = async ()=>{
     if (enviando) return; // prevenção contra clique duplo
+    if(!String(user?.nome||'').trim() || !String(user?.login||'').trim()){
+      toast('Sua sessão está incompleta. Saia, entre novamente e refaça o checklist.'); return;
+    }
+    if(!String(veiculo||'').trim()){
+      toast('Selecione um veículo antes de enviar.'); return;
+    }
     // Quilometragem obrigatória e válida para qualquer frota
     const km = parseInt(extras.km, 10);
     if (!extras.km || isNaN(km) || km<=0){ toast('Informe a quilometragem atual do veículo (somente números).'); return; }
@@ -1118,7 +1215,7 @@ function TelaChecklist({st, setSt, user, toast}){
       }
 
       // 2) tenta enviar agora; só marca ENVIADO com confirmação real da API
-      await FilaEnvio.processar(toast);
+      await FilaEnvio.processar(toast, user.login);
       const fila = await IDB.listarFila();
       const meu = fila.find(x=>x.idLocal===idLocal);
       if (meu && meu.statusEnvio==='ENVIADO'){
@@ -1137,8 +1234,13 @@ function TelaChecklist({st, setSt, user, toast}){
     }
   };
 
-  const reenviarPendentes = ()=>{ toast('Tentando enviar novamente...'); FilaEnvio.processar(toast); };
-  const rotuloStatusEnvio = {RASCUNHO:'Rascunho', PENDENTE:'Aguardando envio', ENVIANDO:'Enviando...', ENVIADO:'Enviado', ERRO:'Falha no envio'};
+  const reenviarPendentes = ()=>{ toast('Tentando enviar novamente...'); FilaEnvio.processar(toast, user.login); };
+  const excluirRegistroInvalido = async idLocal=>{
+    if(!window.confirm('Excluir este envio incompleto deste aparelho? Depois será necessário refazer o checklist.')) return;
+    await IDB.removerFila(idLocal); atualizarFila();
+    toast('Registro incompleto removido. Refaça o checklist.');
+  };
+  const rotuloStatusEnvio = {RASCUNHO:'Rascunho', PENDENTE:'Aguardando envio', ENVIANDO:'Enviando...', ENVIADO:'Enviado', ERRO:'Falha no envio', DADOS_INCOMPLETOS:'Precisa ser refeito'};
 
   return (
     <React.Fragment>
@@ -1149,9 +1251,11 @@ function TelaChecklist({st, setSt, user, toast}){
         <div className="card" style={{borderLeft:'4px solid var(--colheita)'}}>
           <div className="row">
             <div className="grow"><b>{pendentes.length} checklist(s) aguardando envio</b>
-              <div className="muted">{pendentes.map(p=>dataBR(p.dataHoraLocal.slice(0,10))+' · '+p.veiculo.placa+' · '+(rotuloStatusEnvio[p.statusEnvio]||p.statusEnvio)+(p.ultimoErro?' ('+p.ultimoErro+')':'')).join(' — ')}</div>
+              <div className="muted">{pendentes.map(p=>dataBR(String(p.dataHoraLocal||'').slice(0,10))+' · '+(p.veiculo?.placa||'placa não informada')+' · '+(rotuloStatusEnvio[p.statusEnvio]||p.statusEnvio)+(p.ultimoErro?' ('+p.ultimoErro+')':'')).join(' — ')}</div>
             </div>
-            <button className="btn btn-s btn-sm" onClick={reenviarPendentes}>Tentar enviar novamente</button>
+            {pendentes.some(p=>p.statusEnvio==='DADOS_INCOMPLETOS')
+              ? <button className="btn btn-d btn-sm" onClick={()=>excluirRegistroInvalido(pendentes.find(p=>p.statusEnvio==='DADOS_INCOMPLETOS').idLocal)}>Excluir e refazer</button>
+              : <button className="btn btn-s btn-sm" onClick={reenviarPendentes}>Tentar enviar novamente</button>}
           </div>
         </div>}
       {ultimoEnvio &&
@@ -1187,7 +1291,7 @@ function TelaChecklist({st, setSt, user, toast}){
           <div style={{fontSize:34}}>📋</div>
           <h3 style={{margin:'6px 0 2px'}}>{reprovadoHoje ? 'Check list reprovado — refazer' : 'Check list de hoje pendente'}</h3>
           {reprovadoHoje && <div className="erro-box" style={{margin:'8px 0'}}>Motivo: {reprovadoHoje.motivoReprova}</div>}
-          <div className="muted" style={{marginBottom:14}}>Inspeção diária — {dataBR(HOJE)}</div>
+          <div className="muted" style={{marginBottom:14}}>Inspeção pendente — {dataBR(HOJE)}</div>
           <button className="btn btn-p" disabled={carregandoVeiculos||!!erroVeiculos||!veiculo} onClick={abrirFormulario}>{reprovadoHoje?'Refazer check list':(temRascunho?'Continuar rascunho':'Preencher agora')}</button>
         </div>}
       {deHoje &&
@@ -1325,6 +1429,25 @@ function ChecklistDetalhe({ck, perguntas, onClose, acoes}){
 /* ================= SHELL MOTORISTA ================= */
 function MotoristaApp({st, setSt, user, onSair, toast}){
   const dados = usarDadosMensais(st);
+  const [carregandoCargas,setCarregandoCargas]=useState(!CONFIG.MODO_DEMONSTRACAO);
+  const [carregandoPremiacao,setCarregandoPremiacao]=useState(!CONFIG.MODO_DEMONSTRACAO);
+  useEffect(()=>{
+    if(CONFIG.MODO_DEMONSTRACAO) return;
+    let ativo=true;
+    Promise.all([ApiService.obterCargas(),ApiService.obterPremiacao()]).then(([r,p])=>{
+      if(!ativo) return;
+      setSt(s=>({
+        ...s,
+        cargas:Array.isArray(r.cargas)?r.cargas:[],
+        metas:Array.isArray(p.metas)?p.metas:s.metas,
+        descontos:Array.isArray(p.descontos)?p.descontos:s.descontos,
+        apuracoes:Array.isArray(p.apuracoes)?p.apuracoes:[]
+      }));
+    }).catch(e=>toast('Não foi possível carregar os dados do motorista: '+e.message)).finally(()=>{
+      if(ativo){setCarregandoCargas(false);setCarregandoPremiacao(false);}
+    });
+    return()=>{ativo=false};
+  },[user.id]);
   const abas = [
     user.perms.cargas && {id:'cargas', ic:'🚛', nome:'Cargas'},
     user.perms.premiacao && {id:'prem', ic:'🏆', nome:'Premiação'},
@@ -1332,6 +1455,23 @@ function MotoristaApp({st, setSt, user, onSair, toast}){
   ].filter(Boolean);
   const [aba,setAba]=useState(abas.length?abas[0].id:'');
   const placa = Object.values(st.frota).find(f=>f.motorista===user.nome && f.frota!=='leve');
+  const recuperarAplicativo = async ()=>{
+    const ok = window.confirm(
+      'Usar a recuperação deste aparelho?\n\n'+
+      'Rascunhos e registros incompletos serão apagados. Checklists válidos aguardando internet serão preservados.'
+    );
+    if(!ok) return;
+    try{
+      await FilaEnvio.sanear(user.login);
+      await IDB.apagarRascunho('ck_'+String(user.login||'').toLowerCase()+'_'+HOJE).catch(()=>{});
+      ApiService.sair();
+      const url = new URL(window.location.href);
+      url.searchParams.set('atualizar', CONFIG.VERSAO+'-'+Date.now());
+      window.location.replace(url.toString());
+    }catch(e){
+      toast('Não foi possível recuperar automaticamente. Avise a logística.');
+    }
+  };
   return (
     <div className="mshell">
       <div className="mtop row">
@@ -1344,9 +1484,20 @@ function MotoristaApp({st, setSt, user, onSair, toast}){
       </div>
       <div className="mbody">
         {abas.length===0 && <div className="card muted">Seu usuário está sem módulos liberados. Fale com a logística.</div>}
-        {aba==='cargas' && <TelaCargas st={st} setSt={setSt} user={user} dados={dados} toast={toast}/>}
-        {aba==='prem' && <TelaPremiacao st={st} user={user} dados={dados}/>}
+        {aba==='cargas' && carregandoCargas && <div className="card muted">Carregando cargas do SharePoint...</div>}
+        {aba==='cargas' && !carregandoCargas && <TelaCargas st={st} setSt={setSt} user={user} dados={dados} toast={toast}/>}
+        {aba==='prem' && carregandoPremiacao && <div className="card muted">Carregando metas, apuração e descontos do SharePoint...</div>}
+        {aba==='prem' && !carregandoPremiacao && <TelaPremiacao st={st} user={user} dados={dados}/>}
         {aba==='check' && <TelaChecklist st={st} setSt={setSt} user={user} toast={toast}/>}
+        <div className="card" style={{padding:12, marginTop:2}}>
+          <div className="row">
+            <div className="grow">
+              <div style={{fontWeight:700, fontSize:13}}>Problema neste aparelho?</div>
+              <div className="muted">Versão {CONFIG.VERSAO}</div>
+            </div>
+            <button className="btn btn-g btn-sm" onClick={recuperarAplicativo}>Limpar dados deste aparelho</button>
+          </div>
+        </div>
       </div>
       <nav className="mtabs">
         {abas.map(a=>
@@ -1372,7 +1523,7 @@ function AdmPainel({st, dados}){
       <div className="row" style={{flexWrap:'wrap'}}>
         <h2 className="grow">Painel — {mesLabel(mes)}</h2>
         <select style={{width:'auto'}} value={mes} onChange={e=>setMes(e.target.value)}>
-          {MESES_2026.slice(0,6).map(m=><option key={m} value={m}>{mesLabel(m)}</option>)}
+          {MESES_2026.slice(0,7).map(m=><option key={m} value={m}>{mesLabel(m)}</option>)}
         </select>
       </div>
       <div className="cards4">
@@ -1407,12 +1558,15 @@ function AdmPainel({st, dados}){
 /* ================= ADM: IMPORTAÇÃO ================= */
 function AdmImportar({st, setSt, toast}){
   const [resumo,setResumo]=useState(null);
+  const [competenciasSelecionadas,setCompetenciasSelecionadas]=useState([]);
+  const [placaSelecionada,setPlacaSelecionada]=useState('');
+  const [dataInicial,setDataInicial]=useState('');
+  const [dataFinal,setDataFinal]=useState('');
   const [erro,setErro]=useState('');
   const [lendo,setLendo]=useState(false);
+  const [enviando,setEnviando]=useState(false);
+  const [progresso,setProgresso]=useState(null);
   const fileRef = useRef(null);
-
-  const chaveCarga = c => [c.data, c.placa, String(c.nota), c.peso.toFixed(2)].join('|');
-  const existentes = useMemo(()=> new Set(st.cargas.map(chaveCarga)), [st.cargas]);
 
   const processar = (file)=>{
     setErro(''); setResumo(null); setLendo(true);
@@ -1429,10 +1583,9 @@ function AdmImportar({st, setSt, toast}){
         const obrig = ['DATA','PLACA','ORIGEM','DESTINO','PRODUTO','PESO (t)','PREMIAÇÃO'];
         const faltando = obrig.filter(c=>!cols.includes(c));
         if(faltando.length) throw new Error('Colunas não encontradas na aba "'+nomeAba+'": '+faltando.join(', ')+'. Confira se a planilha não foi alterada.');
-        const temMotorista = cols.includes('MATRIZ.MOTORISTA');
         const colNota = cols.includes('N° NOTA') ? 'N° NOTA' : (cols.includes('Nº NOTA') ? 'Nº NOTA' : null);
 
-        const novas=[]; let duplicadas=0, semMotorista=0;
+        const novas=[];
         rows.forEach(r=>{
           if(!r['DATA'] || !r['PLACA']) return;
           let dt;
@@ -1442,16 +1595,11 @@ function AdmImportar({st, setSt, toast}){
             const ut = new Date(d.getTime() + d.getTimezoneOffset()*60000 + 12*3600000);
             dt = ut.getFullYear()+'-'+String(ut.getMonth()+1).padStart(2,'0')+'-'+String(ut.getDate()).padStart(2,'0');
           } else { dt = String(r['DATA']).slice(0,10); }
-          let mot = temMotorista ? r['MATRIZ.MOTORISTA'] : null;
-          if(!mot || mot==='A CONTRATAR'){
-            const f = st.frota[r['PLACA']];
-            mot = f ? f.motorista : null;
-          }
-          if(!mot){ semMotorista++; return; }
-          const c = {data:dt, motorista:mot, placa:r['PLACA'], origem:r['ORIGEM']||'', destino:r['DESTINO']||'',
-            produto:r['PRODUTO']||'', nota:colNota?String(r[colNota]||''):'', peso:Number(r['PESO (t)'])||0,
-            rt:Number(r['R$/t'])||0, valor:Number(r['PREMIAÇÃO'])||0};
-          if(existentes.has(chaveCarga(c))) duplicadas++; else novas.push(c);
+          novas.push({data:dt, placa:String(r['PLACA']||'').trim().toUpperCase(), origem:r['ORIGEM']||'', destino:r['DESTINO']||'',
+            produto:r['PRODUTO']||'', numeroNota:colNota?String(r[colNota]||''):'', valorTon:Number(r['R$/t'])||0,
+            pesoTon:Number(r['PESO (t)'])||0, pesoBruto:Number(r['PESO BRUTO'])||0, freteTotal:Number(r['R$ TOTAL'])||0,
+            premiacao:Number(r['PREMIAÇÃO'])||0, maiorKM:String(r['MAIOR KM?']||''), distancia:Number(r['DISTANCIA'])||0,
+            freteOriginal:Number(r['FRETE ORIGINAL'])||0, diferenca:Number(r['DIFERENÇA'])||0});
         });
 
         // Descontos da aba "Lançamento", se existir
@@ -1467,19 +1615,73 @@ function AdmImportar({st, setSt, toast}){
             if(!jaTem.has([d.motorista,d.mes,d.item,d.valor].join('|'))) descNovos.push(d);
           });
         }
-        setResumo({arquivo:file.name, aba:nomeAba, total:rows.length, novas, duplicadas, semMotorista, descNovos, temMotorista});
+        const porCompetencia={};
+        novas.forEach(c=>{const comp=c.data.slice(0,7);(porCompetencia[comp]||(porCompetencia[comp]=[])).push(c)});
+        const competencias=Object.keys(porCompetencia).sort();
+        const atual=new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0');
+        setCompetenciasSelecionadas([competencias.includes(atual)?atual:competencias[competencias.length-1]].filter(Boolean));
+        setPlacaSelecionada(''); setDataInicial(''); setDataFinal('');
+        setResumo({arquivo:file.name, aba:nomeAba, total:rows.length, novas, porCompetencia, descNovos});
       }catch(e){ setErro(e.message); }
       setLendo(false);
     };
     rd.readAsArrayBuffer(file);
   };
-  const confirmar=()=>{
-    setSt(s=>({...s,
-      cargas:[...s.cargas, ...resumo.novas.map((c,i)=>({...c, id:'ci'+Date.now()+'_'+i}))],
-      descontos:[...s.descontos, ...resumo.descNovos.map((d,i)=>({...d, id:'di'+Date.now()+'_'+i, origem:'Importado de '+resumo.arquivo}))]
-    }));
-    toast(resumo.novas.length+' cargas e '+resumo.descNovos.length+' lançamentos importados.');
-    setResumo(null);
+  const competenciasDisponiveis=resumo?Object.keys(resumo.porCompetencia).sort():[];
+  const placasDisponiveis=resumo?[...new Set(resumo.novas.map(c=>c.placa))].sort():[];
+  const cargasFiltradas=resumo?resumo.novas.filter(c=>
+    competenciasSelecionadas.includes(c.data.slice(0,7)) &&
+    (!placaSelecionada || c.placa===placaSelecionada) &&
+    (!dataInicial || c.data>=dataInicial) && (!dataFinal || c.data<=dataFinal)
+  ):[];
+  const porCompetenciaFiltrada={};
+  cargasFiltradas.forEach(c=>{const comp=c.data.slice(0,7);(porCompetenciaFiltrada[comp]||(porCompetenciaFiltrada[comp]=[])).push(c)});
+  const alternarCompetencia=comp=>setCompetenciasSelecionadas(atual=>atual.includes(comp)?atual.filter(x=>x!==comp):[...atual,comp].sort());
+  const confirmar=async()=>{
+    const TAMANHO_LOTE=20;
+    const MAX_TENTATIVAS_LOTE=6;
+    if(!cargasFiltradas.length){setErro('Selecione ao menos uma competência com cargas para importar.');return;}
+    setEnviando(true); setErro(''); setProgresso({processadas:0,total:cargasFiltradas.length,lote:0,totalLotes:Math.ceil(cargasFiltradas.length/TAMANHO_LOTE)});
+    try{
+      let novas=0, atualizadas=0, semAlteracao=0, duplicadasRemovidas=0;
+      const lotes=[];
+      Object.entries(porCompetenciaFiltrada).forEach(([competencia,cargas])=>{
+        for(let inicio=0;inicio<cargas.length;inicio+=TAMANHO_LOTE) lotes.push({competencia,cargas:cargas.slice(inicio,inicio+TAMANHO_LOTE)});
+      });
+      let processadas=0;
+      for(let indice=0;indice<lotes.length;indice++){
+        const {competencia,cargas}=lotes[indice];
+        let r=null;
+        for(let tentativa=1;tentativa<=MAX_TENTATIVAS_LOTE;tentativa++){
+          try{ r=await ApiService.importarCargas(competencia,cargas); break; }
+          catch(e){
+            const status=Number(e.status||0);
+            const falhaTemporaria=!status || [408,425,429,500,502,503,504].includes(status) || e.name==='AbortError' || /failed to fetch|network|timeout|aborted/i.test(String(e.message||''));
+            if(tentativa===MAX_TENTATIVAS_LOTE || !falhaTemporaria){
+              e.message='Falha no lote '+(indice+1)+' de '+lotes.length+' ('+competencia+'): '+e.message;
+              throw e;
+            }
+            const espera=Math.min(60000,5000*Math.pow(2,tentativa-1));
+            setErro('Instabilidade no lote '+(indice+1)+'. Nova tentativa automática '+(tentativa+1)+' de '+MAX_TENTATIVAS_LOTE+' em '+Math.ceil(espera/1000)+'s...');
+            await new Promise(resolve=>setTimeout(resolve,espera));
+          }
+        }
+        novas+=Number(r.novas??r.gravadas??0);
+        atualizadas+=Number(r.atualizadas||0);
+        semAlteracao+=Number(r.semAlteracao||0);
+        duplicadasRemovidas+=Number(r.duplicadasRemovidas||0);
+        processadas+=cargas.length;
+        setProgresso({processadas,total:cargasFiltradas.length,lote:indice+1,totalLotes:lotes.length});
+        await new Promise(resolve=>setTimeout(resolve,1200));
+      }
+      const cargasAtualizadas=await ApiService.obterCargas();
+      setSt(s=>({...s,cargas:Array.isArray(cargasAtualizadas.cargas)?cargasAtualizadas.cargas:s.cargas}));
+      toast(novas+' novas, '+atualizadas+' atualizadas, '+semAlteracao+' já estavam iguais'+(duplicadasRemovidas?' e '+duplicadasRemovidas+' duplicadas removidas.':'.'));
+      setResumo(null); setProgresso(null);
+    }catch(e){
+      const inc=e.detalhe&&e.detalhe.inconsistencias;
+      setErro(e.message+(Array.isArray(inc)&&inc.length?' Primeiros casos: '+inc.slice(0,5).map(x=>x.placa+' em '+dataBR(x.data)+' — '+x.motivo).join('; '):''));
+    }finally{setEnviando(false)}
   };
   return (
     <React.Fragment>
@@ -1500,18 +1702,26 @@ function AdmImportar({st, setSt, toast}){
       {resumo &&
         <div className="card">
           <h3>Conferência antes de importar</h3>
-          <div className="muted" style={{marginBottom:8}}>{resumo.arquivo} · aba "{resumo.aba}"{resumo.temMotorista?' · motorista lido da própria planilha':' · motorista resolvido pelo vínculo da placa'}</div>
+          <div className="muted" style={{marginBottom:8}}>{resumo.arquivo} · aba "{resumo.aba}" · motorista e tipo serão resolvidos pela placa e vigência</div>
           <div className="linha-item"><span>Linhas lidas</span><b className="num">{resumo.total}</b></div>
-          <div className="linha-item"><span>Cargas novas a importar</span><b className="num" style={{color:'var(--mata)'}}>{resumo.novas.length}</b></div>
-          <div className="linha-item"><span>Já existentes (ignoradas)</span><b className="num">{resumo.duplicadas}</b></div>
-          {resumo.semMotorista>0 && <div className="linha-item"><span>Sem motorista identificado (ver vínculo de placas)</span><b className="num" style={{color:'var(--erro)'}}>{resumo.semMotorista}</b></div>}
-          <div className="linha-item"><span>Lançamentos de desconto novos</span><b className="num">{resumo.descNovos.length}</b></div>
+          <div style={{marginTop:14}}><b>Competências a importar</b></div>
+          <div className="row" style={{gap:8,marginTop:8,flexWrap:'wrap'}}>
+            {competenciasDisponiveis.map(comp=><label key={comp} className="btn btn-s btn-sm" style={{cursor:'pointer',background:competenciasSelecionadas.includes(comp)?'var(--mata)':'white',color:competenciasSelecionadas.includes(comp)?'white':'inherit'}}><input type="checkbox" checked={competenciasSelecionadas.includes(comp)} onChange={()=>alternarCompetencia(comp)} style={{display:'none'}}/>{comp}</label>)}
+          </div>
+          <div className="row" style={{gap:10,marginTop:12,alignItems:'end',flexWrap:'wrap'}}>
+            <label style={{minWidth:170,flex:1}}>Placa (opcional)<select value={placaSelecionada} onChange={e=>setPlacaSelecionada(e.target.value)} disabled={enviando}><option value="">Todas as placas</option>{placasDisponiveis.map(p=><option key={p} value={p}>{p}</option>)}</select></label>
+            <label style={{minWidth:145}}>Data inicial<input type="date" value={dataInicial} onChange={e=>setDataInicial(e.target.value)} disabled={enviando}/></label>
+            <label style={{minWidth:145}}>Data final<input type="date" value={dataFinal} onChange={e=>setDataFinal(e.target.value)} disabled={enviando}/></label>
+          </div>
+          <div className="linha-item" style={{marginTop:12}}><span>Cargas que serão comparadas</span><b className="num" style={{color:'var(--mata)'}}>{cargasFiltradas.length}</b></div>
+          <div className="linha-item"><span>Competências selecionadas</span><b className="num">{competenciasSelecionadas.join(', ')||'Nenhuma'}</b></div>
+          {enviando && progresso && <div className="aviso-box" style={{marginTop:12}}><b>Importando: {progresso.processadas} de {progresso.total} cargas</b><div className="muted">Lote {progresso.lote} de {progresso.totalLotes}. Não feche esta tela.</div><div style={{height:8,background:'#dfe7e2',borderRadius:8,marginTop:8,overflow:'hidden'}}><div style={{height:'100%',width:Math.round((progresso.processadas/Math.max(1,progresso.total))*100)+'%',background:'var(--mata)',transition:'width .2s'}}/></div></div>}
           <div className="row" style={{marginTop:12}}>
-            <button className="btn btn-g" onClick={()=>setResumo(null)}>Cancelar</button>
-            <button className="btn btn-p grow" onClick={confirmar} disabled={!resumo.novas.length && !resumo.descNovos.length}>Confirmar importação</button>
+            <button className="btn btn-g" onClick={()=>setResumo(null)} disabled={enviando}>Cancelar</button>
+            <button className="btn btn-p grow" onClick={confirmar} disabled={enviando||!cargasFiltradas.length}>{enviando?'Importando em lotes...':'Confirmar importação'}</button>
           </div>
         </div>}
-      <div className="aviso-box">Neste protótipo os dados importados ficam apenas na memória do navegador (somem ao recarregar). Na versão com Supabase, tudo fica gravado no banco.</div>
+      <div className="aviso-box">A planilha completa é lida apenas no navegador. Somente as competências, placa e período selecionados são enviados à API. Cargas iguais são mantidas, alteradas são atualizadas e novas são incluídas.</div>
     </React.Fragment>
   );
 }
@@ -1820,20 +2030,66 @@ function AdmChecklist({st, setSt, toast}){
 function AdmPremiacao({st, setSt, toast}){
   const [sub,setSub]=useState('metas');
   const [edit,setEdit]=useState(null);
-  const [novoDesc,setNovoDesc]=useState({motorista:'', mes:MES_ATUAL, item:'Multas', valor:-50});
-  const motoristas = st.usuarios.filter(u=>u.perfil==='motorista');
-  const salvarMeta=()=>{
-    setSt(s=>({...s, metas:s.metas.map(m=>m.id===edit.id?edit:m)}));
-    setEdit(null); toast('Meta atualizada.');
+  const [editTipo,setEditTipo]=useState(null);
+  const [competencia,setCompetencia]=useState(MES_ATUAL.slice(3)+'-'+MES_ATUAL.slice(0,2));
+  const [fMotorista,setFMotorista]=useState('');
+  const [fTipoMeta,setFTipoMeta]=useState('');
+  const [painel,setPainel]=useState({metas:[],tiposVeiculo:[],descontos:[],elegiveis:[],pendencias:{}});
+  const [novoDesc,setNovoDesc]=useState({motoristaId:'',motoristaNome:'',categoria:'Multas',situacao:'Sem ocorrência',quantidade:0,valor:0,percentual:0,dataOcorrencia:'',motivo:'',exibir:true});
+  const categorias=['Notificação / Advertência','Multas','Auditoria Interna'];
+  const carregar=async()=>{try{const r=await ApiService.admPremiacao(competencia);setPainel(r);setSt(s=>({...s,metas:r.metas||s.metas}));}catch(e){toast('Erro ao carregar premiação: '+e.message)}};
+  useEffect(()=>{carregar();},[competencia]);
+  const statusMeta=m=>{
+    const hoje=HOJE;
+    if(m.ativo===false)return'Inativa';
+    if(m.vigIni&&hoje<m.vigIni)return'Programada';
+    if(m.vigFim&&hoje>m.vigFim)return'Finalizada';
+    return'Ativa';
   };
-  const addDesc=()=>{
-    if(!novoDesc.motorista){ toast('Selecione o motorista.'); return; }
-    const v = Number(novoDesc.valor);
-    if(!v || v>0){ toast('O valor do desconto deve ser negativo (ex.: -50).'); return; }
-    setSt(s=>({...s, descontos:[...s.descontos, {id:'d'+Date.now(), ...novoDesc, valor:v, origem:'Lançado no app'}]}));
-    toast('Lançamento registrado.');
+  const salvarMeta=async(e)=>{
+    if(e&&e.preventDefault)e.preventDefault();
+    if(!edit.tipo||!edit.vigIni||!edit.vigFim){toast('Preencha tipo de veículo e vigência.');return;}
+    try{await ApiService.salvarMeta(edit);setEdit(null);await carregar();toast('Meta salva no SharePoint.');}
+    catch(e){toast('Erro ao salvar meta: '+e.message)}
   };
-  const removerDesc=id=> setSt(s=>({...s, descontos:s.descontos.filter(d=>d.id!==id)}));
+  const addDesc=async()=>{
+    if(!novoDesc.motoristaId){toast('Selecione o motorista.');return;}
+    if(novoDesc.motoristaId==='__TODOS__'){
+      if(novoDesc.situacao!=='Sem ocorrência'){toast('O lançamento em massa é permitido somente para Sem ocorrência.');return;}
+      const pendentes=((painel.pendencias||{})[novoDesc.categoria]||[]);
+      if(!pendentes.length){toast('Não há motoristas pendentes nesta categoria.');return;}
+      try{
+        for(const motorista of pendentes){
+          await ApiService.salvarDesconto({
+            ...novoDesc,itemId:undefined,competencia,
+            motoristaId:motorista.motoristaId,motoristaNome:motorista.nome,
+            quantidade:0,valor:0,percentual:0,dataOcorrencia:'',motivo:''
+          });
+        }
+        await carregar();
+        setNovoDesc({motoristaId:'',motoristaNome:'',categoria:novoDesc.categoria,situacao:'Sem ocorrência',quantidade:0,valor:0,percentual:0,dataOcorrencia:'',motivo:'',exibir:true});
+        toast(`${pendentes.length} motoristas foram lançados como Sem ocorrência.`);
+      }catch(e){toast('Erro no lançamento em massa: '+e.message)}
+      return;
+    }
+    if(novoDesc.situacao==='Com ocorrência'&&!Number(novoDesc.valor)&&!Number(novoDesc.percentual)){toast('Informe o valor ou percentual do desconto.');return;}
+    try{await ApiService.salvarDesconto({...novoDesc,competencia});await carregar();setNovoDesc({motoristaId:'',motoristaNome:'',categoria:'Multas',situacao:'Sem ocorrência',quantidade:0,valor:0,percentual:0,dataOcorrencia:'',motivo:'',exibir:true});toast(novoDesc.itemId?'Lançamento atualizado no SharePoint.':'Conferência salva no SharePoint.');}
+    catch(e){toast('Erro ao salvar conferência: '+e.message)}
+  };
+  const tiposMeta=[...new Map(
+    (painel.tiposVeiculo||[]).filter(Boolean).map(tipo=>[chaveTipo(tipo),tipo])
+  ).values()].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  const tipoPelaChave=chave=>{
+    const normalizarChave=v=>chaveTipo(v).replace(/[^A-Z0-9]/g,'');
+    const prefixo=normalizarChave(String(chave||'').split('|')[0]);
+    if(!prefixo)return'';
+    return tiposMeta.find(t=>normalizarChave(t)===prefixo)||'';
+  };
+  const tipoOficial=(tipo,chave)=>tiposMeta.find(t=>chaveTipo(t)===chaveTipo(tipo))||tipo||tipoPelaChave(chave);
+  const metas=(painel.metas||[])
+    .map(m=>({...m,tipo:tipoOficial(m.tipo,m.chave)}))
+    .filter(m=>!fTipoMeta||chaveTipo(m.tipo)===chaveTipo(fTipoMeta));
+  const elegiveis=(painel.elegiveis||[]).filter(u=>!fMotorista||u.motoristaId===fMotorista);
   return (
     <React.Fragment>
       <div className="row" style={{flexWrap:'wrap'}}>
@@ -1845,11 +2101,19 @@ function AdmPremiacao({st, setSt, toast}){
       </div>
 
       {sub==='metas' && <React.Fragment>
+        <div className="row" style={{marginBottom:12,flexWrap:'wrap'}}>
+          <select style={{width:'auto'}} value={fTipoMeta} onChange={e=>setFTipoMeta(e.target.value)}>
+            <option value="">Todos os tipos de veículo</option>
+            {tiposMeta.map(tipo=><option key={tipo} value={tipo}>{tipo}</option>)}
+          </select>
+          <div className="grow"></div>
+          <button className="btn btn-p" onClick={()=>setEdit({tipo:'',start:0,meta:0,valorMeta:0,pctStart:0,pctMeta:0,teto:0,vigIni:HOJE,vigFim:HOJE.slice(0,4)+'-12-31',status:'Ativa',ativo:true,observacao:''})}>+ Incluir meta</button>
+        </div>
         <div className="card" style={{overflowX:'auto'}}>
           <table>
-            <thead><tr><th>Tipo de veículo</th><th className="td-num">Start</th><th className="td-num">Meta</th><th className="td-num">Na meta</th><th className="td-num">% start→meta</th><th className="td-num">% acima meta</th><th className="td-num">Teto mensal</th><th>Vigência</th><th></th></tr></thead>
-            <tbody>{st.metas.map(m=>
-              <tr key={m.id}>
+            <thead><tr><th>Tipo de veículo</th><th className="td-num">Start</th><th className="td-num">Meta</th><th className="td-num">Na meta</th><th className="td-num">% start→meta</th><th className="td-num">% acima meta</th><th className="td-num">Teto mensal</th><th>Vigência</th><th>Status</th><th></th></tr></thead>
+            <tbody>{metas.map(m=>
+              <tr key={m.itemId||m.id}>
                 <td><b>{m.tipo}</b></td>
                 <td className="td-num num">{brl(m.start)}</td>
                 <td className="td-num num">{brl(m.meta)}</td>
@@ -1858,55 +2122,85 @@ function AdmPremiacao({st, setSt, toast}){
                 <td className="td-num num">{m.pctMeta}%</td>
                 <td className="td-num num">{brl(m.teto)}</td>
                 <td className="muted">{dataBR(m.vigIni)} — {dataBR(m.vigFim)}</td>
+                <td><span className="tag tag-neutro">{statusMeta(m)}</span></td>
                 <td><button className="btn btn-s btn-sm" onClick={()=>setEdit({...m})}>Editar</button></td>
               </tr>)}</tbody>
           </table>
         </div>
-        <div className="aviso-box">Régua da POL 4.1.1 Rev03: abaixo do start, sem premiação; do start até a meta, {st.metas[0].pctStart}% sobre o excedente do start; na meta, {brl(st.metas[0].valorMeta)}; acima da meta, {st.metas[0].pctMeta}% sobre o excedente, limitado ao teto mensal. As metas têm vigência — na revisão anual, cadastre a nova vigência sem apagar a antiga, para o histórico continuar calculando certo.</div>
+        <div className="aviso-box">As metas são gravadas por vigência. Cadastre uma nova meta para um novo período sem alterar o histórico finalizado.</div>
       </React.Fragment>}
 
       {sub==='desc' && <React.Fragment>
+        <div className="row" style={{marginBottom:12,flexWrap:'wrap'}}>
+          <input type="month" style={{width:'auto'}} value={competencia} onChange={e=>setCompetencia(e.target.value)}/>
+          <select style={{width:'auto'}} value={fMotorista} onChange={e=>setFMotorista(e.target.value)}><option value="">Todos os motoristas</option>{(painel.elegiveis||[]).map(u=><option key={u.motoristaId} value={u.motoristaId}>{u.nome}</option>)}</select>
+        </div>
+        <div className="totais">
+          {categorias.map(c=><div className="card" key={c}><div className="v num">{((painel.pendencias||{})[c]||[]).filter(u=>!fMotorista||u.motoristaId===fMotorista).length}</div><div className="l">{c}<br/><span className="muted">pendentes</span></div></div>)}
+        </div>
         <div className="card">
-          <h3 style={{marginBottom:10}}>Novo lançamento</h3>
+          <h3 style={{marginBottom:10}}>Conferir desconto</h3>
+          {novoDesc.itemId&&<div className="aviso-box" style={{marginBottom:12}}>Editando lançamento existente. Ao salvar, o registro será atualizado sem criar duplicidade.</div>}
           <div className="form-grid">
             <div><label>Motorista</label>
-              <select value={novoDesc.motorista} onChange={e=>setNovoDesc({...novoDesc, motorista:e.target.value})}>
+              <select value={novoDesc.motoristaId} onChange={e=>{const u=(painel.elegiveis||[]).find(x=>x.motoristaId===e.target.value);setNovoDesc({...novoDesc,motoristaId:e.target.value,motoristaNome:u?.nome||''})}}>
                 <option value="">Selecionar...</option>
-                {motoristas.map(u=><option key={u.id} value={u.nome}>{primeiroNome(u.nome)}</option>)}
+                {!novoDesc.itemId&&<option value="__TODOS__">✓ Todos os motoristas pendentes</option>}
+                {elegiveis.map(u=><option key={u.motoristaId} value={u.motoristaId}>{u.nome}</option>)}
               </select></div>
-            <div><label>Mês</label>
-              <select value={novoDesc.mes} onChange={e=>setNovoDesc({...novoDesc, mes:e.target.value})}>
-                {MESES_2026.map(m=><option key={m} value={m}>{mesLabel(m)}</option>)}
-              </select></div>
-            <div><label>Item</label>
-              <select value={novoDesc.item} onChange={e=>{
-                const item=e.target.value;
-                setNovoDesc({...novoDesc, item, valor: item==='Check List'?-100:-50});
-              }}>
-                <option>Multas</option><option>Notificação / Advertencia</option><option>Check List</option>
-              </select></div>
-            <div><label>Valor (R$)</label><input type="number" value={novoDesc.valor} onChange={e=>setNovoDesc({...novoDesc, valor:e.target.value})}/></div>
+            <div><label>Categoria</label><select value={novoDesc.categoria} onChange={e=>setNovoDesc({...novoDesc,categoria:e.target.value})}>{categorias.map(c=><option key={c}>{c}</option>)}</select></div>
+            <div><label>Situação</label><select value={novoDesc.situacao} onChange={e=>setNovoDesc({...novoDesc,situacao:e.target.value,motoristaId:e.target.value==='Com ocorrência'&&novoDesc.motoristaId==='__TODOS__'?'':novoDesc.motoristaId})}><option>Sem ocorrência</option><option>Com ocorrência</option></select></div>
+            <div><label>Quantidade</label><input type="number" min="0" value={novoDesc.quantidade} onChange={e=>setNovoDesc({...novoDesc,quantidade:e.target.value})}/></div>
+            {novoDesc.situacao==='Com ocorrência'&&<React.Fragment>
+              <div><label>Valor do desconto (R$)</label><input type="number" min="0" value={novoDesc.valor} onChange={e=>setNovoDesc({...novoDesc,valor:e.target.value})}/></div>
+              <div><label>Percentual (%)</label><input type="number" min="0" max="100" value={novoDesc.percentual} onChange={e=>setNovoDesc({...novoDesc,percentual:e.target.value})}/></div>
+              <div><label>Data da ocorrência</label><input type="date" value={novoDesc.dataOcorrencia} onChange={e=>setNovoDesc({...novoDesc,dataOcorrencia:e.target.value})}/></div>
+              <div style={{gridColumn:'1/-1'}}><label>Motivo</label><textarea value={novoDesc.motivo} onChange={e=>setNovoDesc({...novoDesc,motivo:e.target.value})}/></div>
+            </React.Fragment>}
           </div>
-          <button className="btn btn-p" style={{marginTop:12}} onClick={addDesc}>Lançar desconto</button>
+          {novoDesc.motoristaId==='__TODOS__'&&
+            <div className="aviso-box" style={{marginTop:12}}>
+              Serão gravados como <b>Sem ocorrência</b> todos os {((painel.pendencias||{})[novoDesc.categoria]||[]).length} motoristas ainda pendentes em {novoDesc.categoria}. Quem já foi conferido não será alterado.
+            </div>}
+          <div className="row" style={{marginTop:12}}>
+            <button className="btn btn-p" onClick={addDesc}>{novoDesc.itemId?'Salvar edição':'Salvar conferência'}</button>
+            {novoDesc.itemId&&<button className="btn btn-s" onClick={()=>setNovoDesc({motoristaId:'',motoristaNome:'',categoria:'Multas',situacao:'Sem ocorrência',quantidade:0,valor:0,percentual:0,dataOcorrencia:'',motivo:'',exibir:true})}>Cancelar edição</button>}
+          </div>
         </div>
         <div className="card" style={{overflowX:'auto'}}>
           <table>
             <thead><tr><th>Motorista</th><th>Mês</th><th>Item</th><th className="td-num">Valor</th><th>Origem</th><th></th></tr></thead>
-            <tbody>{[...st.descontos].sort((a,b)=>b.mes.slice(3)+b.mes.slice(0,2) < a.mes.slice(3)+a.mes.slice(0,2) ? -1:1).map(d=>
-              <tr key={d.id}>
-                <td><b>{primeiroNome(d.motorista)}</b></td>
-                <td>{mesLabel(d.mes)}</td><td>{d.item}</td>
-                <td className="td-num num" style={{color:'var(--erro)'}}>{brl(d.valor)}</td>
-                <td className="muted">{d.origem}</td>
-                <td><button className="btn btn-g btn-sm" onClick={()=>removerDesc(d.id)}>Excluir</button></td>
+            <tbody>{(painel.descontos||[]).filter(d=>!fMotorista||d.motoristaId===fMotorista).map(d=>
+              <tr key={d.itemId}>
+                <td><b>{d.motoristaNome}</b></td>
+                <td>{competencia.slice(5,7)+'/'+competencia.slice(0,4)}</td><td>{d.categoria}</td>
+                <td className="td-num num" style={{color:d.valor?'var(--erro)':'var(--cinza)'}}>{brl(-Math.abs(d.valor||0))}</td>
+                <td className="muted">{d.situacao}</td>
+                <td><button className="btn btn-s btn-sm" onClick={()=>setNovoDesc({
+                  itemId:d.itemId,motoristaId:d.motoristaId,motoristaNome:d.motoristaNome,
+                  categoria:d.categoria,situacao:d.situacao||'Sem ocorrência',
+                  quantidade:d.quantidade||0,valor:d.valor||0,percentual:d.percentual||0,
+                  dataOcorrencia:d.dataOcorrencia||'',motivo:d.motivo||'',exibir:d.exibir!==false
+                })}>Editar</button></td>
               </tr>)}</tbody>
           </table>
         </div>
       </React.Fragment>}
 
       {edit &&
-        <Modal titulo={'Meta — '+edit.tipo} onClose={()=>setEdit(null)}>
+        <Modal titulo={edit.itemId?'Editar meta':'Incluir meta'} onClose={()=>setEdit(null)}>
           <div className="form-grid">
+            <div style={{gridColumn:'1/-1'}}><label>Tipo de veículo</label>
+              <select value={edit.tipo} onChange={e=>setEdit({...edit,tipo:e.target.value})}>
+                <option value="">Selecionar...</option>
+                {edit.tipo&&!tiposMeta.includes(edit.tipo)&&<option value={edit.tipo}>{edit.tipo}</option>}
+                {tiposMeta.map(tipo=><option key={tipo} value={tipo}>{tipo}</option>)}
+              </select>
+              {!tiposMeta.length&&
+                <div className="aviso-box" style={{marginTop:8}}>
+                  Nenhum tipo foi encontrado nas placas da Frota Pesada. Cadastros consultados: {(painel.diagnosticoVeiculos||{}).totalCadastro||0}; placas pesadas identificadas: {(painel.diagnosticoVeiculos||{}).totalFrotaPesada||0}.
+                </div>}
+            </div>
             <div><label>Start (R$)</label><input type="number" value={edit.start} onChange={e=>setEdit({...edit, start:Number(e.target.value)})}/></div>
             <div><label>Meta (R$)</label><input type="number" value={edit.meta} onChange={e=>setEdit({...edit, meta:Number(e.target.value)})}/></div>
             <div><label>Valor na meta (R$)</label><input type="number" value={edit.valorMeta} onChange={e=>setEdit({...edit, valorMeta:Number(e.target.value)})}/></div>
@@ -1915,8 +2209,9 @@ function AdmPremiacao({st, setSt, toast}){
             <div><label>% acima da meta</label><input type="number" value={edit.pctMeta} onChange={e=>setEdit({...edit, pctMeta:Number(e.target.value)})}/></div>
             <div><label>Vigência início</label><input type="date" value={edit.vigIni} onChange={e=>setEdit({...edit, vigIni:e.target.value})}/></div>
             <div><label>Vigência fim</label><input type="date" value={edit.vigFim} onChange={e=>setEdit({...edit, vigFim:e.target.value})}/></div>
+            <div><label>Ativa</label><select value={edit.ativo===false?'nao':'sim'} onChange={e=>setEdit({...edit,ativo:e.target.value==='sim'})}><option value="sim">Sim</option><option value="nao">Não</option></select></div>
           </div>
-          <button className="btn btn-p" style={{width:'100%', marginTop:14}} onClick={salvarMeta}>Salvar meta</button>
+          <button type="button" className="btn btn-p" style={{width:'100%', marginTop:14}} onClick={salvarMeta}>Salvar meta</button>
         </Modal>}
     </React.Fragment>
   );
@@ -1926,27 +2221,13 @@ function AdmPremiacao({st, setSt, toast}){
 function AdmCadastros({st, setSt, toast}){
   const [sub,setSub]=useState('usuarios');
   const [edit,setEdit]=useState(null);
+  const [editTipo,setEditTipo]=useState(null);
   const [editPlaca,setEditPlaca]=useState(null);
   const [editVinculo,setEditVinculo]=useState(null);
-  const [filtroUsuarios,setFiltroUsuarios]=useState({nome:'',perfil:'TODOS',ordem:'asc'});
-  const [filtroVeiculos,setFiltroVeiculos]=useState({placa:'',frota:'TODAS',tipo:'TODOS',ordenar:'placa',ordem:'asc'});
-  const [filtroVinculos,setFiltroVinculos]=useState({placa:'',usuario:'',status:'TODOS',ordenar:'usuario',ordem:'asc'});
   const [senhaVisivel,setSenhaVisivel]=useState(false);
-  const [cad,setCad]=useState({usuarios:[],veiculos:[],vinculos:[]});
-  const textoBusca=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
-  const comparar=(a,b,ordem='asc')=>String(a||'').localeCompare(String(b||''),'pt-BR',{numeric:true,sensitivity:'base'})*(ordem==='asc'?1:-1);
-  const statusVinculo=v=>v.dataFim?'FINALIZADO':v.ativo?'ATIVO':'INATIVO';
-  const usuariosVisiveis=cad.usuarios
-    .filter(u=>(!filtroUsuarios.nome||textoBusca(u.nome).includes(textoBusca(filtroUsuarios.nome)))&&(filtroUsuarios.perfil==='TODOS'||u.perfil===filtroUsuarios.perfil))
-    .sort((a,b)=>comparar(a.nome,b.nome,filtroUsuarios.ordem));
-  const veiculosVisiveis=cad.veiculos
-    .filter(v=>(!filtroVeiculos.placa||textoBusca(v.placa).includes(textoBusca(filtroVeiculos.placa)))&&(filtroVeiculos.frota==='TODAS'||v.tipoFrota===filtroVeiculos.frota)&&(filtroVeiculos.tipo==='TODOS'||v.tipoModelo===filtroVeiculos.tipo))
-    .sort((a,b)=>comparar(a[filtroVeiculos.ordenar==='frota'?'tipoFrota':filtroVeiculos.ordenar==='tipo'?'tipoModelo':'placa'],b[filtroVeiculos.ordenar==='frota'?'tipoFrota':filtroVeiculos.ordenar==='tipo'?'tipoModelo':'placa'],filtroVeiculos.ordem));
-  const vinculosVisiveis=cad.vinculos
-    .filter(v=>(!filtroVinculos.placa||textoBusca(v.placa).includes(textoBusca(filtroVinculos.placa)))&&(!filtroVinculos.usuario||textoBusca(v.usuarioNome).includes(textoBusca(filtroVinculos.usuario)))&&(filtroVinculos.status==='TODOS'||statusVinculo(v)===filtroVinculos.status))
-    .sort((a,b)=>comparar(filtroVinculos.ordenar==='placa'?a.placa:filtroVinculos.ordenar==='status'?statusVinculo(a):a.usuarioNome,filtroVinculos.ordenar==='placa'?b.placa:filtroVinculos.ordenar==='status'?statusVinculo(b):b.usuarioNome,filtroVinculos.ordem));
+  const [cad,setCad]=useState({usuarios:[],tiposVeiculo:[],veiculos:[],vinculos:[]});
   const proximoUsuarioId=()=>{const maior=cad.usuarios.reduce((m,u)=>{const x=String(u.usuarioId||'').match(/^USU-(\d+)$/i);return x?Math.max(m,Number(x[1])):m;},0);return 'USU-'+String(maior+1).padStart(3,'0');};
-  const carregar=async()=>{try{const r=await ApiService.admCadastros();setCad({usuarios:r.usuarios||[],veiculos:r.veiculos||[],vinculos:r.vinculos||[]});}catch(e){toast('Erro ao carregar cadastros: '+e.message);}};
+  const carregar=async()=>{try{const r=await ApiService.admCadastros();setCad({usuarios:r.usuarios||[],tiposVeiculo:r.tiposVeiculo||[],veiculos:r.veiculos||[],vinculos:r.vinculos||[]});}catch(e){toast('Erro ao carregar cadastros: '+e.message);}};
   useEffect(()=>{carregar();},[]);
   const salvarUser=async()=>{
     const login=String(edit.login||'').trim().toLowerCase(), usuarioId=String(edit.usuarioId||'').trim().toUpperCase();
@@ -1985,6 +2266,16 @@ function AdmCadastros({st, setSt, toast}){
     if(repetida){toast('A placa '+placa+' já está cadastrada.');return;}
     try{await ApiService.salvarVeiculo({...editPlaca,placa});setEditPlaca(null);await carregar();toast('Veículo salvo no SharePoint.');}catch(e){toast('Erro ao salvar veículo: '+e.message);}
   };
+  const salvarTipo=async()=>{
+    if(!String(editTipo.nome||'').trim()){toast('Informe o nome do tipo de veículo.');return;}
+    try{await ApiService.salvarTipoVeiculo(editTipo);setEditTipo(null);await carregar();toast('Tipo de veículo salvo no SharePoint.');}
+    catch(e){toast('Erro ao salvar tipo de veículo: '+e.message);}
+  };
+  const alterarStatusTipo=async(t)=>{
+    if(!window.confirm((t.ativo?'Inativar':'Reativar')+' o tipo '+t.nome+'?'))return;
+    try{await ApiService.salvarTipoVeiculo({...t,ativo:!t.ativo});await carregar();toast('Tipo de veículo atualizado.');}
+    catch(e){toast('Erro ao alterar tipo de veículo: '+e.message);}
+  };
   const alterarStatusPlaca=async(f)=>{
     const acao=f.ativo?'inativar':'reativar';
     if(!window.confirm((f.ativo?'Inativar':'Reativar')+' a placa '+f.placa+'?')) return;
@@ -1995,13 +2286,21 @@ function AdmCadastros({st, setSt, toast}){
     }catch(e){toast('Erro ao '+acao+' placa: '+e.message);}
   };
   const salvarVinculo=async()=>{const u=cad.usuarios.find(x=>x.itemId===editVinculo.usuarioItemId),v=cad.veiculos.find(x=>x.itemId===editVinculo.veiculoItemId);if(!u||!v){toast('Selecione usuário e veículo.');return;}try{await ApiService.salvarVinculo({...editVinculo,usuarioId:u.usuarioId,titulo:u.usuarioId+' - '+v.placa});setEditVinculo(null);await carregar();toast('Vínculo salvo no SharePoint.');}catch(e){toast('Erro ao salvar vínculo: '+e.message);}};
-  const tipos=['CAÇAMBA 4º EIXO','CARRO','CAÇAMBA VANDERLEIA','BICAÇAMBA','BITRUCK','TOCO'];
+  /* A edição da placa deve sempre exibir o cadastro central. O status ou a
+     classificação da frota não podem apagar as opções do seletor; o valor
+     antigo continua identificado separadamente como histórico. */
+  const tiposAtivos=[...new Map(cad.tiposVeiculo
+    .filter(t=>String(t.nome||'').trim())
+    .map(t=>[chaveTipo(t.nome),t])
+  ).values()]
+    .sort((a,b)=>String(a.nome).localeCompare(String(b.nome),'pt-BR'));
   return (
     <React.Fragment>
       <div className="row" style={{flexWrap:'wrap'}}>
         <h2 className="grow">Cadastros</h2>
         <div className="subtabs">
           <button className={'subtab'+(sub==='usuarios'?' on':'')} onClick={()=>setSub('usuarios')}>Usuários e acessos</button>
+          <button className={'subtab'+(sub==='tipos'?' on':'')} onClick={()=>setSub('tipos')}>Tipos de veículo</button>
           <button className={'subtab'+(sub==='frota'?' on':'')} onClick={()=>setSub('frota')}>Veículos</button>
           <button className={'subtab'+(sub==='vinculos'?' on':'')} onClick={()=>setSub('vinculos')}>Vínculos</button>
         </div>
@@ -2009,16 +2308,10 @@ function AdmCadastros({st, setSt, toast}){
 
       {sub==='usuarios' && <React.Fragment>
         <div><button className="btn btn-p" onClick={()=>{setSenhaVisivel(false);setEdit({nome:'',usuarioId:proximoUsuarioId(),login:'',telefone:'',perfil:'MOTORISTA',tipoFrotaAcesso:'FROTA PESADA',ativo:true,novaSenha:'',perms:{cargas:true,premiacao:true,checklist:true,historico:true,administracao:false}})}}>+ Novo usuário</button></div>
-        <div className="filtros-cadastro">
-          <div><label>Filtrar por nome</label><input value={filtroUsuarios.nome} onChange={e=>setFiltroUsuarios({...filtroUsuarios,nome:e.target.value})} placeholder="Digite o nome"/></div>
-          <div><label>Perfil</label><select value={filtroUsuarios.perfil} onChange={e=>setFiltroUsuarios({...filtroUsuarios,perfil:e.target.value})}><option value="TODOS">Todos</option><option>MOTORISTA</option><option>ADMINISTRADOR</option><option>VISUALIZADOR</option></select></div>
-          <div><label>Ordenar por</label><select value="nome" disabled><option value="nome">Nome</option></select></div>
-          <button className="btn btn-s sort-btn" onClick={()=>setFiltroUsuarios({...filtroUsuarios,ordem:filtroUsuarios.ordem==='asc'?'desc':'asc'})}>{filtroUsuarios.ordem==='asc'?'A → Z':'Z → A'}</button>
-        </div>
         <div className="card" style={{overflowX:'auto'}}>
           <table>
             <thead><tr><th>Nome</th><th>UsuarioID</th><th>Usuário</th><th>Perfil</th><th>Senha</th><th>Cargas</th><th>Premiação</th><th>Check list</th><th>Status</th><th>Ações</th></tr></thead>
-            <tbody>{usuariosVisiveis.map(u=>
+            <tbody>{cad.usuarios.map(u=>
               <tr key={u.itemId}>
                 <td><b>{u.nome}</b></td>
                 <td className="muted">{u.usuarioId}</td>
@@ -2030,32 +2323,34 @@ function AdmCadastros({st, setSt, toast}){
                 </React.Fragment>}
                 <td><span className={'tag '+(u.ativo?'tag-ok':'tag-neutro')}>{u.ativo?'Ativo':'Inativo'}</span></td>
                 <td><div className="row" style={{gap:6,flexWrap:'nowrap'}}><button className="btn btn-s btn-sm" onClick={()=>{setSenhaVisivel(false);setEdit({...u,novaSenha:'',perms:{cargas:u.acessoCargas,premiacao:u.acessoPremiacao,checklist:u.acessoChecklist,historico:u.acessoHistorico,administracao:u.acessoAdministracao}})}}>Editar</button><button className={'btn btn-sm '+(u.ativo?'btn-s':'btn-p')} onClick={()=>alterarStatusUsuario(u)}>{u.ativo?'Inativar':'Reativar'}</button></div></td>
-              </tr>)}{usuariosVisiveis.length===0&&<tr><td colSpan="10" className="vazio-tabela">Nenhum usuário encontrado com os filtros informados.</td></tr>}</tbody>
+              </tr>)}</tbody>
           </table>
         </div>
       </React.Fragment>}
 
-      {sub==='frota' && <React.Fragment>
-        <div><button className="btn btn-p" onClick={()=>setEditPlaca({placa:'',tipoFrota:'FROTA PESADA',tipoModelo:'CAÇAMBA 4º EIXO',ativo:true,usoCompartilhado:false})}>+ Novo veículo</button></div>
-        <div className="filtros-cadastro veiculos">
-          <div><label>Placa</label><input value={filtroVeiculos.placa} onChange={e=>setFiltroVeiculos({...filtroVeiculos,placa:e.target.value.toUpperCase()})} placeholder="Ex.: ABC1D23"/></div>
-          <div><label>Frota</label><select value={filtroVeiculos.frota} onChange={e=>setFiltroVeiculos({...filtroVeiculos,frota:e.target.value})}><option value="TODAS">Todas</option><option>FROTA PESADA</option><option>FROTA LEVE</option></select></div>
-          <div><label>Tipo</label><select value={filtroVeiculos.tipo} onChange={e=>setFiltroVeiculos({...filtroVeiculos,tipo:e.target.value})}><option value="TODOS">Todos</option>{tipos.map(t=><option key={t}>{t}</option>)}</select></div>
-          <div><label>Ordenar por</label><select value={filtroVeiculos.ordenar} onChange={e=>setFiltroVeiculos({...filtroVeiculos,ordenar:e.target.value})}><option value="placa">Placa</option><option value="frota">Frota</option><option value="tipo">Tipo</option></select></div>
-          <button className="btn btn-s sort-btn" onClick={()=>setFiltroVeiculos({...filtroVeiculos,ordem:filtroVeiculos.ordem==='asc'?'desc':'asc'})}>{filtroVeiculos.ordem==='asc'?'↑ Crescente':'↓ Decrescente'}</button>
+      {sub==='tipos' && <React.Fragment>
+        <div><button className="btn btn-p" onClick={()=>setEditTipo({nome:'',tipoFrota:'FROTA PESADA',pbtKg:0,capacidadeCargaKg:0,toleranciaSuperiorKg:0,limiteInferiorKg:0,exigeAprovacaoAbaixo:false,ativo:true,observacao:''})}>+ Novo tipo de veículo</button></div>
+        <div className="card" style={{overflowX:'auto'}}>
+          <table><thead><tr><th>Tipo de veículo</th><th>Frota</th><th className="td-num">PBT</th><th className="td-num">Capacidade</th><th className="td-num">Tolerância superior</th><th className="td-num">Limite inferior</th><th>Status</th><th>Ações</th></tr></thead>
+          <tbody>{cad.tiposVeiculo.map(t=><tr key={t.itemId}><td><b>{t.nome}</b></td><td>{t.tipoFrota}</td><td className="td-num num">{Number(t.pbtKg||0).toLocaleString('pt-BR')} kg</td><td className="td-num num">{Number(t.capacidadeCargaKg||0).toLocaleString('pt-BR')} kg</td><td className="td-num num">{Number(t.toleranciaSuperiorKg||0).toLocaleString('pt-BR')} kg</td><td className="td-num num">{Number(t.limiteInferiorKg||0).toLocaleString('pt-BR')} kg</td><td><span className={'tag '+(t.ativo?'tag-ok':'tag-neutro')}>{t.ativo?'Ativo':'Inativo'}</span></td><td><div className="row" style={{gap:6,flexWrap:'nowrap'}}><button className="btn btn-s btn-sm" onClick={()=>setEditTipo({...t})}>Editar</button><button className={'btn btn-sm '+(t.ativo?'btn-s':'btn-p')} onClick={()=>alterarStatusTipo(t)}>{t.ativo?'Inativar':'Reativar'}</button></div></td></tr>)}</tbody></table>
         </div>
+        <div className="aviso-box">Este cadastro é a fonte única dos tipos usados nos veículos, nas metas e nos filtros. Os limites de peso ficam armazenados para a futura auditoria, sem gerar bloqueio nesta etapa.</div>
+      </React.Fragment>}
+
+      {sub==='frota' && <React.Fragment>
+        <div><button className="btn btn-p" onClick={()=>setEditPlaca({placa:'',tipoFrota:'FROTA PESADA',tipoModelo:'',ativo:true,usoCompartilhado:false})}>+ Novo veículo</button></div>
         <div className="card" style={{overflowX:'auto'}}>
           <table>
             <thead><tr><th>Placa</th><th>Frota</th><th>Tipo / modelo</th><th>Uso</th><th>Status</th><th>Ações</th></tr></thead>
-            <tbody>{veiculosVisiveis.map(f=>
+            <tbody>{cad.veiculos.map(f=>
               <tr key={f.placa}>
                 <td><b className="num">{f.placa}</b></td>
-                <td><span className="tag tag-ok">{f.tipoFrota}</span></td>
+                <td><span className="tag tag-ok">{f.tipoFrota||'Não informado'}</span></td>
                 <td>{f.tipoModelo}</td>
                 <td>{f.usoCompartilhado?'Compartilhado':'Por vínculo'}</td>
                 <td><span className={'tag '+(f.ativo?'tag-ok':'tag-neutro')}>{f.ativo?'Ativo':'Inativo'}</span></td>
                 <td><div className="row" style={{gap:6,flexWrap:'nowrap'}}><button className="btn btn-s btn-sm" onClick={()=>setEditPlaca({...f})}>Editar</button><button className={'btn btn-sm '+(f.ativo?'btn-s':'btn-p')} onClick={()=>alterarStatusPlaca(f)}>{f.ativo?'Inativar':'Reativar'}</button></div></td>
-              </tr>)}{veiculosVisiveis.length===0&&<tr><td colSpan="6" className="vazio-tabela">Nenhum veículo encontrado com os filtros informados.</td></tr>}</tbody>
+              </tr>)}</tbody>
           </table>
         </div>
         <div className="aviso-box">A classificação da frota define qual modelo de check list o veículo recebe. Nos pesados, o tipo de veículo define também a meta da premiação; o vínculo com o motorista é usado na importação quando a planilha não traz a coluna de motorista.</div>
@@ -2063,14 +2358,7 @@ function AdmCadastros({st, setSt, toast}){
 
       {sub==='vinculos' && <React.Fragment>
         <div><button className="btn btn-p" onClick={()=>setEditVinculo({vinculoId:'VIN-'+String(cad.vinculos.length+1).padStart(3,'0'),usuarioItemId:'',veiculoItemId:'',dataInicio:HOJE,dataFim:'',ativo:true,principal:true,observacao:''})}>+ Novo vínculo</button></div>
-        <div className="filtros-cadastro vinculos">
-          <div><label>Placa</label><input value={filtroVinculos.placa} onChange={e=>setFiltroVinculos({...filtroVinculos,placa:e.target.value.toUpperCase()})} placeholder="Filtrar placa"/></div>
-          <div><label>Usuário</label><input value={filtroVinculos.usuario} onChange={e=>setFiltroVinculos({...filtroVinculos,usuario:e.target.value})} placeholder="Filtrar usuário"/></div>
-          <div><label>Status</label><select value={filtroVinculos.status} onChange={e=>setFiltroVinculos({...filtroVinculos,status:e.target.value})}><option value="TODOS">Todos</option><option value="ATIVO">Ativo</option><option value="INATIVO">Inativo</option><option value="FINALIZADO">Finalizado</option></select></div>
-          <div><label>Ordenar por</label><select value={filtroVinculos.ordenar} onChange={e=>setFiltroVinculos({...filtroVinculos,ordenar:e.target.value})}><option value="usuario">Nome</option><option value="status">Status</option><option value="placa">Placa</option></select></div>
-          <button className="btn btn-s sort-btn" onClick={()=>setFiltroVinculos({...filtroVinculos,ordem:filtroVinculos.ordem==='asc'?'desc':'asc'})}>{filtroVinculos.ordem==='asc'?'↑ Crescente':'↓ Decrescente'}</button>
-        </div>
-        <div className="card" style={{overflowX:'auto'}}><table><thead><tr><th>Vínculo</th><th>Usuário</th><th>Veículo</th><th>Início</th><th>Fim</th><th>Principal</th><th>Status</th><th></th></tr></thead><tbody>{vinculosVisiveis.map(v=><tr key={v.itemId}><td>{v.vinculoId}</td><td><b>{v.usuarioNome}</b></td><td>{v.placa}</td><td>{dataBR((v.dataInicio||'').slice(0,10))}</td><td>{v.dataFim?dataBR(v.dataFim.slice(0,10)):'—'}</td><td>{v.principal?'Sim':'Não'}</td><td><span className={'tag '+(v.dataFim?'tag-neutro':v.ativo?'tag-ok':'tag-neg')}>{v.dataFim?'Finalizado':v.ativo?'Ativo':'Inativo'}</span></td><td><button className="btn btn-s btn-sm" onClick={()=>setEditVinculo({...v})}>Editar</button></td></tr>)}{vinculosVisiveis.length===0&&<tr><td colSpan="8" className="vazio-tabela">Nenhum vínculo encontrado com os filtros informados.</td></tr>}</tbody></table></div>
+        <div className="card" style={{overflowX:'auto'}}><table><thead><tr><th>Vínculo</th><th>Usuário</th><th>Veículo</th><th>Início</th><th>Fim</th><th>Principal</th><th>Status</th><th></th></tr></thead><tbody>{cad.vinculos.map(v=><tr key={v.itemId}><td>{v.vinculoId}</td><td><b>{v.usuarioNome}</b></td><td>{v.placa}</td><td>{dataBR((v.dataInicio||'').slice(0,10))}</td><td>{v.dataFim?dataBR(v.dataFim.slice(0,10)):'—'}</td><td>{v.principal?'Sim':'Não'}</td><td><span className={'tag '+(v.dataFim?'tag-neutro':v.ativo?'tag-ok':'tag-neg')}>{v.dataFim?'Finalizado':v.ativo?'Ativo':'Inativo'}</span></td><td><button className="btn btn-s btn-sm" onClick={()=>setEditVinculo({...v})}>Editar</button></td></tr>)}</tbody></table></div>
       </React.Fragment>}
 
       {edit &&
@@ -2116,13 +2404,29 @@ function AdmCadastros({st, setSt, toast}){
               </select></div>
             <div><label>Placa</label><input value={editPlaca.placa} disabled={!!editPlaca.itemId} onChange={e=>setEditPlaca({...editPlaca,placa:e.target.value.toUpperCase()})}/></div><div><label>Tipo / modelo</label>
                 <select value={editPlaca.tipoModelo} onChange={e=>setEditPlaca({...editPlaca, tipoModelo:e.target.value})}>
-                  {tipos.map(t=><option key={t}>{t}</option>)}
+                  <option value="">Selecionar...</option>
+                  {editPlaca.tipoModelo&&!tiposAtivos.some(t=>chaveTipo(t.nome)===chaveTipo(editPlaca.tipoModelo))&&<option value={editPlaca.tipoModelo}>{editPlaca.tipoModelo} (histórico)</option>}
+                  {tiposAtivos.map(t=><option key={t.itemId} value={t.nome}>{t.nome}</option>)}
                 </select></div><div><label>Uso compartilhado?</label><select value={editPlaca.usoCompartilhado?'s':'n'} onChange={e=>setEditPlaca({...editPlaca,usoCompartilhado:e.target.value==='s'})}><option value="n">Não — exige vínculo</option><option value="s">Sim</option></select></div>
             <div><label>Status do veículo</label><select value={editPlaca.ativo?'s':'n'} onChange={e=>setEditPlaca({...editPlaca,ativo:e.target.value==='s'})}><option value="s">Ativo</option><option value="n">Inativo</option></select></div>
             <button className="btn btn-p" onClick={salvarPlaca}>Salvar placa</button>
           </div>
         </Modal>}
       {editVinculo && <Modal titulo="Vínculo usuário × veículo" onClose={()=>setEditVinculo(null)}><div style={{display:'flex',flexDirection:'column',gap:12}}><div><label>Usuário</label><select value={editVinculo.usuarioItemId} onChange={e=>setEditVinculo({...editVinculo,usuarioItemId:e.target.value})}><option value="">Selecionar...</option>{cad.usuarios.filter(u=>u.ativo).map(u=><option key={u.itemId} value={u.itemId}>{u.nome}</option>)}</select></div><div><label>Veículo</label><select value={editVinculo.veiculoItemId} onChange={e=>setEditVinculo({...editVinculo,veiculoItemId:e.target.value})}><option value="">Selecionar...</option>{cad.veiculos.filter(v=>v.ativo&&!v.usoCompartilhado).map(v=><option key={v.itemId} value={v.itemId}>{v.placa}</option>)}</select></div><div className="form-grid"><div><label>Início</label><input type="date" value={(editVinculo.dataInicio||'').slice(0,10)} onChange={e=>setEditVinculo({...editVinculo,dataInicio:e.target.value})}/></div><div><label>Fim</label><input type="date" value={(editVinculo.dataFim||'').slice(0,10)} onChange={e=>setEditVinculo({...editVinculo,dataFim:e.target.value,ativo:!e.target.value})}/></div></div><div><label>Principal?</label><select value={editVinculo.principal?'s':'n'} onChange={e=>setEditVinculo({...editVinculo,principal:e.target.value==='s'})}><option value="s">Sim</option><option value="n">Não</option></select></div><div><label>Observação</label><textarea value={editVinculo.observacao||''} onChange={e=>setEditVinculo({...editVinculo,observacao:e.target.value})}/></div><button className="btn btn-p" onClick={salvarVinculo}>Salvar vínculo</button></div></Modal>}
+      {editTipo && <Modal titulo={editTipo.itemId?'Editar tipo de veículo':'Novo tipo de veículo'} onClose={()=>setEditTipo(null)}>
+        <div className="form-grid">
+          <div style={{gridColumn:'1/-1'}}><label>Nome do tipo de veículo</label><input value={editTipo.nome} onChange={e=>setEditTipo({...editTipo,nome:e.target.value.toUpperCase()})}/></div>
+          <div><label>Frota</label><select value={editTipo.tipoFrota} onChange={e=>setEditTipo({...editTipo,tipoFrota:e.target.value})}><option>FROTA PESADA</option><option>FROTA LEVE</option></select></div>
+          <div><label>Status</label><select value={editTipo.ativo?'s':'n'} onChange={e=>setEditTipo({...editTipo,ativo:e.target.value==='s'})}><option value="s">Ativo</option><option value="n">Inativo</option></select></div>
+          <div><label>PBT (kg)</label><input type="number" min="0" value={editTipo.pbtKg} onChange={e=>setEditTipo({...editTipo,pbtKg:Number(e.target.value)})}/></div>
+          <div><label>Capacidade de carga (kg)</label><input type="number" min="0" value={editTipo.capacidadeCargaKg} onChange={e=>setEditTipo({...editTipo,capacidadeCargaKg:Number(e.target.value)})}/></div>
+          <div><label>Tolerância superior (kg)</label><input type="number" min="0" value={editTipo.toleranciaSuperiorKg} onChange={e=>setEditTipo({...editTipo,toleranciaSuperiorKg:Number(e.target.value)})}/></div>
+          <div><label>Limite inferior (kg)</label><input type="number" min="0" value={editTipo.limiteInferiorKg} onChange={e=>setEditTipo({...editTipo,limiteInferiorKg:Number(e.target.value)})}/></div>
+          <div><label>Exige aprovação abaixo?</label><select value={editTipo.exigeAprovacaoAbaixo?'s':'n'} onChange={e=>setEditTipo({...editTipo,exigeAprovacaoAbaixo:e.target.value==='s'})}><option value="n">Não</option><option value="s">Sim</option></select></div>
+          <div style={{gridColumn:'1/-1'}}><label>Observação</label><textarea value={editTipo.observacao||''} onChange={e=>setEditTipo({...editTipo,observacao:e.target.value})}/></div>
+        </div>
+        <button className="btn btn-p" style={{width:'100%',marginTop:14}} onClick={salvarTipo}>Salvar tipo de veículo</button>
+      </Modal>}
     </React.Fragment>
   );
 }
@@ -2184,8 +2488,8 @@ function App(){
   return (
     <React.Fragment>
       {!userAtual && <Login st={st} onLogin={setUser}/>}
-      {userAtual && ehMotorista && <MotoristaApp st={st} setSt={setSt} user={userAtual} onSair={()=>setUser(null)} toast={toast}/>}
-      {userAtual && (ehAdministrador || ehVisualizador) && <AdmApp st={st} setSt={setSt} user={userAtual} onSair={()=>setUser(null)} toast={toast}/>}
+      {userAtual && ehMotorista && <MotoristaApp st={st} setSt={setSt} user={userAtual} onSair={()=>{ApiService.sair();setUser(null);}} toast={toast}/>}
+      {userAtual && (ehAdministrador || ehVisualizador) && <AdmApp st={st} setSt={setSt} user={userAtual} onSair={()=>{ApiService.sair();setUser(null);}} toast={toast}/>}
       {userAtual && !ehMotorista && !ehAdministrador && !ehVisualizador && (
         <div className="login-wrap"><div className="login-card">
           <div className="marca">Bocchi <em>Frota</em></div>
