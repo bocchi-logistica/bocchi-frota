@@ -179,7 +179,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 90000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '1.9.23-premiacao-motorista-banco'
+  VERSAO: '1.9.25-premiacao-vinculo-historico'
 };
 
 /* ============================================================================
@@ -647,6 +647,9 @@ function apuracaoMes(st, dados, motNome, mes){
       nCargas:Number(calculada.quantidadeCargas||0),
       peso:Number(calculada.pesoTon||0),
       detalhe:true
+      ,detalhesVigencia:Array.isArray(calculada.detalhesVigencia)?calculada.detalhesVigencia:[]
+      ,inconsistencias:Array.isArray(calculada.inconsistencias)?calculada.inconsistencias:[]
+      ,nCargasValidas:Number(calculada.quantidadeCargasValidas||0)
     };
   }
   const u = st.usuarios.find(x=>x.nome===motNome);
@@ -810,7 +813,16 @@ function TelaCargas({st, setSt, user, dados, toast}){
 
 /* ================= MOTORISTA: PREMIAÇÃO ================= */
 function Regua({fat, meta}){
-  if(!meta) return null;
+  if(!meta) {
+    return (
+      <div className="regua" style={{opacity:.55}}>
+        <div className="fill" style={{width:'0%'}}></div>
+        <div className="marco" style={{left:'35%'}}><span className="flag">START</span></div>
+        <div className="marco meta" style={{left:'78%'}}><span className="flag">META</span></div>
+        <span className="caminhao" style={{left:'3%'}}>🚛</span>
+      </div>
+    );
+  }
   const fim = Math.max(meta.meta * 1.25, meta.start * 1.35, 1);
   const pct = Math.max(0, Math.min(100, fat/fim*100));
   const pStart = meta.start/fim*100, pMeta = meta.meta/fim*100;
@@ -865,6 +877,26 @@ function TelaPremiacao({st, user, dados}){
 
       <div className="card">
         <h3 style={{marginBottom:6}}>Apuração de {mesLabel(mes)}</h3>
+        {ap.inconsistencias && ap.inconsistencias.length>0 &&
+          <div className="aviso-box" style={{marginBottom:10,borderColor:'var(--erro)'}}>
+            <b>{ap.inconsistencias.length} carga(s) não considerada(s)</b><br/>
+            Falta ou divergência no vínculo Motorista × Veículo vigente na data. A logística deve corrigir o histórico de vínculos.
+          </div>}
+        {ap.detalhesVigencia && ap.detalhesVigencia.length>1 &&
+          <div className="aviso-box" style={{marginBottom:10}}>
+            <b>Troca de veículo/tipo no mês.</b> A apuração foi separada por vigência e as metas foram proporcionais aos dias de cada período.
+          </div>}
+        {ap.detalhesVigencia && ap.detalhesVigencia.map((v,idx)=>
+          <div className="linha-item" key={(v.vinculoId||idx)+'-'+(v.meta&&v.meta.id||'')}>
+            <span>
+              <b>{v.placa} · {v.tipoVeiculo}</b>
+              <span className="muted"> — {dataBR(v.inicio)} a {dataBR(v.fim)} · {v.diasVigencia} dia(s)</span>
+            </span>
+            <span style={{textAlign:'right'}}>
+              <b className="num">{brl(v.realizado)}</b>
+              <span className="muted" style={{display:'block'}}>Meta proporcional: {brl(v.metaRateada&&v.metaRateada.meta||0)}</span>
+            </span>
+          </div>)}
         <div className="linha-item">
           <span>Frete realizado no mês</span>
           <b className="num" style={{color:'var(--mata)'}}>{brl(ap.fat)}</b>
