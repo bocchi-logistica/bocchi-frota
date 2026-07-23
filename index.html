@@ -1993,12 +1993,35 @@ function AdmPremiacao({st, setSt, toast}){
   };
   const addDesc=async()=>{
     if(!novoDesc.motoristaId){toast('Selecione o motorista.');return;}
+    if(novoDesc.motoristaId==='__TODOS__'){
+      if(novoDesc.situacao!=='Sem ocorrência'){toast('O lançamento em massa é permitido somente para Sem ocorrência.');return;}
+      const pendentes=((painel.pendencias||{})[novoDesc.categoria]||[]);
+      if(!pendentes.length){toast('Não há motoristas pendentes nesta categoria.');return;}
+      try{
+        for(const motorista of pendentes){
+          await ApiService.salvarDesconto({
+            ...novoDesc,itemId:undefined,competencia,
+            motoristaId:motorista.motoristaId,motoristaNome:motorista.nome,
+            quantidade:0,valor:0,percentual:0,dataOcorrencia:'',motivo:''
+          });
+        }
+        await carregar();
+        setNovoDesc({motoristaId:'',motoristaNome:'',categoria:novoDesc.categoria,situacao:'Sem ocorrência',quantidade:0,valor:0,percentual:0,dataOcorrencia:'',motivo:'',exibir:true});
+        toast(`${pendentes.length} motoristas foram lançados como Sem ocorrência.`);
+      }catch(e){toast('Erro no lançamento em massa: '+e.message)}
+      return;
+    }
     if(novoDesc.situacao==='Com ocorrência'&&!Number(novoDesc.valor)&&!Number(novoDesc.percentual)){toast('Informe o valor ou percentual do desconto.');return;}
     try{await ApiService.salvarDesconto({...novoDesc,competencia});await carregar();setNovoDesc({motoristaId:'',motoristaNome:'',categoria:'Multas',situacao:'Sem ocorrência',quantidade:0,valor:0,percentual:0,dataOcorrencia:'',motivo:'',exibir:true});toast(novoDesc.itemId?'Lançamento atualizado no SharePoint.':'Conferência salva no SharePoint.');}
     catch(e){toast('Erro ao salvar conferência: '+e.message)}
   };
-  const tiposMeta=[...new Set([...(painel.tiposVeiculo||[]),...(painel.metas||[]).map(m=>m.tipo)].filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
-  const metas=(painel.metas||[]).filter(m=>!fTipoMeta||m.tipo===fTipoMeta);
+  const tiposMeta=[...new Map(
+    (painel.tiposVeiculo||[]).filter(Boolean).map(tipo=>[chaveTipo(tipo),tipo])
+  ).values()].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  const tipoOficial=tipo=>tiposMeta.find(t=>chaveTipo(t)===chaveTipo(tipo))||tipo;
+  const metas=(painel.metas||[])
+    .map(m=>({...m,tipo:tipoOficial(m.tipo)}))
+    .filter(m=>!fTipoMeta||chaveTipo(m.tipo)===chaveTipo(fTipoMeta));
   const elegiveis=(painel.elegiveis||[]).filter(u=>!fMotorista||u.motoristaId===fMotorista);
   return (
     <React.Fragment>
@@ -2055,10 +2078,11 @@ function AdmPremiacao({st, setSt, toast}){
             <div><label>Motorista</label>
               <select value={novoDesc.motoristaId} onChange={e=>{const u=(painel.elegiveis||[]).find(x=>x.motoristaId===e.target.value);setNovoDesc({...novoDesc,motoristaId:e.target.value,motoristaNome:u?.nome||''})}}>
                 <option value="">Selecionar...</option>
+                {!novoDesc.itemId&&<option value="__TODOS__">✓ Todos os motoristas pendentes</option>}
                 {elegiveis.map(u=><option key={u.motoristaId} value={u.motoristaId}>{u.nome}</option>)}
               </select></div>
             <div><label>Categoria</label><select value={novoDesc.categoria} onChange={e=>setNovoDesc({...novoDesc,categoria:e.target.value})}>{categorias.map(c=><option key={c}>{c}</option>)}</select></div>
-            <div><label>Situação</label><select value={novoDesc.situacao} onChange={e=>setNovoDesc({...novoDesc,situacao:e.target.value})}><option>Sem ocorrência</option><option>Com ocorrência</option></select></div>
+            <div><label>Situação</label><select value={novoDesc.situacao} onChange={e=>setNovoDesc({...novoDesc,situacao:e.target.value,motoristaId:e.target.value==='Com ocorrência'&&novoDesc.motoristaId==='__TODOS__'?'':novoDesc.motoristaId})}><option>Sem ocorrência</option><option>Com ocorrência</option></select></div>
             <div><label>Quantidade</label><input type="number" min="0" value={novoDesc.quantidade} onChange={e=>setNovoDesc({...novoDesc,quantidade:e.target.value})}/></div>
             {novoDesc.situacao==='Com ocorrência'&&<React.Fragment>
               <div><label>Valor do desconto (R$)</label><input type="number" min="0" value={novoDesc.valor} onChange={e=>setNovoDesc({...novoDesc,valor:e.target.value})}/></div>
@@ -2067,6 +2091,10 @@ function AdmPremiacao({st, setSt, toast}){
               <div style={{gridColumn:'1/-1'}}><label>Motivo</label><textarea value={novoDesc.motivo} onChange={e=>setNovoDesc({...novoDesc,motivo:e.target.value})}/></div>
             </React.Fragment>}
           </div>
+          {novoDesc.motoristaId==='__TODOS__'&&
+            <div className="aviso-box" style={{marginTop:12}}>
+              Serão gravados como <b>Sem ocorrência</b> todos os {((painel.pendencias||{})[novoDesc.categoria]||[]).length} motoristas ainda pendentes em {novoDesc.categoria}. Quem já foi conferido não será alterado.
+            </div>}
           <div className="row" style={{marginTop:12}}>
             <button className="btn btn-p" onClick={addDesc}>{novoDesc.itemId?'Salvar edição':'Salvar conferência'}</button>
             {novoDesc.itemId&&<button className="btn btn-s" onClick={()=>setNovoDesc({motoristaId:'',motoristaNome:'',categoria:'Multas',situacao:'Sem ocorrência',quantidade:0,valor:0,percentual:0,dataOcorrencia:'',motivo:'',exibir:true})}>Cancelar edição</button>}
