@@ -94,6 +94,17 @@ label{font-size:12.5px; font-weight:600; color:var(--cinza); display:block; marg
 .grande{font-family:'Archivo'; font-weight:800; font-size:30px; letter-spacing:-.01em}
 .linha-item{display:flex; justify-content:space-between; padding:9px 0; border-bottom:1px solid var(--linha); font-size:14px}
 .linha-item:last-child{border-bottom:none}
+.ocorrencia-linha{display:block}
+.ocorrencia-resumo{display:flex; justify-content:space-between; align-items:center; gap:10px}
+.ocorrencia-abrir{display:flex; align-items:center; gap:7px; min-width:0; text-align:left; color:inherit}
+.ocorrencia-seta{display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; flex:0 0 24px; border-radius:50%; background:var(--papel); color:var(--mata); font-weight:800; transition:transform .18s}
+.ocorrencia-seta.aberta{transform:rotate(180deg)}
+.ocorrencia-detalhes{margin-top:8px; padding:10px 12px; border-radius:10px; background:var(--papel); border:1px solid var(--linha)}
+.ocorrencia-detalhe{padding:8px 0; border-bottom:1px solid var(--linha)}
+.ocorrencia-detalhe:last-child{border-bottom:none}
+.ocorrencia-motivo{margin-top:4px; color:var(--tinta); white-space:pre-wrap}
+.filtros-cadastro{display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:10px; margin:12px 0}
+.filtros-cadastro label{margin-bottom:4px}
 .quad-mes{display:flex; justify-content:space-between; align-items:center; padding:10px 12px; border-radius:10px; background:var(--papel); margin-bottom:6px}
 .quad-mes.on{outline:2px solid var(--folha)}
 
@@ -838,6 +849,7 @@ function Regua({fat, meta}){
 }
 function TelaPremiacao({st, user, dados}){
   const [mes,setMes]=useState(MES_ATUAL);
+  const [ocorrenciasAbertas,setOcorrenciasAbertas]=useState({});
   const ap = apuracaoMes(st, dados, user.nome, mes);
   const quad = QUADS.find(q=>q.meses.includes(mes)) || QUADS[0];
   const apsQuad = quad.meses.map(m=>({mes:m, ...apuracaoMes(st, dados, user.nome, m)}));
@@ -907,13 +919,41 @@ function TelaPremiacao({st, user, dados}){
           {rotulo:'Multas', aliases:['Multas']},
           {rotulo:'Auditoria Interna', aliases:['Auditoria Interna','Check List']}
         ].map(grupo=>{
-          const doItem = ap.descs.filter(d=>grupo.aliases.includes(d.item));
-          const tot = doItem.reduce((s,d)=>s+d.valor,0);
+          const doItem = ap.descs.filter(d=>{
+            const categoria=String(d.item||d.categoria||'');
+            return grupo.aliases.includes(categoria) && d.exibir!==false &&
+              (String(d.situacao||'Com ocorrência').toLowerCase().includes('ocorr') || Number(d.valor||0)!==0 || Number(d.percentual||0)!==0);
+          });
+          const tot = doItem.reduce((s,d)=>s+(Number(d.valor||0)>0?-Math.abs(Number(d.valor||0)):Number(d.valor||0)),0);
+          const chave=grupo.rotulo;
+          const aberta=!!ocorrenciasAbertas[chave];
           return (
-            <div className="linha-item" key={grupo.rotulo}>
-              <span>{grupo.rotulo}
-                <span className="muted"> — {doItem.length===0 ? 'nenhuma ocorrência' : doItem.length+' ocorrência'+(doItem.length>1?'s':'')}</span></span>
-              <b className="num" style={{color: tot<0?'var(--erro)':'var(--cinza)'}}>{tot<0 ? brl(tot) : brl(0)}</b>
+            <div className="linha-item ocorrencia-linha" key={grupo.rotulo}>
+              <div className="ocorrencia-resumo">
+                {doItem.length>0 ?
+                  <button type="button" className="ocorrencia-abrir" onClick={()=>setOcorrenciasAbertas(a=>({...a,[chave]:!a[chave]}))} aria-expanded={aberta}>
+                    <span className={'ocorrencia-seta'+(aberta?' aberta':'')}>⌄</span>
+                    <span>{grupo.rotulo}<span className="muted"> — {doItem.length} ocorrência{doItem.length>1?'s':''}</span></span>
+                  </button> :
+                  <span>{grupo.rotulo}<span className="muted"> — nenhuma ocorrência</span></span>}
+                <b className="num" style={{color: tot<0?'var(--erro)':'var(--cinza)'}}>{tot<0 ? brl(tot) : brl(0)}</b>
+              </div>
+              {aberta && doItem.length>0 &&
+                <div className="ocorrencia-detalhes">
+                  {doItem.map((d,i)=>{
+                    const valor=Number(d.valor||0)>0?-Math.abs(Number(d.valor||0)):Number(d.valor||0);
+                    return <div className="ocorrencia-detalhe" key={d.itemId||d.id||i}>
+                      <div className="row" style={{alignItems:'flex-start'}}>
+                        <div className="grow">
+                          <b>{d.dataOcorrencia?dataBR(String(d.dataOcorrencia).slice(0,10)):'Data não informada'}</b>
+                          <div className="muted">{d.situacao||'Com ocorrência'}{Number(d.quantidade||0)>0?' · Quantidade: '+d.quantidade:''}{Number(d.percentual||0)>0?' · '+brn(d.percentual,2)+'%':''}</div>
+                        </div>
+                        <b className="num" style={{color:valor<0?'var(--erro)':'var(--cinza)'}}>{brl(valor)}</b>
+                      </div>
+                      <div className="ocorrencia-motivo"><b>Motivo:</b> {String(d.motivo||d.origem||'Não informado')}</div>
+                    </div>;
+                  })}
+                </div>}
             </div>
           );
         })}
@@ -2226,6 +2266,9 @@ function AdmCadastros({st, setSt, toast}){
   const [editVinculo,setEditVinculo]=useState(null);
   const [senhaVisivel,setSenhaVisivel]=useState(false);
   const [cad,setCad]=useState({usuarios:[],tiposVeiculo:[],veiculos:[],vinculos:[]});
+  const [fUsuario,setFUsuario]=useState({nome:'',perfil:'',ordem:'nome-asc'});
+  const [fVeiculo,setFVeiculo]=useState({placa:'',frota:'',tipo:'',ordem:'placa-asc'});
+  const [fVinculo,setFVinculo]=useState({placa:'',usuario:'',status:'',ordem:'usuario-asc'});
   const proximoUsuarioId=()=>{const maior=cad.usuarios.reduce((m,u)=>{const x=String(u.usuarioId||'').match(/^USU-(\d+)$/i);return x?Math.max(m,Number(x[1])):m;},0);return 'USU-'+String(maior+1).padStart(3,'0');};
   const carregar=async()=>{try{const r=await ApiService.admCadastros();setCad({usuarios:r.usuarios||[],tiposVeiculo:r.tiposVeiculo||[],veiculos:r.veiculos||[],vinculos:r.vinculos||[]});}catch(e){toast('Erro ao carregar cadastros: '+e.message);}};
   useEffect(()=>{carregar();},[]);
@@ -2294,6 +2337,31 @@ function AdmCadastros({st, setSt, toast}){
     .map(t=>[chaveTipo(t.nome),t])
   ).values()]
     .sort((a,b)=>String(a.nome).localeCompare(String(b.nome),'pt-BR'));
+  const compararTexto=(a,b)=>String(a||'').localeCompare(String(b||''),'pt-BR',{numeric:true,sensitivity:'base'});
+  const usuariosFiltrados=cad.usuarios
+    .filter(u=>String(u.nome||'').toLocaleLowerCase('pt-BR').includes(fUsuario.nome.toLocaleLowerCase('pt-BR')) && (!fUsuario.perfil||u.perfil===fUsuario.perfil))
+    .sort((a,b)=>(fUsuario.ordem.endsWith('desc')?-1:1)*compararTexto(fUsuario.ordem.startsWith('perfil')?a.perfil:a.nome,fUsuario.ordem.startsWith('perfil')?b.perfil:b.nome));
+  const veiculosFiltrados=cad.veiculos
+    .filter(v=>String(v.placa||'').toUpperCase().includes(fVeiculo.placa.toUpperCase()) &&
+      (!fVeiculo.frota||v.tipoFrota===fVeiculo.frota) &&
+      (!fVeiculo.tipo||chaveTipo(v.tipoModelo)===chaveTipo(fVeiculo.tipo)))
+    .sort((a,b)=>{
+      const campo=fVeiculo.ordem.split('-')[0], dir=fVeiculo.ordem.endsWith('desc')?-1:1;
+      const va=campo==='frota'?a.tipoFrota:campo==='tipo'?a.tipoModelo:a.placa;
+      const vb=campo==='frota'?b.tipoFrota:campo==='tipo'?b.tipoModelo:b.placa;
+      return dir*compararTexto(va,vb);
+    });
+  const statusVinculo=v=>v.dataFim?'Finalizado':v.ativo?'Ativo':'Inativo';
+  const vinculosFiltrados=cad.vinculos
+    .filter(v=>String(v.placa||'').toUpperCase().includes(fVinculo.placa.toUpperCase()) &&
+      String(v.usuarioNome||'').toLocaleLowerCase('pt-BR').includes(fVinculo.usuario.toLocaleLowerCase('pt-BR')) &&
+      (!fVinculo.status||statusVinculo(v)===fVinculo.status))
+    .sort((a,b)=>{
+      const campo=fVinculo.ordem.split('-')[0], dir=fVinculo.ordem.endsWith('desc')?-1:1;
+      const va=campo==='placa'?a.placa:campo==='status'?statusVinculo(a):a.usuarioNome;
+      const vb=campo==='placa'?b.placa:campo==='status'?statusVinculo(b):b.usuarioNome;
+      return dir*compararTexto(va,vb);
+    });
   return (
     <React.Fragment>
       <div className="row" style={{flexWrap:'wrap'}}>
@@ -2308,10 +2376,15 @@ function AdmCadastros({st, setSt, toast}){
 
       {sub==='usuarios' && <React.Fragment>
         <div><button className="btn btn-p" onClick={()=>{setSenhaVisivel(false);setEdit({nome:'',usuarioId:proximoUsuarioId(),login:'',telefone:'',perfil:'MOTORISTA',tipoFrotaAcesso:'FROTA PESADA',ativo:true,novaSenha:'',perms:{cargas:true,premiacao:true,checklist:true,historico:true,administracao:false}})}}>+ Novo usuário</button></div>
+        <div className="filtros-cadastro">
+          <div><label>Filtrar por nome</label><input value={fUsuario.nome} onChange={e=>setFUsuario({...fUsuario,nome:e.target.value})} placeholder="Digite o nome"/></div>
+          <div><label>Perfil</label><select value={fUsuario.perfil} onChange={e=>setFUsuario({...fUsuario,perfil:e.target.value})}><option value="">Todos os perfis</option>{[...new Set(cad.usuarios.map(u=>u.perfil).filter(Boolean))].sort(compararTexto).map(p=><option key={p}>{p}</option>)}</select></div>
+          <div><label>Ordenar</label><select value={fUsuario.ordem} onChange={e=>setFUsuario({...fUsuario,ordem:e.target.value})}><option value="nome-asc">Nome A–Z</option><option value="nome-desc">Nome Z–A</option><option value="perfil-asc">Perfil A–Z</option><option value="perfil-desc">Perfil Z–A</option></select></div>
+        </div>
         <div className="card" style={{overflowX:'auto'}}>
           <table>
             <thead><tr><th>Nome</th><th>UsuarioID</th><th>Usuário</th><th>Perfil</th><th>Senha</th><th>Cargas</th><th>Premiação</th><th>Check list</th><th>Status</th><th>Ações</th></tr></thead>
-            <tbody>{cad.usuarios.map(u=>
+            <tbody>{usuariosFiltrados.map(u=>
               <tr key={u.itemId}>
                 <td><b>{u.nome}</b></td>
                 <td className="muted">{u.usuarioId}</td>
@@ -2339,10 +2412,16 @@ function AdmCadastros({st, setSt, toast}){
 
       {sub==='frota' && <React.Fragment>
         <div><button className="btn btn-p" onClick={()=>setEditPlaca({placa:'',tipoFrota:'FROTA PESADA',tipoModelo:'',ativo:true,usoCompartilhado:false})}>+ Novo veículo</button></div>
+        <div className="filtros-cadastro">
+          <div><label>Placa</label><input value={fVeiculo.placa} onChange={e=>setFVeiculo({...fVeiculo,placa:e.target.value})} placeholder="Filtrar placa"/></div>
+          <div><label>Frota</label><select value={fVeiculo.frota} onChange={e=>setFVeiculo({...fVeiculo,frota:e.target.value})}><option value="">Todas as frotas</option>{[...new Set(cad.veiculos.map(v=>v.tipoFrota).filter(Boolean))].sort(compararTexto).map(x=><option key={x}>{x}</option>)}</select></div>
+          <div><label>Tipo</label><select value={fVeiculo.tipo} onChange={e=>setFVeiculo({...fVeiculo,tipo:e.target.value})}><option value="">Todos os tipos</option>{tiposAtivos.map(t=><option key={t.itemId||t.nome} value={t.nome}>{t.nome}</option>)}</select></div>
+          <div><label>Ordenar</label><select value={fVeiculo.ordem} onChange={e=>setFVeiculo({...fVeiculo,ordem:e.target.value})}><option value="placa-asc">Placa crescente</option><option value="placa-desc">Placa decrescente</option><option value="frota-asc">Frota A–Z</option><option value="frota-desc">Frota Z–A</option><option value="tipo-asc">Tipo A–Z</option><option value="tipo-desc">Tipo Z–A</option></select></div>
+        </div>
         <div className="card" style={{overflowX:'auto'}}>
           <table>
             <thead><tr><th>Placa</th><th>Frota</th><th>Tipo / modelo</th><th>Uso</th><th>Status</th><th>Ações</th></tr></thead>
-            <tbody>{cad.veiculos.map(f=>
+            <tbody>{veiculosFiltrados.map(f=>
               <tr key={f.placa}>
                 <td><b className="num">{f.placa}</b></td>
                 <td><span className="tag tag-ok">{f.tipoFrota||'Não informado'}</span></td>
@@ -2358,7 +2437,13 @@ function AdmCadastros({st, setSt, toast}){
 
       {sub==='vinculos' && <React.Fragment>
         <div><button className="btn btn-p" onClick={()=>setEditVinculo({vinculoId:'VIN-'+String(cad.vinculos.length+1).padStart(3,'0'),usuarioItemId:'',veiculoItemId:'',dataInicio:HOJE,dataFim:'',ativo:true,principal:true,observacao:''})}>+ Novo vínculo</button></div>
-        <div className="card" style={{overflowX:'auto'}}><table><thead><tr><th>Vínculo</th><th>Usuário</th><th>Veículo</th><th>Início</th><th>Fim</th><th>Principal</th><th>Status</th><th></th></tr></thead><tbody>{cad.vinculos.map(v=><tr key={v.itemId}><td>{v.vinculoId}</td><td><b>{v.usuarioNome}</b></td><td>{v.placa}</td><td>{dataBR((v.dataInicio||'').slice(0,10))}</td><td>{v.dataFim?dataBR(v.dataFim.slice(0,10)):'—'}</td><td>{v.principal?'Sim':'Não'}</td><td><span className={'tag '+(v.dataFim?'tag-neutro':v.ativo?'tag-ok':'tag-neg')}>{v.dataFim?'Finalizado':v.ativo?'Ativo':'Inativo'}</span></td><td><button className="btn btn-s btn-sm" onClick={()=>setEditVinculo({...v})}>Editar</button></td></tr>)}</tbody></table></div>
+        <div className="filtros-cadastro">
+          <div><label>Placa</label><input value={fVinculo.placa} onChange={e=>setFVinculo({...fVinculo,placa:e.target.value})} placeholder="Filtrar placa"/></div>
+          <div><label>Usuário</label><input value={fVinculo.usuario} onChange={e=>setFVinculo({...fVinculo,usuario:e.target.value})} placeholder="Filtrar usuário"/></div>
+          <div><label>Status</label><select value={fVinculo.status} onChange={e=>setFVinculo({...fVinculo,status:e.target.value})}><option value="">Todos os status</option><option>Ativo</option><option>Inativo</option><option>Finalizado</option></select></div>
+          <div><label>Ordenar</label><select value={fVinculo.ordem} onChange={e=>setFVinculo({...fVinculo,ordem:e.target.value})}><option value="usuario-asc">Usuário A–Z</option><option value="usuario-desc">Usuário Z–A</option><option value="status-asc">Status A–Z</option><option value="status-desc">Status Z–A</option><option value="placa-asc">Placa crescente</option><option value="placa-desc">Placa decrescente</option></select></div>
+        </div>
+        <div className="card" style={{overflowX:'auto'}}><table><thead><tr><th>Vínculo</th><th>Usuário</th><th>Veículo</th><th>Início</th><th>Fim</th><th>Principal</th><th>Status</th><th></th></tr></thead><tbody>{vinculosFiltrados.map(v=><tr key={v.itemId}><td>{v.vinculoId}</td><td><b>{v.usuarioNome}</b></td><td>{v.placa}</td><td>{dataBR((v.dataInicio||'').slice(0,10))}</td><td>{v.dataFim?dataBR(v.dataFim.slice(0,10)):'—'}</td><td>{v.principal?'Sim':'Não'}</td><td><span className={'tag '+(v.dataFim?'tag-neutro':v.ativo?'tag-ok':'tag-neg')}>{statusVinculo(v)}</span></td><td><button className="btn btn-s btn-sm" onClick={()=>setEditVinculo({...v})}>Editar</button></td></tr>)}</tbody></table></div>
       </React.Fragment>}
 
       {edit &&
