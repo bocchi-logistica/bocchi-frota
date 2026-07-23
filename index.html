@@ -560,6 +560,12 @@ const mesLabel = m => NOME_MES[m.slice(0,2)] + '/' + m.slice(5);
 const dataBR = d => d ? d.slice(8,10)+'/'+d.slice(5,7)+'/'+d.slice(0,4) : '—';
 const mesDaData = d => d.slice(5,7)+'/'+d.slice(0,4);
 const primeiroNome = n => { const p=n.split(' '); return p[0].charAt(0)+p[0].slice(1).toLowerCase()+(p[1]?' '+p[1].charAt(0)+p[1].slice(1).toLowerCase():''); };
+const chaveTipo = v => String(v||'')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g,'')
+  .replace(/[º°]/g,'O')
+  .trim()
+  .toUpperCase();
 
 const FOTO_DEMO = 'data:image/svg+xml;utf8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="#D8D6C9"/><text x="100" y="95" font-family="sans-serif" font-size="16" fill="#6B7267" text-anchor="middle">FOTO ANEXADA</text><text x="100" y="118" font-family="sans-serif" font-size="12" fill="#9A9F94" text-anchor="middle">(exemplo)</text></svg>');
 
@@ -602,7 +608,6 @@ function calcProdutividade(fat, meta){
 function metaDoTipo(metas, tipo, mes){
   // mes 'MM/AAAA' -> usa vigência
   const ref = mes ? mes.slice(3)+'-'+mes.slice(0,2)+'-15' : '2026-06-15';
-  const chaveTipo=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[º°]/g,'O').trim().toUpperCase();
   const tipoBusca=chaveTipo(tipo);
   return metas.find(m => chaveTipo(m.tipo)===tipoBusca && m.vigIni<=ref && m.vigFim>=ref) ||
          metas.find(m=>chaveTipo(m.tipo)===tipoBusca);
