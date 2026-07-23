@@ -2229,8 +2229,10 @@ function AdmCadastros({st, setSt, toast}){
   /* A edição da placa deve sempre exibir o cadastro central. O status ou a
      classificação da frota não podem apagar as opções do seletor; o valor
      antigo continua identificado separadamente como histórico. */
-  const tiposAtivos=cad.tiposVeiculo
-    .filter(t=>String(t.nome||'').trim() && t.ativo!==false)
+  const tiposAtivos=[...new Map(cad.tiposVeiculo
+    .filter(t=>String(t.nome||'').trim())
+    .map(t=>[chaveTipo(t.nome),t])
+  ).values()]
     .sort((a,b)=>String(a.nome).localeCompare(String(b.nome),'pt-BR'));
   return (
     <React.Fragment>
