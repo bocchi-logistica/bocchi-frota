@@ -179,7 +179,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 90000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '1.9.26-faturamento-vinculos-apuracao'
+  VERSAO: '1.9.27-saldo-negativo-quadrimestre'
 };
 
 /* ============================================================================
@@ -919,7 +919,7 @@ function TelaPremiacao({st, user, dados}){
         })}
         <div className="linha-item" style={{fontSize:15.5}}><b>Apurado no mês</b>
           <b className="num" style={{color: ap.apurado<0?'var(--erro)':'var(--mata)'}}>{brl(ap.apurado)}</b></div>
-        <div className="aviso-box" style={{marginTop:10}}>Valores estimados conforme POL 4.1.1 e sujeitos a conferência. O pagamento é a soma dos meses do quadrimestre, via folha.</div>
+        <div className="aviso-box" style={{marginTop:10}}>Valores estimados conforme POL 4.1.1 e sujeitos a conferência. O apurado mensal pode ficar negativo e será compensado pelos demais meses do quadrimestre. Nunca haverá desconto em folha se o acumulado final ficar negativo.</div>
       </div>
 
       <div className="card">
