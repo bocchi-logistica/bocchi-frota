@@ -396,6 +396,12 @@ const ApiService = {
     return this._req('GET','/cargas/me'+q);
   },
   obterPremiacao(){ return this._req('GET','/premiacao/me'); },
+  admPremiacao(competencia=''){
+    const q=competencia?'?competencia='+encodeURIComponent(competencia):'';
+    return this._req('GET','/admin/premiacao'+q);
+  },
+  salvarMeta(d){ return this._req('POST','/admin/premiacao/metas/salvar',d); },
+  salvarDesconto(d){ return this._req('POST','/admin/premiacao/descontos/salvar',d); },
   importarCargas(competencia,cargas){ return this._req('POST','/admin/cargas/importar',{competencia,cargas}); },
   admCadastros(){ return this._req('GET','/admin/cadastros'); },
   salvarUsuario(d){ return this._req('POST','/admin/usuarios/salvar',d); },
@@ -1965,20 +1971,33 @@ function AdmChecklist({st, setSt, toast}){
 function AdmPremiacao({st, setSt, toast}){
   const [sub,setSub]=useState('metas');
   const [edit,setEdit]=useState(null);
-  const [novoDesc,setNovoDesc]=useState({motorista:'', mes:MES_ATUAL, item:'Multas', valor:-50});
-  const motoristas = st.usuarios.filter(u=>u.perfil==='motorista');
-  const salvarMeta=()=>{
-    setSt(s=>({...s, metas:s.metas.map(m=>m.id===edit.id?edit:m)}));
-    setEdit(null); toast('Meta atualizada.');
+  const [competencia,setCompetencia]=useState(MES_ATUAL.slice(3)+'-'+MES_ATUAL.slice(0,2));
+  const [fMotorista,setFMotorista]=useState('');
+  const [painel,setPainel]=useState({metas:[],descontos:[],elegiveis:[],pendencias:{}});
+  const [novoDesc,setNovoDesc]=useState({motoristaId:'',motoristaNome:'',categoria:'Multas',situacao:'Sem ocorrência',quantidade:0,valor:0,percentual:0,dataOcorrencia:'',motivo:'',exibir:true});
+  const categorias=['Notificação / Advertência','Multas','Auditoria Interna'];
+  const carregar=async()=>{try{const r=await ApiService.admPremiacao(competencia);setPainel(r);setSt(s=>({...s,metas:r.metas||s.metas}));}catch(e){toast('Erro ao carregar premiação: '+e.message)}};
+  useEffect(()=>{carregar();},[competencia]);
+  const statusMeta=m=>{
+    const hoje=HOJE;
+    if(m.ativo===false)return'Inativa';
+    if(m.vigIni&&hoje<m.vigIni)return'Programada';
+    if(m.vigFim&&hoje>m.vigFim)return'Finalizada';
+    return'Ativa';
   };
-  const addDesc=()=>{
-    if(!novoDesc.motorista){ toast('Selecione o motorista.'); return; }
-    const v = Number(novoDesc.valor);
-    if(!v || v>0){ toast('O valor do desconto deve ser negativo (ex.: -50).'); return; }
-    setSt(s=>({...s, descontos:[...s.descontos, {id:'d'+Date.now(), ...novoDesc, valor:v, origem:'Lançado no app'}]}));
-    toast('Lançamento registrado.');
+  const salvarMeta=async()=>{
+    if(!edit.tipo||!edit.vigIni||!edit.vigFim){toast('Preencha tipo de veículo e vigência.');return;}
+    try{await ApiService.salvarMeta(edit);setEdit(null);await carregar();toast('Meta salva no SharePoint.');}
+    catch(e){toast('Erro ao salvar meta: '+e.message)}
   };
-  const removerDesc=id=> setSt(s=>({...s, descontos:s.descontos.filter(d=>d.id!==id)}));
+  const addDesc=async()=>{
+    if(!novoDesc.motoristaId){toast('Selecione o motorista.');return;}
+    if(novoDesc.situacao==='Com ocorrência'&&!Number(novoDesc.valor)&&!Number(novoDesc.percentual)){toast('Informe o valor ou percentual do desconto.');return;}
+    try{await ApiService.salvarDesconto({...novoDesc,competencia});await carregar();setNovoDesc({...novoDesc,situacao:'Sem ocorrência',quantidade:0,valor:0,percentual:0,dataOcorrencia:'',motivo:''});toast('Conferência salva no SharePoint.');}
+    catch(e){toast('Erro ao salvar conferência: '+e.message)}
+  };
+  const metas=painel.metas||[];
+  const elegiveis=(painel.elegiveis||[]).filter(u=>!fMotorista||u.motoristaId===fMotorista);
   return (
     <React.Fragment>
       <div className="row" style={{flexWrap:'wrap'}}>
@@ -1990,11 +2009,14 @@ function AdmPremiacao({st, setSt, toast}){
       </div>
 
       {sub==='metas' && <React.Fragment>
+        <div className="row" style={{marginBottom:12}}><div className="grow"></div>
+          <button className="btn btn-p" onClick={()=>setEdit({tipo:'',start:0,meta:0,valorMeta:0,pctStart:0,pctMeta:0,teto:0,vigIni:HOJE,vigFim:HOJE.slice(0,4)+'-12-31',status:'Ativa',ativo:true,observacao:''})}>+ Incluir meta</button>
+        </div>
         <div className="card" style={{overflowX:'auto'}}>
           <table>
-            <thead><tr><th>Tipo de veículo</th><th className="td-num">Start</th><th className="td-num">Meta</th><th className="td-num">Na meta</th><th className="td-num">% start→meta</th><th className="td-num">% acima meta</th><th className="td-num">Teto mensal</th><th>Vigência</th><th></th></tr></thead>
-            <tbody>{st.metas.map(m=>
-              <tr key={m.id}>
+            <thead><tr><th>Tipo de veículo</th><th className="td-num">Start</th><th className="td-num">Meta</th><th className="td-num">Na meta</th><th className="td-num">% start→meta</th><th className="td-num">% acima meta</th><th className="td-num">Teto mensal</th><th>Vigência</th><th>Status</th><th></th></tr></thead>
+            <tbody>{metas.map(m=>
+              <tr key={m.itemId||m.id}>
                 <td><b>{m.tipo}</b></td>
                 <td className="td-num num">{brl(m.start)}</td>
                 <td className="td-num num">{brl(m.meta)}</td>
@@ -2003,55 +2025,60 @@ function AdmPremiacao({st, setSt, toast}){
                 <td className="td-num num">{m.pctMeta}%</td>
                 <td className="td-num num">{brl(m.teto)}</td>
                 <td className="muted">{dataBR(m.vigIni)} — {dataBR(m.vigFim)}</td>
+                <td><span className="tag tag-neutro">{statusMeta(m)}</span></td>
                 <td><button className="btn btn-s btn-sm" onClick={()=>setEdit({...m})}>Editar</button></td>
               </tr>)}</tbody>
           </table>
         </div>
-        <div className="aviso-box">Régua da POL 4.1.1 Rev03: abaixo do start, sem premiação; do start até a meta, {st.metas[0].pctStart}% sobre o excedente do start; na meta, {brl(st.metas[0].valorMeta)}; acima da meta, {st.metas[0].pctMeta}% sobre o excedente, limitado ao teto mensal. As metas têm vigência — na revisão anual, cadastre a nova vigência sem apagar a antiga, para o histórico continuar calculando certo.</div>
+        <div className="aviso-box">As metas são gravadas por vigência. Cadastre uma nova meta para um novo período sem alterar o histórico finalizado.</div>
       </React.Fragment>}
 
       {sub==='desc' && <React.Fragment>
+        <div className="row" style={{marginBottom:12,flexWrap:'wrap'}}>
+          <input type="month" style={{width:'auto'}} value={competencia} onChange={e=>setCompetencia(e.target.value)}/>
+          <select style={{width:'auto'}} value={fMotorista} onChange={e=>setFMotorista(e.target.value)}><option value="">Todos os motoristas</option>{(painel.elegiveis||[]).map(u=><option key={u.motoristaId} value={u.motoristaId}>{u.nome}</option>)}</select>
+        </div>
+        <div className="totais">
+          {categorias.map(c=><div className="card" key={c}><div className="v num">{((painel.pendencias||{})[c]||[]).filter(u=>!fMotorista||u.motoristaId===fMotorista).length}</div><div className="l">{c}<br/><span className="muted">pendentes</span></div></div>)}
+        </div>
         <div className="card">
-          <h3 style={{marginBottom:10}}>Novo lançamento</h3>
+          <h3 style={{marginBottom:10}}>Conferir desconto</h3>
           <div className="form-grid">
             <div><label>Motorista</label>
-              <select value={novoDesc.motorista} onChange={e=>setNovoDesc({...novoDesc, motorista:e.target.value})}>
+              <select value={novoDesc.motoristaId} onChange={e=>{const u=(painel.elegiveis||[]).find(x=>x.motoristaId===e.target.value);setNovoDesc({...novoDesc,motoristaId:e.target.value,motoristaNome:u?.nome||''})}}>
                 <option value="">Selecionar...</option>
-                {motoristas.map(u=><option key={u.id} value={u.nome}>{primeiroNome(u.nome)}</option>)}
+                {elegiveis.map(u=><option key={u.motoristaId} value={u.motoristaId}>{u.nome}</option>)}
               </select></div>
-            <div><label>Mês</label>
-              <select value={novoDesc.mes} onChange={e=>setNovoDesc({...novoDesc, mes:e.target.value})}>
-                {MESES_2026.map(m=><option key={m} value={m}>{mesLabel(m)}</option>)}
-              </select></div>
-            <div><label>Item</label>
-              <select value={novoDesc.item} onChange={e=>{
-                const item=e.target.value;
-                setNovoDesc({...novoDesc, item, valor: item==='Check List'?-100:-50});
-              }}>
-                <option>Multas</option><option>Notificação / Advertencia</option><option>Check List</option>
-              </select></div>
-            <div><label>Valor (R$)</label><input type="number" value={novoDesc.valor} onChange={e=>setNovoDesc({...novoDesc, valor:e.target.value})}/></div>
+            <div><label>Categoria</label><select value={novoDesc.categoria} onChange={e=>setNovoDesc({...novoDesc,categoria:e.target.value})}>{categorias.map(c=><option key={c}>{c}</option>)}</select></div>
+            <div><label>Situação</label><select value={novoDesc.situacao} onChange={e=>setNovoDesc({...novoDesc,situacao:e.target.value})}><option>Sem ocorrência</option><option>Com ocorrência</option></select></div>
+            <div><label>Quantidade</label><input type="number" min="0" value={novoDesc.quantidade} onChange={e=>setNovoDesc({...novoDesc,quantidade:e.target.value})}/></div>
+            {novoDesc.situacao==='Com ocorrência'&&<React.Fragment>
+              <div><label>Valor do desconto (R$)</label><input type="number" min="0" value={novoDesc.valor} onChange={e=>setNovoDesc({...novoDesc,valor:e.target.value})}/></div>
+              <div><label>Percentual (%)</label><input type="number" min="0" max="100" value={novoDesc.percentual} onChange={e=>setNovoDesc({...novoDesc,percentual:e.target.value})}/></div>
+              <div><label>Data da ocorrência</label><input type="date" value={novoDesc.dataOcorrencia} onChange={e=>setNovoDesc({...novoDesc,dataOcorrencia:e.target.value})}/></div>
+              <div style={{gridColumn:'1/-1'}}><label>Motivo</label><textarea value={novoDesc.motivo} onChange={e=>setNovoDesc({...novoDesc,motivo:e.target.value})}/></div>
+            </React.Fragment>}
           </div>
-          <button className="btn btn-p" style={{marginTop:12}} onClick={addDesc}>Lançar desconto</button>
+          <button className="btn btn-p" style={{marginTop:12}} onClick={addDesc}>Salvar conferência</button>
         </div>
         <div className="card" style={{overflowX:'auto'}}>
           <table>
             <thead><tr><th>Motorista</th><th>Mês</th><th>Item</th><th className="td-num">Valor</th><th>Origem</th><th></th></tr></thead>
-            <tbody>{[...st.descontos].sort((a,b)=>b.mes.slice(3)+b.mes.slice(0,2) < a.mes.slice(3)+a.mes.slice(0,2) ? -1:1).map(d=>
-              <tr key={d.id}>
-                <td><b>{primeiroNome(d.motorista)}</b></td>
-                <td>{mesLabel(d.mes)}</td><td>{d.item}</td>
-                <td className="td-num num" style={{color:'var(--erro)'}}>{brl(d.valor)}</td>
-                <td className="muted">{d.origem}</td>
-                <td><button className="btn btn-g btn-sm" onClick={()=>removerDesc(d.id)}>Excluir</button></td>
+            <tbody>{(painel.descontos||[]).filter(d=>!fMotorista||d.motoristaId===fMotorista).map(d=>
+              <tr key={d.itemId}>
+                <td><b>{d.motoristaNome}</b></td>
+                <td>{competencia.slice(5,7)+'/'+competencia.slice(0,4)}</td><td>{d.categoria}</td>
+                <td className="td-num num" style={{color:d.valor?'var(--erro)':'var(--cinza)'}}>{brl(-Math.abs(d.valor||0))}</td>
+                <td className="muted">{d.situacao}</td><td></td>
               </tr>)}</tbody>
           </table>
         </div>
       </React.Fragment>}
 
       {edit &&
-        <Modal titulo={'Meta — '+edit.tipo} onClose={()=>setEdit(null)}>
+        <Modal titulo={edit.itemId?'Editar meta':'Incluir meta'} onClose={()=>setEdit(null)}>
           <div className="form-grid">
+            <div style={{gridColumn:'1/-1'}}><label>Tipo de veículo</label><input value={edit.tipo} onChange={e=>setEdit({...edit,tipo:e.target.value})}/></div>
             <div><label>Start (R$)</label><input type="number" value={edit.start} onChange={e=>setEdit({...edit, start:Number(e.target.value)})}/></div>
             <div><label>Meta (R$)</label><input type="number" value={edit.meta} onChange={e=>setEdit({...edit, meta:Number(e.target.value)})}/></div>
             <div><label>Valor na meta (R$)</label><input type="number" value={edit.valorMeta} onChange={e=>setEdit({...edit, valorMeta:Number(e.target.value)})}/></div>
@@ -2060,6 +2087,7 @@ function AdmPremiacao({st, setSt, toast}){
             <div><label>% acima da meta</label><input type="number" value={edit.pctMeta} onChange={e=>setEdit({...edit, pctMeta:Number(e.target.value)})}/></div>
             <div><label>Vigência início</label><input type="date" value={edit.vigIni} onChange={e=>setEdit({...edit, vigIni:e.target.value})}/></div>
             <div><label>Vigência fim</label><input type="date" value={edit.vigFim} onChange={e=>setEdit({...edit, vigFim:e.target.value})}/></div>
+            <div><label>Ativa</label><select value={edit.ativo===false?'nao':'sim'} onChange={e=>setEdit({...edit,ativo:e.target.value==='sim'})}><option value="sim">Sim</option><option value="nao">Não</option></select></div>
           </div>
           <button className="btn btn-p" style={{width:'100%', marginTop:14}} onClick={salvarMeta}>Salvar meta</button>
         </Modal>}
