@@ -2285,7 +2285,7 @@ function AdmCadastros({st, setSt, toast}){
             <tbody>{cad.veiculos.map(f=>
               <tr key={f.placa}>
                 <td><b className="num">{f.placa}</b></td>
-                <td><span className="tag tag-ok">{f.tipoFrota}</span></td>
+                <td><span className="tag tag-ok">{f.tipoFrota||'Não informado'}</span></td>
                 <td>{f.tipoModelo}</td>
                 <td>{f.usoCompartilhado?'Compartilhado':'Por vínculo'}</td>
                 <td><span className={'tag '+(f.ativo?'tag-ok':'tag-neutro')}>{f.ativo?'Ativo':'Inativo'}</span></td>
