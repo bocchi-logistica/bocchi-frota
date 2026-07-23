@@ -179,7 +179,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 90000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '1.9.25-premiacao-vinculo-historico'
+  VERSAO: '1.9.26-faturamento-vinculos-apuracao'
 };
 
 /* ============================================================================
@@ -636,7 +636,8 @@ function apuracaoMes(st, dados, motNome, mes){
   const calculada=(st.apuracoes||[]).find(a=>a.mes===mes);
   if(calculada){
     return {
-      fat:Number(calculada.realizado||0),
+      fat:Number(calculada.faturamento ?? calculada.realizadoInformado ?? calculada.realizado ?? 0),
+      realizadoElegivel:Number(calculada.realizadoElegivel ?? calculada.realizado ?? 0),
       prod:Number(calculada.premioBruto||0),
       descs:Array.isArray(calculada.descontos)?calculada.descontos:[],
       totDesc:Number(calculada.totalDescontos||0),
@@ -897,14 +898,6 @@ function TelaPremiacao({st, user, dados}){
               <span className="muted" style={{display:'block'}}>Meta proporcional: {brl(v.metaRateada&&v.metaRateada.meta||0)}</span>
             </span>
           </div>)}
-        <div className="linha-item">
-          <span>Frete realizado no mês</span>
-          <b className="num" style={{color:'var(--mata)'}}>{brl(ap.fat)}</b>
-        </div>
-        <div className="linha-item">
-          <span>Meta mensal{ap.tipo ? <span className="muted"> — {ap.tipo}</span> : null}</span>
-          <b className="num">{ap.meta ? brl(ap.meta.meta) : 'Não cadastrada'}</b>
-        </div>
         <div className="linha-item">
           <span>Premiação pelo frete realizado <span className="muted">(estimativa)</span></span>
           <b className="num" style={{color:'var(--mata)'}}>{brl(ap.prod)}</b>
