@@ -405,6 +405,7 @@ const ApiService = {
   importarCargas(competencia,cargas){ return this._req('POST','/admin/cargas/importar',{competencia,cargas}); },
   admCadastros(){ return this._req('GET','/admin/cadastros'); },
   salvarUsuario(d){ return this._req('POST','/admin/usuarios/salvar',d); },
+  salvarTipoVeiculo(d){ return this._req('POST','/admin/tipos-veiculo/salvar',d); },
   salvarVeiculo(d){ return this._req('POST','/admin/veiculos/salvar',d); },
   salvarVinculo(d){ return this._req('POST','/admin/vinculos/salvar',d); },
   // Painel administrativo (a API valida o perfil pelo token)
@@ -1971,6 +1972,7 @@ function AdmChecklist({st, setSt, toast}){
 function AdmPremiacao({st, setSt, toast}){
   const [sub,setSub]=useState('metas');
   const [edit,setEdit]=useState(null);
+  const [editTipo,setEditTipo]=useState(null);
   const [competencia,setCompetencia]=useState(MES_ATUAL.slice(3)+'-'+MES_ATUAL.slice(0,2));
   const [fMotorista,setFMotorista]=useState('');
   const [fTipoMeta,setFTipoMeta]=useState('');
@@ -2129,6 +2131,10 @@ function AdmPremiacao({st, setSt, toast}){
                 {edit.tipo&&!tiposMeta.includes(edit.tipo)&&<option value={edit.tipo}>{edit.tipo}</option>}
                 {tiposMeta.map(tipo=><option key={tipo} value={tipo}>{tipo}</option>)}
               </select>
+              {!tiposMeta.length&&
+                <div className="aviso-box" style={{marginTop:8}}>
+                  Nenhum tipo foi encontrado nas placas da Frota Pesada. Cadastros consultados: {(painel.diagnosticoVeiculos||{}).totalCadastro||0}; placas pesadas identificadas: {(painel.diagnosticoVeiculos||{}).totalFrotaPesada||0}.
+                </div>}
             </div>
             <div><label>Start (R$)</label><input type="number" value={edit.start} onChange={e=>setEdit({...edit, start:Number(e.target.value)})}/></div>
             <div><label>Meta (R$)</label><input type="number" value={edit.meta} onChange={e=>setEdit({...edit, meta:Number(e.target.value)})}/></div>
@@ -2153,9 +2159,9 @@ function AdmCadastros({st, setSt, toast}){
   const [editPlaca,setEditPlaca]=useState(null);
   const [editVinculo,setEditVinculo]=useState(null);
   const [senhaVisivel,setSenhaVisivel]=useState(false);
-  const [cad,setCad]=useState({usuarios:[],veiculos:[],vinculos:[]});
+  const [cad,setCad]=useState({usuarios:[],tiposVeiculo:[],veiculos:[],vinculos:[]});
   const proximoUsuarioId=()=>{const maior=cad.usuarios.reduce((m,u)=>{const x=String(u.usuarioId||'').match(/^USU-(\d+)$/i);return x?Math.max(m,Number(x[1])):m;},0);return 'USU-'+String(maior+1).padStart(3,'0');};
-  const carregar=async()=>{try{const r=await ApiService.admCadastros();setCad({usuarios:r.usuarios||[],veiculos:r.veiculos||[],vinculos:r.vinculos||[]});}catch(e){toast('Erro ao carregar cadastros: '+e.message);}};
+  const carregar=async()=>{try{const r=await ApiService.admCadastros();setCad({usuarios:r.usuarios||[],tiposVeiculo:r.tiposVeiculo||[],veiculos:r.veiculos||[],vinculos:r.vinculos||[]});}catch(e){toast('Erro ao carregar cadastros: '+e.message);}};
   useEffect(()=>{carregar();},[]);
   const salvarUser=async()=>{
     const login=String(edit.login||'').trim().toLowerCase(), usuarioId=String(edit.usuarioId||'').trim().toUpperCase();
@@ -2194,6 +2200,16 @@ function AdmCadastros({st, setSt, toast}){
     if(repetida){toast('A placa '+placa+' já está cadastrada.');return;}
     try{await ApiService.salvarVeiculo({...editPlaca,placa});setEditPlaca(null);await carregar();toast('Veículo salvo no SharePoint.');}catch(e){toast('Erro ao salvar veículo: '+e.message);}
   };
+  const salvarTipo=async()=>{
+    if(!String(editTipo.nome||'').trim()){toast('Informe o nome do tipo de veículo.');return;}
+    try{await ApiService.salvarTipoVeiculo(editTipo);setEditTipo(null);await carregar();toast('Tipo de veículo salvo no SharePoint.');}
+    catch(e){toast('Erro ao salvar tipo de veículo: '+e.message);}
+  };
+  const alterarStatusTipo=async(t)=>{
+    if(!window.confirm((t.ativo?'Inativar':'Reativar')+' o tipo '+t.nome+'?'))return;
+    try{await ApiService.salvarTipoVeiculo({...t,ativo:!t.ativo});await carregar();toast('Tipo de veículo atualizado.');}
+    catch(e){toast('Erro ao alterar tipo de veículo: '+e.message);}
+  };
   const alterarStatusPlaca=async(f)=>{
     const acao=f.ativo?'inativar':'reativar';
     if(!window.confirm((f.ativo?'Inativar':'Reativar')+' a placa '+f.placa+'?')) return;
@@ -2204,13 +2220,14 @@ function AdmCadastros({st, setSt, toast}){
     }catch(e){toast('Erro ao '+acao+' placa: '+e.message);}
   };
   const salvarVinculo=async()=>{const u=cad.usuarios.find(x=>x.itemId===editVinculo.usuarioItemId),v=cad.veiculos.find(x=>x.itemId===editVinculo.veiculoItemId);if(!u||!v){toast('Selecione usuário e veículo.');return;}try{await ApiService.salvarVinculo({...editVinculo,usuarioId:u.usuarioId,titulo:u.usuarioId+' - '+v.placa});setEditVinculo(null);await carregar();toast('Vínculo salvo no SharePoint.');}catch(e){toast('Erro ao salvar vínculo: '+e.message);}};
-  const tipos=['CAÇAMBA 4º EIXO','CARRO','CAÇAMBA VANDERLEIA','BICAÇAMBA','BITRUCK','TOCO'];
+  const tiposAtivos=cad.tiposVeiculo.filter(t=>t.ativo);
   return (
     <React.Fragment>
       <div className="row" style={{flexWrap:'wrap'}}>
         <h2 className="grow">Cadastros</h2>
         <div className="subtabs">
           <button className={'subtab'+(sub==='usuarios'?' on':'')} onClick={()=>setSub('usuarios')}>Usuários e acessos</button>
+          <button className={'subtab'+(sub==='tipos'?' on':'')} onClick={()=>setSub('tipos')}>Tipos de veículo</button>
           <button className={'subtab'+(sub==='frota'?' on':'')} onClick={()=>setSub('frota')}>Veículos</button>
           <button className={'subtab'+(sub==='vinculos'?' on':'')} onClick={()=>setSub('vinculos')}>Vínculos</button>
         </div>
@@ -2238,8 +2255,17 @@ function AdmCadastros({st, setSt, toast}){
         </div>
       </React.Fragment>}
 
+      {sub==='tipos' && <React.Fragment>
+        <div><button className="btn btn-p" onClick={()=>setEditTipo({nome:'',tipoFrota:'FROTA PESADA',pbtKg:0,capacidadeCargaKg:0,toleranciaSuperiorKg:0,limiteInferiorKg:0,exigeAprovacaoAbaixo:false,ativo:true,observacao:''})}>+ Novo tipo de veículo</button></div>
+        <div className="card" style={{overflowX:'auto'}}>
+          <table><thead><tr><th>Tipo de veículo</th><th>Frota</th><th className="td-num">PBT</th><th className="td-num">Capacidade</th><th className="td-num">Tolerância superior</th><th className="td-num">Limite inferior</th><th>Status</th><th>Ações</th></tr></thead>
+          <tbody>{cad.tiposVeiculo.map(t=><tr key={t.itemId}><td><b>{t.nome}</b></td><td>{t.tipoFrota}</td><td className="td-num num">{Number(t.pbtKg||0).toLocaleString('pt-BR')} kg</td><td className="td-num num">{Number(t.capacidadeCargaKg||0).toLocaleString('pt-BR')} kg</td><td className="td-num num">{Number(t.toleranciaSuperiorKg||0).toLocaleString('pt-BR')} kg</td><td className="td-num num">{Number(t.limiteInferiorKg||0).toLocaleString('pt-BR')} kg</td><td><span className={'tag '+(t.ativo?'tag-ok':'tag-neutro')}>{t.ativo?'Ativo':'Inativo'}</span></td><td><div className="row" style={{gap:6,flexWrap:'nowrap'}}><button className="btn btn-s btn-sm" onClick={()=>setEditTipo({...t})}>Editar</button><button className={'btn btn-sm '+(t.ativo?'btn-s':'btn-p')} onClick={()=>alterarStatusTipo(t)}>{t.ativo?'Inativar':'Reativar'}</button></div></td></tr>)}</tbody></table>
+        </div>
+        <div className="aviso-box">Este cadastro é a fonte única dos tipos usados nos veículos, nas metas e nos filtros. Os limites de peso ficam armazenados para a futura auditoria, sem gerar bloqueio nesta etapa.</div>
+      </React.Fragment>}
+
       {sub==='frota' && <React.Fragment>
-        <div><button className="btn btn-p" onClick={()=>setEditPlaca({placa:'',tipoFrota:'FROTA PESADA',tipoModelo:'CAÇAMBA 4º EIXO',ativo:true,usoCompartilhado:false})}>+ Novo veículo</button></div>
+        <div><button className="btn btn-p" onClick={()=>setEditPlaca({placa:'',tipoFrota:'FROTA PESADA',tipoModelo:'',ativo:true,usoCompartilhado:false})}>+ Novo veículo</button></div>
         <div className="card" style={{overflowX:'auto'}}>
           <table>
             <thead><tr><th>Placa</th><th>Frota</th><th>Tipo / modelo</th><th>Uso</th><th>Status</th><th>Ações</th></tr></thead>
@@ -2305,13 +2331,29 @@ function AdmCadastros({st, setSt, toast}){
               </select></div>
             <div><label>Placa</label><input value={editPlaca.placa} disabled={!!editPlaca.itemId} onChange={e=>setEditPlaca({...editPlaca,placa:e.target.value.toUpperCase()})}/></div><div><label>Tipo / modelo</label>
                 <select value={editPlaca.tipoModelo} onChange={e=>setEditPlaca({...editPlaca, tipoModelo:e.target.value})}>
-                  {tipos.map(t=><option key={t}>{t}</option>)}
+                  <option value="">Selecionar...</option>
+                  {editPlaca.tipoModelo&&!tiposAtivos.some(t=>chaveTipo(t.nome)===chaveTipo(editPlaca.tipoModelo))&&<option value={editPlaca.tipoModelo}>{editPlaca.tipoModelo} (histórico)</option>}
+                  {tiposAtivos.filter(t=>!t.tipoFrota||t.tipoFrota===editPlaca.tipoFrota).map(t=><option key={t.itemId} value={t.nome}>{t.nome}</option>)}
                 </select></div><div><label>Uso compartilhado?</label><select value={editPlaca.usoCompartilhado?'s':'n'} onChange={e=>setEditPlaca({...editPlaca,usoCompartilhado:e.target.value==='s'})}><option value="n">Não — exige vínculo</option><option value="s">Sim</option></select></div>
             <div><label>Status do veículo</label><select value={editPlaca.ativo?'s':'n'} onChange={e=>setEditPlaca({...editPlaca,ativo:e.target.value==='s'})}><option value="s">Ativo</option><option value="n">Inativo</option></select></div>
             <button className="btn btn-p" onClick={salvarPlaca}>Salvar placa</button>
           </div>
         </Modal>}
       {editVinculo && <Modal titulo="Vínculo usuário × veículo" onClose={()=>setEditVinculo(null)}><div style={{display:'flex',flexDirection:'column',gap:12}}><div><label>Usuário</label><select value={editVinculo.usuarioItemId} onChange={e=>setEditVinculo({...editVinculo,usuarioItemId:e.target.value})}><option value="">Selecionar...</option>{cad.usuarios.filter(u=>u.ativo).map(u=><option key={u.itemId} value={u.itemId}>{u.nome}</option>)}</select></div><div><label>Veículo</label><select value={editVinculo.veiculoItemId} onChange={e=>setEditVinculo({...editVinculo,veiculoItemId:e.target.value})}><option value="">Selecionar...</option>{cad.veiculos.filter(v=>v.ativo&&!v.usoCompartilhado).map(v=><option key={v.itemId} value={v.itemId}>{v.placa}</option>)}</select></div><div className="form-grid"><div><label>Início</label><input type="date" value={(editVinculo.dataInicio||'').slice(0,10)} onChange={e=>setEditVinculo({...editVinculo,dataInicio:e.target.value})}/></div><div><label>Fim</label><input type="date" value={(editVinculo.dataFim||'').slice(0,10)} onChange={e=>setEditVinculo({...editVinculo,dataFim:e.target.value,ativo:!e.target.value})}/></div></div><div><label>Principal?</label><select value={editVinculo.principal?'s':'n'} onChange={e=>setEditVinculo({...editVinculo,principal:e.target.value==='s'})}><option value="s">Sim</option><option value="n">Não</option></select></div><div><label>Observação</label><textarea value={editVinculo.observacao||''} onChange={e=>setEditVinculo({...editVinculo,observacao:e.target.value})}/></div><button className="btn btn-p" onClick={salvarVinculo}>Salvar vínculo</button></div></Modal>}
+      {editTipo && <Modal titulo={editTipo.itemId?'Editar tipo de veículo':'Novo tipo de veículo'} onClose={()=>setEditTipo(null)}>
+        <div className="form-grid">
+          <div style={{gridColumn:'1/-1'}}><label>Nome do tipo de veículo</label><input value={editTipo.nome} onChange={e=>setEditTipo({...editTipo,nome:e.target.value.toUpperCase()})}/></div>
+          <div><label>Frota</label><select value={editTipo.tipoFrota} onChange={e=>setEditTipo({...editTipo,tipoFrota:e.target.value})}><option>FROTA PESADA</option><option>FROTA LEVE</option></select></div>
+          <div><label>Status</label><select value={editTipo.ativo?'s':'n'} onChange={e=>setEditTipo({...editTipo,ativo:e.target.value==='s'})}><option value="s">Ativo</option><option value="n">Inativo</option></select></div>
+          <div><label>PBT (kg)</label><input type="number" min="0" value={editTipo.pbtKg} onChange={e=>setEditTipo({...editTipo,pbtKg:Number(e.target.value)})}/></div>
+          <div><label>Capacidade de carga (kg)</label><input type="number" min="0" value={editTipo.capacidadeCargaKg} onChange={e=>setEditTipo({...editTipo,capacidadeCargaKg:Number(e.target.value)})}/></div>
+          <div><label>Tolerância superior (kg)</label><input type="number" min="0" value={editTipo.toleranciaSuperiorKg} onChange={e=>setEditTipo({...editTipo,toleranciaSuperiorKg:Number(e.target.value)})}/></div>
+          <div><label>Limite inferior (kg)</label><input type="number" min="0" value={editTipo.limiteInferiorKg} onChange={e=>setEditTipo({...editTipo,limiteInferiorKg:Number(e.target.value)})}/></div>
+          <div><label>Exige aprovação abaixo?</label><select value={editTipo.exigeAprovacaoAbaixo?'s':'n'} onChange={e=>setEditTipo({...editTipo,exigeAprovacaoAbaixo:e.target.value==='s'})}><option value="n">Não</option><option value="s">Sim</option></select></div>
+          <div style={{gridColumn:'1/-1'}}><label>Observação</label><textarea value={editTipo.observacao||''} onChange={e=>setEditTipo({...editTipo,observacao:e.target.value})}/></div>
+        </div>
+        <button className="btn btn-p" style={{width:'100%',marginTop:14}} onClick={salvarTipo}>Salvar tipo de veículo</button>
+      </Modal>}
     </React.Fragment>
   );
 }
