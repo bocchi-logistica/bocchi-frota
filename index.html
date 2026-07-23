@@ -1993,7 +1993,8 @@ function AdmPremiacao({st, setSt, toast}){
     if(m.vigFim&&hoje>m.vigFim)return'Finalizada';
     return'Ativa';
   };
-  const salvarMeta=async()=>{
+  const salvarMeta=async(e)=>{
+    if(e&&e.preventDefault)e.preventDefault();
     if(!edit.tipo||!edit.vigIni||!edit.vigFim){toast('Preencha tipo de veículo e vigência.');return;}
     try{await ApiService.salvarMeta(edit);setEdit(null);await carregar();toast('Meta salva no SharePoint.');}
     catch(e){toast('Erro ao salvar meta: '+e.message)}
@@ -2157,7 +2158,7 @@ function AdmPremiacao({st, setSt, toast}){
             <div><label>Vigência fim</label><input type="date" value={edit.vigFim} onChange={e=>setEdit({...edit, vigFim:e.target.value})}/></div>
             <div><label>Ativa</label><select value={edit.ativo===false?'nao':'sim'} onChange={e=>setEdit({...edit,ativo:e.target.value==='sim'})}><option value="sim">Sim</option><option value="nao">Não</option></select></div>
           </div>
-          <button className="btn btn-p" style={{width:'100%', marginTop:14}} onClick={salvarMeta}>Salvar meta</button>
+          <button type="button" className="btn btn-p" style={{width:'100%', marginTop:14}} onClick={salvarMeta}>Salvar meta</button>
         </Modal>}
     </React.Fragment>
   );
