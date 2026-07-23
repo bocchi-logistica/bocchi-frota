@@ -395,6 +395,7 @@ const ApiService = {
     const q = competencia ? '?competencia='+encodeURIComponent(competencia) : '';
     return this._req('GET','/cargas/me'+q);
   },
+  obterPremiacao(){ return this._req('GET','/premiacao/me'); },
   importarCargas(competencia,cargas){ return this._req('POST','/admin/cargas/importar',{competencia,cargas}); },
   admCadastros(){ return this._req('GET','/admin/cadastros'); },
   salvarUsuario(d){ return this._req('POST','/admin/usuarios/salvar',d); },
@@ -594,7 +595,10 @@ function calcProdutividade(fat, meta){
 function metaDoTipo(metas, tipo, mes){
   // mes 'MM/AAAA' -> usa vigência
   const ref = mes ? mes.slice(3)+'-'+mes.slice(0,2)+'-15' : '2026-06-15';
-  return metas.find(m => m.tipo===tipo && m.vigIni<=ref && m.vigFim>=ref) || metas.find(m=>m.tipo===tipo);
+  const chaveTipo=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[º°]/g,'O').trim().toUpperCase();
+  const tipoBusca=chaveTipo(tipo);
+  return metas.find(m => chaveTipo(m.tipo)===tipoBusca && m.vigIni<=ref && m.vigFim>=ref) ||
+         metas.find(m=>chaveTipo(m.tipo)===tipoBusca);
 }
 
 /* Faturamento por motorista/mês: resumos (jan–abr) + cargas detalhadas (mai em diante) */
@@ -618,7 +622,8 @@ function usarDadosMensais(st){
 function apuracaoMes(st, dados, motNome, mes){
   const u = st.usuarios.find(x=>x.nome===motNome);
   const placa = Object.values(st.frota).find(f=>f.motorista===motNome && f.frota!=='leve');
-  const tipo = placa ? placa.tipo : null;
+  const cargaComTipo = [...st.cargas].reverse().find(c=>c.motorista===motNome && c.tipoVeiculo);
+  const tipo = cargaComTipo ? cargaComTipo.tipoVeiculo : (placa ? placa.tipo : null);
   const meta = tipo ? metaDoTipo(st.metas, tipo, mes) : null;
   const d = (dados[motNome]||{})[mes];
   const fat = d ? d.fat : 0;
@@ -829,15 +834,27 @@ function TelaPremiacao({st, user, dados}){
       <div className="card">
         <h3 style={{marginBottom:6}}>Apuração de {mesLabel(mes)}</h3>
         <div className="linha-item">
-          <span>R$ Frete realizado — premiação <span className="muted">(estimativa)</span></span>
+          <span>Frete realizado no mês</span>
+          <b className="num" style={{color:'var(--mata)'}}>{brl(ap.fat)}</b>
+        </div>
+        <div className="linha-item">
+          <span>Meta mensal{ap.tipo ? <span className="muted"> — {ap.tipo}</span> : null}</span>
+          <b className="num">{ap.meta ? brl(ap.meta.meta) : 'Não cadastrada'}</b>
+        </div>
+        <div className="linha-item">
+          <span>Premiação pelo frete realizado <span className="muted">(estimativa)</span></span>
           <b className="num" style={{color:'var(--mata)'}}>{brl(ap.prod)}</b>
         </div>
-        {['Multas','Notificação / Advertencia','Check List'].map(item=>{
-          const doItem = ap.descs.filter(d=>d.item===item);
+        {[
+          {rotulo:'Notificação / Advertência', aliases:['Notificação / Advertência','Notificação / Advertencia']},
+          {rotulo:'Multas', aliases:['Multas']},
+          {rotulo:'Auditoria Interna', aliases:['Auditoria Interna','Check List']}
+        ].map(grupo=>{
+          const doItem = ap.descs.filter(d=>grupo.aliases.includes(d.item));
           const tot = doItem.reduce((s,d)=>s+d.valor,0);
           return (
-            <div className="linha-item" key={item}>
-              <span>{item==='Check List'?'Check list (auditoria abaixo de 85%)':item}
+            <div className="linha-item" key={grupo.rotulo}>
+              <span>{grupo.rotulo}
                 <span className="muted"> — {doItem.length===0 ? 'nenhuma ocorrência' : doItem.length+' ocorrência'+(doItem.length>1?'s':'')}</span></span>
               <b className="num" style={{color: tot<0?'var(--erro)':'var(--cinza)'}}>{tot<0 ? brl(tot) : brl(0)}</b>
             </div>
@@ -1356,9 +1373,14 @@ function MotoristaApp({st, setSt, user, onSair, toast}){
   useEffect(()=>{
     if(CONFIG.MODO_DEMONSTRACAO) return;
     let ativo=true;
-    ApiService.obterCargas().then(r=>{
+    Promise.all([ApiService.obterCargas(),ApiService.obterPremiacao()]).then(([r,p])=>{
       if(!ativo) return;
-      setSt(s=>({...s,cargas:Array.isArray(r.cargas)?r.cargas:[]}));
+      setSt(s=>({
+        ...s,
+        cargas:Array.isArray(r.cargas)?r.cargas:[],
+        metas:Array.isArray(p.metas)?p.metas:s.metas,
+        descontos:Array.isArray(p.descontos)?p.descontos:s.descontos
+      }));
     }).catch(e=>toast('Não foi possível carregar as cargas: '+e.message)).finally(()=>{if(ativo)setCarregandoCargas(false)});
     return()=>{ativo=false};
   },[user.id]);
