@@ -218,7 +218,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 90000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '1.10.1-perfis-sharepoint'
+  VERSAO: '1.10.3-perfil-lookup-modulos'
 };
 
 /* ============================================================================
@@ -2502,6 +2502,8 @@ function AdmCadastros({st, setSt, toast, user}){
   const [fUsuario,setFUsuario]=useState({nome:'',perfil:'',ordem:'nome-asc'});
   const [fVeiculo,setFVeiculo]=useState({placa:'',frota:'',tipo:'',ordem:'placa-asc'});
   const [fVinculo,setFVinculo]=useState({placa:'',usuario:'',status:'',ordem:'usuario-asc'});
+  const perfilSelecionado=edit?cad.perfis.find(p=>String(p.itemId)===String(edit.perfilAcessoId||'')):null;
+  const permiteModulosUsuario=perfilSelecionado?.permiteModulosApp===true;
   const proximoUsuarioId=()=>{const maior=cad.usuarios.reduce((m,u)=>{const x=String(u.usuarioId||'').match(/^USU-(\d+)$/i);return x?Math.max(m,Number(x[1])):m;},0);return 'USU-'+String(maior+1).padStart(3,'0');};
   const carregar=async()=>{try{const r=await ApiService.admCadastros();setCad({usuarios:r.usuarios||[],tiposVeiculo:r.tiposVeiculo||[],veiculos:r.veiculos||[],vinculos:r.vinculos||[],perfis:r.perfis||[]});}catch(e){toast('Erro ao carregar cadastros: '+e.message);}};
   useEffect(()=>{carregar();},[]);
@@ -2509,13 +2511,21 @@ function AdmCadastros({st, setSt, toast, user}){
     const login=String(edit.login||'').trim().toLowerCase(), usuarioId=String(edit.usuarioId||'').trim().toUpperCase();
     if(!String(edit.nome||'').trim()||!login||!usuarioId){ toast('Nome, UsuarioID e usuário são obrigatórios.'); return; }
     if(!edit.perfilAcessoId){toast('Selecione um perfil de acesso cadastrado.');return;}
+    const perfilDoUsuario=cad.perfis.find(p=>String(p.itemId)===String(edit.perfilAcessoId));
+    const modulosPermitidos=perfilDoUsuario?.permiteModulosApp===true;
     if(cad.usuarios.some(u=>u.itemId!==edit.itemId&&String(u.login||'').trim().toLowerCase()===login)){toast('O usuário '+login+' já está cadastrado.');return;}
     if(cad.usuarios.some(u=>u.itemId!==edit.itemId&&String(u.usuarioId||'').trim().toUpperCase()===usuarioId)){toast('O UsuarioID '+usuarioId+' já está cadastrado.');return;}
     const novaSenha=String(edit.novaSenha||'');
     if(!edit.itemId&&!novaSenha){toast('Digite ou gere a senha inicial.');return;}
     if(novaSenha&&edit.perfil==='MOTORISTA'&&!/^\d{6}$/.test(novaSenha)){toast('Motorista deve usar PIN com exatamente 6 números.');return;}
     if(novaSenha&&edit.perfil!=='MOTORISTA'&&novaSenha.length<8){toast('Administrador e visualizador devem usar ao menos 8 caracteres.');return;}
-    try{await ApiService.salvarUsuario({...edit,login,usuarioId});setEdit(null);await carregar();if(novaSenha)window.alert('Acesso salvo com sucesso.\n\nUsuário: '+login+'\nSenha temporária: '+novaSenha+'\n\nCopie agora: ela não poderá ser visualizada novamente.');else toast('Usuário salvo no SharePoint.');}catch(e){toast('Erro ao salvar usuário: '+e.message);}
+    const dadosUsuario={...edit,login,usuarioId,
+      acessoCargas:modulosPermitidos&&edit.acessoCargas===true,
+      acessoPremiacao:modulosPermitidos&&edit.acessoPremiacao===true,
+      acessoChecklist:modulosPermitidos&&edit.acessoChecklist===true,
+      acessoHistorico:modulosPermitidos&&edit.acessoChecklist===true
+    };
+    try{await ApiService.salvarUsuario(dadosUsuario);setEdit(null);await carregar();if(novaSenha)window.alert('Acesso salvo com sucesso.\n\nUsuário: '+login+'\nSenha temporária: '+novaSenha+'\n\nCopie agora: ela não poderá ser visualizada novamente.');else toast('Usuário salvo no SharePoint.');}catch(e){toast('Erro ao salvar usuário: '+e.message);}
   };
   const gerarSenha=()=>{
     if(edit.perfil==='MOTORISTA'){
@@ -2625,7 +2635,7 @@ function AdmCadastros({st, setSt, toast, user}){
       </div>
 
       {sub==='usuarios' && podeSub('cadastro.usuarios') && <React.Fragment>
-        <div><button className="btn btn-p" onClick={()=>{setSenhaVisivel(false);const p=cad.perfis.find(x=>x.titulo==='MOTORISTA');setEdit({nome:'',usuarioId:proximoUsuarioId(),login:'',telefone:'',perfil:p?.titulo||'',perfilAcessoId:p?.itemId||'',tipoFrotaAcesso:'FROTA PESADA',ativo:true,novaSenha:''})}}>+ Novo usuário</button></div>
+        <div><button className="btn btn-p" onClick={()=>{setSenhaVisivel(false);const p=cad.perfis.find(x=>x.titulo==='MOTORISTA');setEdit({nome:'',usuarioId:proximoUsuarioId(),login:'',telefone:'',perfil:p?.titulo||'',perfilAcessoId:p?.itemId||'',tipoFrotaAcesso:'FROTA PESADA',ativo:true,novaSenha:'',acessoCargas:false,acessoPremiacao:false,acessoChecklist:false,acessoHistorico:false})}}>+ Novo usuário</button></div>
         <div className="filtros-cadastro">
           <div><label>Filtrar por nome</label><input value={fUsuario.nome} onChange={e=>setFUsuario({...fUsuario,nome:e.target.value})} placeholder="Digite o nome"/></div>
           <div><label>Perfil</label><select value={fUsuario.perfil} onChange={e=>setFUsuario({...fUsuario,perfil:e.target.value})}><option value="">Todos os perfis</option>{[...new Set(cad.usuarios.map(u=>u.perfil).filter(Boolean))].sort(compararTexto).map(p=><option key={p}>{p}</option>)}</select></div>
@@ -2710,11 +2720,31 @@ function AdmCadastros({st, setSt, toast, user}){
               <div><label>Telefone</label><input value={edit.telefone||''} onChange={e=>setEdit({...edit,telefone:e.target.value})}/></div>
             </div>
             <div><label>Perfil</label>
-              <select value={edit.perfilAcessoId||''} onChange={e=>{const p=cad.perfis.find(x=>x.itemId===e.target.value);setEdit({...edit,perfilAcessoId:e.target.value,perfil:p?.titulo||edit.perfil})}}>
+              <select value={edit.perfilAcessoId||''} onChange={e=>{const p=cad.perfis.find(x=>String(x.itemId)===String(e.target.value));const permite=p?.permiteModulosApp===true;setEdit({...edit,perfilAcessoId:e.target.value,perfil:p?.titulo||edit.perfil,...(!permite?{acessoCargas:false,acessoPremiacao:false,acessoChecklist:false,acessoHistorico:false}:{})})}}>
                 <option value="">Selecionar perfil...</option>
                 {cad.perfis.filter(p=>p.ativo||p.itemId===edit.perfilAcessoId).map(p=><option key={p.itemId} value={p.itemId}>{p.titulo}</option>)}
               </select>
               {!edit.perfilAcessoId&&<div className="muted" style={{fontSize:12,marginTop:5}}>Selecione um perfil para definir áreas, subtelas e nível de acesso.</div>}</div>
+            {edit.perfilAcessoId&&<div>
+              <label>Módulos liberados para este usuário</label>
+              <div className="muted" style={{fontSize:12,marginTop:5}}>
+                Perfil selecionado: <b>{perfilSelecionado?.titulo||'não localizado'}</b> · Permite módulos: <b>{permiteModulosUsuario?'Sim':'Não'}</b>
+              </div>
+              {permiteModulosUsuario?
+                <div className="perfil-subtelas-grid" style={{marginTop:8}}>
+                  {[
+                    ['acessoCargas','Cargas'],
+                    ['acessoPremiacao','Premiação'],
+                    ['acessoChecklist','Check list']
+                  ].map(([campo,rotulo])=>
+                    <button type="button" key={campo} className={'perfil-subtela'+(edit[campo]?' on':'')} onClick={()=>setEdit({...edit,[campo]:!edit[campo]})}>
+                      <span className="perfil-subtela-check">{edit[campo]?'✓':''}</span>
+                      <span>{rotulo}</span>
+                    </button>
+                  )}
+                </div>
+                :<div className="aviso-box" style={{marginTop:8}}>Este perfil está configurado com “Permite módulos do app? = Não”. Nenhum módulo pode ser liberado para este usuário.</div>}
+            </div>}
             <div><label>Acesso à frota</label><select value={edit.tipoFrotaAcesso} onChange={e=>setEdit({...edit,tipoFrotaAcesso:e.target.value})}><option>FROTA PESADA</option><option>FROTA LEVE</option><option>AMBAS</option></select></div>
             <div><label>Status do usuário</label><select value={edit.ativo?'s':'n'} onChange={e=>setEdit({...edit,ativo:e.target.value==='s'})}><option value="s">Ativo</option><option value="n">Inativo</option></select></div>
             <div>
@@ -2872,9 +2902,24 @@ function App(){
   const toast=(m)=>{ setToastMsg(m); clearTimeout(tRef.current); tRef.current=setTimeout(()=>setToastMsg(''),3200); };
   const userAtual = user ? st.usuarios.find(u=>u.id===user.id) || user : null;
   const ehMotorista = temPerfil(userAtual,'MOTORISTA');
-  const acessoGestao = pode(userAtual,'painel_rh.visualizar')||
-    pode(userAtual,'painel.visualizar')||pode(userAtual,'premiacao.visualizar')&&
-    !ehMotorista||permissoesDoUsuario(userAtual).has('*');
+  const acessoGestao = [
+    'painel_rh.visualizar',
+    'painel.visualizar',
+    'importar.criar',
+    'contestacoes.visualizar',
+    'checklist.aprovacao',
+    'checklist.perguntas',
+    'checklist.relatorio',
+    'premiacao.visualizar',
+    'metas.visualizar',
+    'descontos.visualizar',
+    'cadastro.usuarios',
+    'cadastro.tipos_veiculo',
+    'cadastro.veiculos',
+    'cadastro.vinculos',
+    'cadastro.perfis'
+  ].some(permissao=>pode(userAtual,permissao)) ||
+    permissoesDoUsuario(userAtual).has('*');
   return (
     <React.Fragment>
       {!userAtual && <Login st={st} onLogin={setUser}/>}
