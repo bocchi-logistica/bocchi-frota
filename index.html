@@ -218,7 +218,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 90000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '1.10.7-painel-rh-api'
+  VERSAO: '1.10.9-premiacao-historico-vinculo'
 };
 
 /* ============================================================================
@@ -246,6 +246,30 @@ const normalizarPerfil=p=>String(p||'').trim().toUpperCase()
   .normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[\s/]+/g,'_');
 const normalizar=valor=>String(valor||'').trim().toLocaleLowerCase('pt-BR')
   .normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ');
+const usuarioConfiguradoPremiacao=u=>
+  normalizarPerfil(u?.perfil)==='MOTORISTA' &&
+  normalizarPerfil(u?.tipoFrotaAcesso)==='FROTA_PESADA' &&
+  u?.acessoPremiacao===true;
+const idUsuario=u=>String(u?.itemId||u?.id||u?.usuarioItemId||u?.usuarioId||'');
+const vinculoPertenceUsuario=(v,u)=>{
+  const id=idUsuario(u);
+  const idV=String(v?.usuarioItemId||v?.usuarioId||v?.userItemId||'');
+  if(id&&idV) return id===idV;
+  return normalizar(v?.usuarioNome||v?.motoristaNome||v?.nomeUsuario)===normalizar(u?.nome);
+};
+const sobrepoePeriodo=(v,inicio,fim)=>{
+  const ini=String(v?.dataInicio||'').slice(0,10)||'0000-01-01';
+  const encerrado=String(v?.dataFim||'').slice(0,10);
+  const fimV=encerrado||'9999-12-31';
+  return ini<=fim&&fimV>=inicio;
+};
+const usuarioValidoPremiacaoPeriodo=(u,vinculos,inicio,fim)=>{
+  if(!usuarioConfiguradoPremiacao(u)) return false;
+  const lista=(Array.isArray(vinculos)?vinculos:[]).filter(v=>vinculoPertenceUsuario(v,u));
+  /* Compatibilidade: enquanto não houver vínculos retornados, preserva os ativos. */
+  if(!lista.length) return u?.ativo!==false;
+  return lista.some(v=>sobrepoePeriodo(v,inicio,fim));
+};
 function perfisDoUsuario(user){
   const lista=Array.isArray(user?.perfis)?user.perfis:[user?.perfil];
   return [...new Set(lista.filter(Boolean).map(normalizarPerfil))];
@@ -1675,19 +1699,23 @@ function PainelRH({st,dados}){
   const [nome,setNome]=useState('');
   const [aberto,setAberto]=useState('');
   const [usuariosRH,setUsuariosRH]=useState([]);
+  const [vinculosRH,setVinculosRH]=useState([]);
   const [apuracoesRH,setApuracoesRH]=useState({});
   const [carregandoRH,setCarregandoRH]=useState(false);
   const [erroRH,setErroRH]=useState('');
   const mesesPorQuad={'1':['01','02','03','04'],'2':['05','06','07','08'],'3':['09','10','11','12']};
   const meses=(mesesPorQuad[quadrimestre]||mesesPorQuad['1']).map(m=>m+'/'+ano);
+  const inicioPeriodo=`${ano}-${mesesPorQuad[quadrimestre][0]}-01`;
+  const ultimoMes=mesesPorQuad[quadrimestre][3];
+  const fimPeriodo=new Date(Number(ano),Number(ultimoMes),0).toISOString().slice(0,10);
   const motoristas=usuariosRH
-    .filter(u=>normalizarPerfil(u.perfil)==='MOTORISTA')
-    .filter(u=>u.ativo!==false)
+    .filter(u=>usuarioValidoPremiacaoPeriodo(u,vinculosRH,inicioPeriodo,fimPeriodo))
     .filter(u=>String(u.nome||'').toLocaleLowerCase('pt-BR').includes(nome.toLocaleLowerCase('pt-BR')))
     .sort((a,b)=>String(a.nome).localeCompare(String(b.nome),'pt-BR'));
   useEffect(()=>{
     if(CONFIG.MODO_DEMONSTRACAO){
       setUsuariosRH(st.usuarios||[]);
+      setVinculosRH(st.vinculos||[]);
       return;
     }
     let ativo=true;
@@ -1697,6 +1725,7 @@ function PainelRH({st,dados}){
       .then(r=>{
         if(!ativo) return;
         setUsuariosRH(Array.isArray(r.usuarios)?r.usuarios:[]);
+        setVinculosRH(Array.isArray(r.vinculos)?r.vinculos:[]);
       })
       .catch(e=>{
         if(!ativo) return;
@@ -1710,8 +1739,7 @@ function PainelRH({st,dados}){
     if(CONFIG.MODO_DEMONSTRACAO) return;
     let ativo=true;
     const nomes=[...new Set(usuariosRH
-      .filter(u=>normalizarPerfil(u.perfil)==='MOTORISTA')
-      .filter(u=>u.ativo!==false)
+      .filter(u=>usuarioValidoPremiacaoPeriodo(u,vinculosRH,inicioPeriodo,fimPeriodo))
       .map(u=>String(u.nome||'').trim()).filter(Boolean))];
     if(!nomes.length) return;
     setCarregandoRH(true); setErroRH('');
@@ -1736,7 +1764,7 @@ function PainelRH({st,dados}){
       if(ativo&&falhas) setErroRH(`${falhas} motorista(s) não puderam ser calculados. Abra a auditoria para conferir.`);
     })().finally(()=>{if(ativo)setCarregandoRH(false)});
     return()=>{ativo=false};
-  },[usuariosRH]);
+  },[usuariosRH,vinculosRH,ano,quadrimestre]);
   const linhas=motoristas.map(u=>{
     const chave=normalizar(u.nome);
     const vindas=Array.isArray(apuracoesRH[chave])?apuracoesRH[chave]:[];
@@ -1799,15 +1827,20 @@ function PainelRH({st,dados}){
 function AdmPainel({st, dados}){
   const [mes,setMes]=useState(MES_ATUAL);
   const [usuariosPainel,setUsuariosPainel]=useState([]);
+  const [vinculosPainel,setVinculosPainel]=useState([]);
   const [apuracoesPainel,setApuracoesPainel]=useState({});
   const [carregandoPainel,setCarregandoPainel]=useState(false);
   const [erroPainel,setErroPainel]=useState('');
-  const motoristas = usuariosPainel
-    .filter(u=>normalizarPerfil(u.perfil)==='MOTORISTA')
-    .filter(u=>u.ativo!==false);
+  const [mesNumero,anoNumero]=String(mes).split('/');
+  const inicioMes=`${anoNumero}-${mesNumero}-01`;
+  const fimMes=new Date(Number(anoNumero),Number(mesNumero),0).toISOString().slice(0,10);
+  const motoristas = usuariosPainel.filter(u=>
+    usuarioValidoPremiacaoPeriodo(u,vinculosPainel,inicioMes,fimMes)
+  );
   useEffect(()=>{
     if(CONFIG.MODO_DEMONSTRACAO){
       setUsuariosPainel(st.usuarios||[]);
+      setVinculosPainel(st.vinculos||[]);
       return;
     }
     let ativo=true;
@@ -1817,6 +1850,7 @@ function AdmPainel({st, dados}){
       .then(r=>{
         if(!ativo) return;
         setUsuariosPainel(Array.isArray(r.usuarios)?r.usuarios:[]);
+        setVinculosPainel(Array.isArray(r.vinculos)?r.vinculos:[]);
       })
       .catch(e=>{
         if(!ativo) return;
@@ -1856,7 +1890,7 @@ function AdmPainel({st, dados}){
       if(ativo&&falhas)setErroPainel(`${falhas} motorista(s) não puderam ser calculados.`);
     })().finally(()=>{if(ativo)setCarregandoPainel(false)});
     return()=>{ativo=false};
-  },[usuariosPainel,mes]);
+  },[usuariosPainel,vinculosPainel,mes]);
   const linhas = motoristas.map(u=>{
     const oficial=apuracoesPainel[normalizar(u.nome)];
     const stMotorista={...st,apuracoes:oficial&&!oficial.erro?[oficial]:[]};
