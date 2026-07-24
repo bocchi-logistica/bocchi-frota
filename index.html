@@ -218,7 +218,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 90000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '1.10.3-perfil-lookup-modulos'
+  VERSAO: '1.10.4-fechamento-rh-normalizacao'
 };
 
 /* ============================================================================
@@ -244,6 +244,8 @@ const PERMISSOES_POR_PERFIL = {
 };
 const normalizarPerfil=p=>String(p||'').trim().toUpperCase()
   .normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[\s/]+/g,'_');
+const normalizar=valor=>String(valor||'').trim().toLocaleLowerCase('pt-BR')
+  .normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ');
 function perfisDoUsuario(user){
   const lista=Array.isArray(user?.perfis)?user.perfis:[user?.perfil];
   return [...new Set(lista.filter(Boolean).map(normalizarPerfil))];
