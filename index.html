@@ -190,8 +190,53 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 90000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '1.9.27-saldo-negativo-quadrimestre'
+  VERSAO: '1.10.0-perfis-permissoes'
 };
+
+/* ============================================================================
+   CONTROLE DE ACESSO — PERFIS + PERMISSÕES
+   A API pode devolver `perfis` e `permissoes`. Enquanto a API não devolver
+   essas listas, os perfis atuais recebem as permissões-padrão abaixo.
+   ========================================================================== */
+const PERMISSOES_POR_PERFIL = {
+  ADMINISTRADOR:['*'],
+  ADM:['*'],
+  MOTORISTA:[
+    'cargas.visualizar','premiacao.visualizar','checklist.visualizar',
+    'checklist.criar','contestacao.criar','historico.visualizar'
+  ],
+  VISUALIZADOR:[
+    'painel_rh.visualizar','premiacao.visualizar','metas.visualizar',
+    'descontos.visualizar','faturamento.visualizar'
+  ],
+  RH_AUDITORIA:[
+    'painel_rh.visualizar','premiacao.visualizar','metas.visualizar',
+    'descontos.visualizar','faturamento.visualizar'
+  ]
+};
+const normalizarPerfil=p=>String(p||'').trim().toUpperCase()
+  .normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[\s/]+/g,'_');
+function perfisDoUsuario(user){
+  const lista=Array.isArray(user?.perfis)?user.perfis:[user?.perfil];
+  return [...new Set(lista.filter(Boolean).map(normalizarPerfil))];
+}
+function permissoesDoUsuario(user){
+  const explicitas=Array.isArray(user?.permissoes)?user.permissoes.filter(Boolean):[];
+  const herdadas=user?.permissoesDefinidas?[]:perfisDoUsuario(user).flatMap(p=>PERMISSOES_POR_PERFIL[p]||[]);
+  const antigas=user?.perms||user?.acessos||{};
+  const compat=[
+    antigas.cargas&&'cargas.visualizar',
+    antigas.premiacao&&'premiacao.visualizar',
+    antigas.checklist&&'checklist.visualizar',
+    antigas.administracao&&!user?.permissoesDefinidas&&'*'
+  ].filter(Boolean);
+  return new Set([...explicitas,...herdadas,...compat]);
+}
+function pode(user,permissao){
+  const ps=permissoesDoUsuario(user);
+  return ps.has('*')||ps.has(permissao);
+}
+function temPerfil(user,perfil){return perfisDoUsuario(user).includes(normalizarPerfil(perfil));}
 
 /* ============================================================================
    ALTERAÇÃO V6 — UTILITÁRIOS
@@ -367,6 +412,12 @@ const ApiService = {
   nome: r.motorista.nome || 'MOTORISTA TESTE',
   login: r.motorista.login || login,
   perfil: (r.motorista.perfil || 'motorista').toLowerCase(),
+  perfis: Array.isArray(r.motorista.perfis) ? r.motorista.perfis : undefined,
+  permissoes: Array.isArray(r.motorista.permissoes) ? r.motorista.permissoes : undefined,
+  permissoesDefinidas: Array.isArray(r.motorista.permissoes),
+  areasAcesso: Array.isArray(r.motorista.areasAcesso) ? r.motorista.areasAcesso : [],
+  subtelasAcesso: Array.isArray(r.motorista.subtelasAcesso) ? r.motorista.subtelasAcesso : [],
+  nivelAcesso: r.motorista.nivelAcesso || 'SOMENTE_VISUALIZAR',
   veiculoPadrao: r.motorista.veiculoPadrao || '',
   acessos: r.motorista.acessos || {},
   perms: r.motorista.perms || {
@@ -419,6 +470,7 @@ const ApiService = {
   salvarTipoVeiculo(d){ return this._req('POST','/admin/tipos-veiculo/salvar',d); },
   salvarVeiculo(d){ return this._req('POST','/admin/veiculos/salvar',d); },
   salvarVinculo(d){ return this._req('POST','/admin/vinculos/salvar',d); },
+  salvarPerfil(d){ return this._req('POST','/admin/perfis/salvar',d); },
   // Painel administrativo (a API valida o perfil pelo token)
   admListarChecklists(filtros){
     const q = filtros ? '?'+new URLSearchParams(filtros).toString() : '';
@@ -725,6 +777,8 @@ function Login({st, onLogin}){
   nome: r.motorista.nome,
   login: r.motorista.login || login.trim().toLowerCase(),
   perfil: r.motorista.perfil || 'motorista',
+  perfis: Array.isArray(r.motorista.perfis) ? r.motorista.perfis : undefined,
+  permissoes: Array.isArray(r.motorista.permissoes) ? r.motorista.permissoes : undefined,
   perms: r.motorista.perms || {
     cargas: true,
     premiacao: true,
@@ -1550,6 +1604,72 @@ function MotoristaApp({st, setSt, user, onSair, toast}){
 }
 
 /* ================= ADM: PAINEL ================= */
+function PainelRH({st,dados}){
+  const anoAtual=String(new Date().getFullYear());
+  const [ano,setAno]=useState(anoAtual);
+  const [quadrimestre,setQuadrimestre]=useState('2');
+  const [nome,setNome]=useState('');
+  const [aberto,setAberto]=useState('');
+  const mesesPorQuad={'1':['01','02','03','04'],'2':['05','06','07','08'],'3':['09','10','11','12']};
+  const meses=(mesesPorQuad[quadrimestre]||mesesPorQuad['1']).map(m=>m+'/'+ano);
+  const motoristas=st.usuarios
+    .filter(u=>normalizarPerfil(u.perfil)==='MOTORISTA')
+    .filter(u=>String(u.nome||'').toLocaleLowerCase('pt-BR').includes(nome.toLocaleLowerCase('pt-BR')))
+    .sort((a,b)=>String(a.nome).localeCompare(String(b.nome),'pt-BR'));
+  const linhas=motoristas.map(u=>{
+    const apuracoes=meses.map(m=>apuracaoMes(st,dados,u.nome,m));
+    const acumulado=apuracoes.reduce((s,a)=>s+Number(a.apurado||0),0);
+    return {u,apuracoes,acumulado,pagar:Math.max(0,acumulado)};
+  });
+  const total=linhas.reduce((s,l)=>s+l.pagar,0);
+  return <React.Fragment>
+    <div className="row" style={{flexWrap:'wrap'}}>
+      <div className="grow">
+        <h2>Fechamento de premiação — RH</h2>
+        <div className="muted">Consulta e auditoria, sem permissão para alterar lançamentos.</div>
+      </div>
+      <span className="tag tag-neutro">Somente leitura</span>
+    </div>
+    <div className="card">
+      <div className="filtros-cadastro" style={{margin:0}}>
+        <div><label>Motorista</label><input value={nome} onChange={e=>setNome(e.target.value)} placeholder="Filtrar por nome"/></div>
+        <div><label>Ano</label><select value={ano} onChange={e=>setAno(e.target.value)}>{[2025,2026,2027,2028].map(a=><option key={a}>{a}</option>)}</select></div>
+        <div><label>Pagamento</label><select value={quadrimestre} onChange={e=>setQuadrimestre(e.target.value)}><option value="1">1º quadrimestre — jan a abr</option><option value="2">2º quadrimestre — mai a ago</option><option value="3">3º quadrimestre — set a dez</option></select></div>
+      </div>
+    </div>
+    <div className="cards4">
+      <div className="card kpi"><div className="l">Motoristas</div><div className="v num">{linhas.length}</div></div>
+      <div className="card kpi"><div className="l">Total previsto para folha</div><div className="v num">{brl(total)}</div></div>
+      <div className="card kpi"><div className="l">Período</div><div className="v" style={{fontSize:18}}>{quadrimestre}º quadrimestre/{ano}</div></div>
+    </div>
+    <div className="card" style={{overflowX:'auto'}}>
+      <table>
+        <thead><tr><th>Motorista</th>{meses.map(m=><th key={m} className="td-num">{mesLabel(m)}</th>)}<th className="td-num">Acumulado</th><th className="td-num">Valor a pagar</th><th></th></tr></thead>
+        <tbody>{linhas.map(l=><React.Fragment key={l.u.id||l.u.nome}>
+          <tr>
+            <td><b>{l.u.nome}</b></td>
+            {l.apuracoes.map((a,i)=><td key={meses[i]} className="td-num num" style={{color:a.apurado<0?'var(--erro)':'inherit'}}>{brl(a.apurado)}</td>)}
+            <td className="td-num num"><b style={{color:l.acumulado<0?'var(--erro)':'var(--mata)'}}>{brl(l.acumulado)}</b></td>
+            <td className="td-num num"><b>{brl(l.pagar)}</b></td>
+            <td><button className="btn btn-s btn-sm" onClick={()=>setAberto(aberto===l.u.nome?'':l.u.nome)}>{aberto===l.u.nome?'Fechar':'Auditar'}</button></td>
+          </tr>
+          {aberto===l.u.nome&&<tr><td colSpan="8">
+            <div className="cards4">{l.apuracoes.map((a,i)=><div className="card" key={meses[i]} style={{boxShadow:'none',border:'1px solid var(--linha)'}}>
+              <b>{mesLabel(meses[i])}</b>
+              <div className="linha-item"><span>Tipo / meta</span><span>{a.tipo||'—'}{a.meta?' · '+brl(a.meta.meta):''}</span></div>
+              <div className="linha-item"><span>Faturamento</span><b>{brl(a.fat)}</b></div>
+              <div className="linha-item"><span>Premiação calculada</span><span>{brl(a.prod)}</span></div>
+              <div className="linha-item"><span>Descontos</span><span style={{color:a.totDesc<0?'var(--erro)':'inherit'}}>{brl(a.totDesc)}</span></div>
+              <div className="linha-item"><span>Apurado do mês</span><b>{brl(a.apurado)}</b></div>
+            </div>)}</div>
+          </td></tr>}
+        </React.Fragment>)}</tbody>
+      </table>
+    </div>
+    <div className="aviso-box">O acumulado soma os quatro meses, inclusive resultados negativos. O valor a pagar nunca fica abaixo de R$ 0,00 e o saldo negativo não é levado para o quadrimestre seguinte.</div>
+  </React.Fragment>;
+}
+
 function AdmPainel({st, dados}){
   const [mes,setMes]=useState(MES_ATUAL);
   const motoristas = st.usuarios.filter(u=>u.perfil==='motorista');
@@ -1823,10 +1943,10 @@ function AdmContestacoes({st, setSt, toast}){
 }
 
 /* ================= ADM: CHECK LIST (aprovação + perguntas + relatório) ================= */
-function AdmChecklist({st, setSt, toast}){
+function AdmChecklist({st, setSt, toast, user}){
   /* ALTERAÇÃO V6: fora do modo demonstração, o painel carrega os registros pela
      API (GET /admin/checklists) em vez de usar apenas o estado do navegador. */
-  const [sub,setSub]=useState('aprovar');
+  const [sub,setSub]=useState(pode(user,'checklist.aprovacao')?'aprovar':pode(user,'checklist.perguntas')?'perguntas':'relatorio');
   const [sincronizando,setSincronizando]=useState(false);
   const sincronizar = async ()=>{
     if (CONFIG.MODO_DEMONSTRACAO){ toast('Modo demonstração: dados locais. Configure a URL da Azure Function e desative MODO_DEMONSTRACAO para consultar o SharePoint.'); return; }
@@ -1943,13 +2063,13 @@ function AdmChecklist({st, setSt, toast}){
         <h2 className="grow">Check list veicular</h2>
         <button className="btn btn-s btn-sm" disabled={sincronizando} onClick={sincronizar}>{sincronizando?'Sincronizando...':'Sincronizar com servidor'}</button>
         <div className="subtabs">
-          <button className={'subtab'+(sub==='aprovar'?' on':'')} onClick={()=>setSub('aprovar')}>Aprovar ({pendentes.length})</button>
-          <button className={'subtab'+(sub==='perguntas'?' on':'')} onClick={()=>setSub('perguntas')}>Perguntas</button>
-          <button className={'subtab'+(sub==='relatorio'?' on':'')} onClick={()=>setSub('relatorio')}>Relatório</button>
+          {pode(user,'checklist.aprovacao')&&<button className={'subtab'+(sub==='aprovar'?' on':'')} onClick={()=>setSub('aprovar')}>Aprovar ({pendentes.length})</button>}
+          {pode(user,'checklist.perguntas')&&<button className={'subtab'+(sub==='perguntas'?' on':'')} onClick={()=>setSub('perguntas')}>Perguntas</button>}
+          {pode(user,'checklist.relatorio')&&<button className={'subtab'+(sub==='relatorio'?' on':'')} onClick={()=>setSub('relatorio')}>Relatório</button>}
         </div>
       </div>
 
-      {sub==='aprovar' && <React.Fragment>
+      {sub==='aprovar' && pode(user,'checklist.aprovacao') && <React.Fragment>
         {pendentes.length===0 && <div className="card muted">Nenhum check list aguardando aprovação.</div>}
         {pendentes.map(ck=>
           <div className="card row" key={ck.id}>
@@ -1958,7 +2078,7 @@ function AdmChecklist({st, setSt, toast}){
           </div>)}
       </React.Fragment>}
 
-      {sub==='perguntas' && <React.Fragment>
+      {sub==='perguntas' && pode(user,'checklist.perguntas') && <React.Fragment>
         <div className="card">
           <h3 style={{marginBottom:10}}>{editandoPergunta?'Editar pergunta':'Nova pergunta'}</h3>
           <div className="form-grid">
@@ -2017,7 +2137,7 @@ function AdmChecklist({st, setSt, toast}){
         </div>
       </React.Fragment>}
 
-      {sub==='relatorio' && <React.Fragment>
+      {sub==='relatorio' && pode(user,'checklist.relatorio') && <React.Fragment>
         <div className="row" style={{flexWrap:'wrap'}}>
           <input type="month" aria-label="Filtrar relatório por mês" style={{width:'auto'}} value={fMes} onChange={e=>setFMes(e.target.value)}/>
           <select style={{width:'auto'}} value={fPlaca} onChange={e=>setFPlaca(e.target.value)}>
@@ -2067,8 +2187,10 @@ function AdmChecklist({st, setSt, toast}){
 }
 
 /* ================= ADM: PREMIAÇÃO (metas + descontos) ================= */
-function AdmPremiacao({st, setSt, toast}){
-  const [sub,setSub]=useState('metas');
+function AdmPremiacao({st, setSt, toast, user}){
+  const podeEditarMetas=pode(user,'metas.editar');
+  const podeEditarDescontos=pode(user,'descontos.editar');
+  const [sub,setSub]=useState(pode(user,'premiacao.visualizar')?'painel':pode(user,'metas.visualizar')?'metas':'desc');
   const [edit,setEdit]=useState(null);
   const [editTipo,setEditTipo]=useState(null);
   const [competencia,setCompetencia]=useState(MES_ATUAL.slice(3)+'-'+MES_ATUAL.slice(0,2));
@@ -2135,19 +2257,32 @@ function AdmPremiacao({st, setSt, toast}){
       <div className="row" style={{flexWrap:'wrap'}}>
         <h2 className="grow">Premiação</h2>
         <div className="subtabs">
-          <button className={'subtab'+(sub==='metas'?' on':'')} onClick={()=>setSub('metas')}>Metas</button>
-          <button className={'subtab'+(sub==='desc'?' on':'')} onClick={()=>setSub('desc')}>Descontos</button>
+          {pode(user,'premiacao.visualizar')&&<button className={'subtab'+(sub==='painel'?' on':'')} onClick={()=>setSub('painel')}>Painel</button>}
+          {pode(user,'metas.visualizar')&&<button className={'subtab'+(sub==='metas'?' on':'')} onClick={()=>setSub('metas')}>Metas</button>}
+          {pode(user,'descontos.visualizar')&&<button className={'subtab'+(sub==='desc'?' on':'')} onClick={()=>setSub('desc')}>Descontos</button>}
         </div>
       </div>
 
-      {sub==='metas' && <React.Fragment>
+      {sub==='painel' && pode(user,'premiacao.visualizar') && <React.Fragment>
+        <div className="form-grid" style={{marginBottom:12}}>
+          <div><label>Competência</label><input type="month" value={competencia} onChange={e=>setCompetencia(e.target.value)}/></div>
+        </div>
+        <div className="kpis">
+          <div className="kpi"><span>Metas cadastradas</span><b>{(painel.metas||[]).length}</b></div>
+          <div className="kpi"><span>Motoristas elegíveis</span><b>{(painel.elegiveis||[]).length}</b></div>
+          <div className="kpi"><span>Descontos lançados</span><b>{(painel.descontos||[]).filter(d=>d.competencia===competencia).length}</b></div>
+        </div>
+        <div className="aviso-box">Visão geral da premiação na competência selecionada. O acesso a Metas e Descontos é controlado separadamente pelo perfil.</div>
+      </React.Fragment>}
+
+      {sub==='metas' && pode(user,'metas.visualizar') && <React.Fragment>
         <div className="row" style={{marginBottom:12,flexWrap:'wrap'}}>
           <select style={{width:'auto'}} value={fTipoMeta} onChange={e=>setFTipoMeta(e.target.value)}>
             <option value="">Todos os tipos de veículo</option>
             {tiposMeta.map(tipo=><option key={tipo} value={tipo}>{tipo}</option>)}
           </select>
           <div className="grow"></div>
-          <button className="btn btn-p" onClick={()=>setEdit({tipo:'',start:0,meta:0,valorMeta:0,pctStart:0,pctMeta:0,teto:0,vigIni:HOJE,vigFim:HOJE.slice(0,4)+'-12-31',status:'Ativa',ativo:true,observacao:''})}>+ Incluir meta</button>
+          {podeEditarMetas&&<button className="btn btn-p" onClick={()=>setEdit({tipo:'',start:0,meta:0,valorMeta:0,pctStart:0,pctMeta:0,teto:0,vigIni:HOJE,vigFim:HOJE.slice(0,4)+'-12-31',status:'Ativa',ativo:true,observacao:''})}>+ Incluir meta</button>}
         </div>
         <div className="card" style={{overflowX:'auto'}}>
           <table>
@@ -2163,14 +2298,14 @@ function AdmPremiacao({st, setSt, toast}){
                 <td className="td-num num">{brl(m.teto)}</td>
                 <td className="muted">{dataBR(m.vigIni)} — {dataBR(m.vigFim)}</td>
                 <td><span className="tag tag-neutro">{statusMeta(m)}</span></td>
-                <td><button className="btn btn-s btn-sm" onClick={()=>setEdit({...m})}>Editar</button></td>
+                <td>{podeEditarMetas&&<button className="btn btn-s btn-sm" onClick={()=>setEdit({...m})}>Editar</button>}</td>
               </tr>)}</tbody>
           </table>
         </div>
         <div className="aviso-box">As metas são gravadas por vigência. Cadastre uma nova meta para um novo período sem alterar o histórico finalizado.</div>
       </React.Fragment>}
 
-      {sub==='desc' && <React.Fragment>
+      {sub==='desc' && pode(user,'descontos.visualizar') && <React.Fragment>
         <div className="row" style={{marginBottom:12,flexWrap:'wrap'}}>
           <input type="month" style={{width:'auto'}} value={competencia} onChange={e=>setCompetencia(e.target.value)}/>
           <select style={{width:'auto'}} value={fMotorista} onChange={e=>setFMotorista(e.target.value)}><option value="">Todos os motoristas</option>{(painel.elegiveis||[]).map(u=><option key={u.motoristaId} value={u.motoristaId}>{u.nome}</option>)}</select>
@@ -2178,7 +2313,7 @@ function AdmPremiacao({st, setSt, toast}){
         <div className="totais">
           {categorias.map(c=><div className="card" key={c}><div className="v num">{((painel.pendencias||{})[c]||[]).filter(u=>!fMotorista||u.motoristaId===fMotorista).length}</div><div className="l">{c}<br/><span className="muted">pendentes</span></div></div>)}
         </div>
-        <div className="card">
+        {podeEditarDescontos&&<div className="card">
           <h3 style={{marginBottom:10}}>Conferir desconto</h3>
           {novoDesc.itemId&&<div className="aviso-box" style={{marginBottom:12}}>Editando lançamento existente. Ao salvar, o registro será atualizado sem criar duplicidade.</div>}
           <div className="form-grid">
@@ -2206,7 +2341,7 @@ function AdmPremiacao({st, setSt, toast}){
             <button className="btn btn-p" onClick={addDesc}>{novoDesc.itemId?'Salvar edição':'Salvar conferência'}</button>
             {novoDesc.itemId&&<button className="btn btn-s" onClick={()=>setNovoDesc({motoristaId:'',motoristaNome:'',categoria:'Multas',situacao:'Sem ocorrência',quantidade:0,valor:0,percentual:0,dataOcorrencia:'',motivo:'',exibir:true})}>Cancelar edição</button>}
           </div>
-        </div>
+        </div>}
         <div className="card" style={{overflowX:'auto'}}>
           <table>
             <thead><tr><th>Motorista</th><th>Mês</th><th>Item</th><th className="td-num">Valor</th><th>Origem</th><th></th></tr></thead>
@@ -2216,12 +2351,12 @@ function AdmPremiacao({st, setSt, toast}){
                 <td>{competencia.slice(5,7)+'/'+competencia.slice(0,4)}</td><td>{d.categoria}</td>
                 <td className="td-num num" style={{color:d.valor?'var(--erro)':'var(--cinza)'}}>{brl(-Math.abs(d.valor||0))}</td>
                 <td className="muted">{d.situacao}</td>
-                <td><button className="btn btn-s btn-sm" onClick={()=>setNovoDesc({
+                <td>{podeEditarDescontos&&<button className="btn btn-s btn-sm" onClick={()=>setNovoDesc({
                   itemId:d.itemId,motoristaId:d.motoristaId,motoristaNome:d.motoristaNome,
                   categoria:d.categoria,situacao:d.situacao||'Sem ocorrência',
                   quantidade:d.quantidade||0,valor:d.valor||0,percentual:d.percentual||0,
                   dataOcorrencia:d.dataOcorrencia||'',motivo:d.motivo||'',exibir:d.exibir!==false
-                })}>Editar</button></td>
+                })}>Editar</button>}</td>
               </tr>)}</tbody>
           </table>
         </div>
@@ -2257,20 +2392,46 @@ function AdmPremiacao({st, setSt, toast}){
   );
 }
 
-/* ================= ADM: CADASTROS (usuários + frota) ================= */
-function AdmCadastros({st, setSt, toast}){
-  const [sub,setSub]=useState('usuarios');
+const AREAS_E_SUBTELAS = {
+  PAINEL: [],
+  IMPORTACAO: [],
+  CONTESTACOES: [],
+  RH_FECHAMENTO: [],
+  PREMIACAO: [
+    ['PREMIACAO_PAINEL','Painel da premiação'],
+    ['PREMIACAO_METAS','Metas'],
+    ['PREMIACAO_DESCONTOS','Descontos']
+  ],
+  CHECKLIST: [
+    ['CHECKLIST_APROVACAO','Aprovação'],
+    ['CHECKLIST_PERGUNTAS','Perguntas'],
+    ['CHECKLIST_RELATORIO','Relatório']
+  ],
+  CADASTROS: [
+    ['CADASTRO_USUARIOS','Usuários'],
+    ['CADASTRO_TIPOS_VEICULO','Tipos de veículo'],
+    ['CADASTRO_VEICULOS','Veículos'],
+    ['CADASTRO_VINCULOS','Vínculos'],
+    ['CADASTRO_PERFIS','Perfis']
+  ]
+};
+const ROTULOS_AREAS={PAINEL:'Painel',IMPORTACAO:'Importação',CONTESTACOES:'Contestações',RH_FECHAMENTO:'RH / Fechamento',PREMIACAO:'Premiação',CHECKLIST:'Check list',CADASTROS:'Cadastros'};
+
+/* ================= ADM: CADASTROS (usuários + frota + perfis) ================= */
+function AdmCadastros({st, setSt, toast, user}){
+  const [sub,setSub]=useState(pode(user,'cadastro.usuarios')?'usuarios':pode(user,'cadastro.tipos_veiculo')?'tipos':pode(user,'cadastro.veiculos')?'frota':pode(user,'cadastro.vinculos')?'vinculos':'perfis');
   const [edit,setEdit]=useState(null);
   const [editTipo,setEditTipo]=useState(null);
   const [editPlaca,setEditPlaca]=useState(null);
   const [editVinculo,setEditVinculo]=useState(null);
+  const [editPerfil,setEditPerfil]=useState(null);
   const [senhaVisivel,setSenhaVisivel]=useState(false);
-  const [cad,setCad]=useState({usuarios:[],tiposVeiculo:[],veiculos:[],vinculos:[]});
+  const [cad,setCad]=useState({usuarios:[],tiposVeiculo:[],veiculos:[],vinculos:[],perfis:[]});
   const [fUsuario,setFUsuario]=useState({nome:'',perfil:'',ordem:'nome-asc'});
   const [fVeiculo,setFVeiculo]=useState({placa:'',frota:'',tipo:'',ordem:'placa-asc'});
   const [fVinculo,setFVinculo]=useState({placa:'',usuario:'',status:'',ordem:'usuario-asc'});
   const proximoUsuarioId=()=>{const maior=cad.usuarios.reduce((m,u)=>{const x=String(u.usuarioId||'').match(/^USU-(\d+)$/i);return x?Math.max(m,Number(x[1])):m;},0);return 'USU-'+String(maior+1).padStart(3,'0');};
-  const carregar=async()=>{try{const r=await ApiService.admCadastros();setCad({usuarios:r.usuarios||[],tiposVeiculo:r.tiposVeiculo||[],veiculos:r.veiculos||[],vinculos:r.vinculos||[]});}catch(e){toast('Erro ao carregar cadastros: '+e.message);}};
+  const carregar=async()=>{try{const r=await ApiService.admCadastros();setCad({usuarios:r.usuarios||[],tiposVeiculo:r.tiposVeiculo||[],veiculos:r.veiculos||[],vinculos:r.vinculos||[],perfis:r.perfis||[]});}catch(e){toast('Erro ao carregar cadastros: '+e.message);}};
   useEffect(()=>{carregar();},[]);
   const salvarUser=async()=>{
     const login=String(edit.login||'').trim().toLowerCase(), usuarioId=String(edit.usuarioId||'').trim().toUpperCase();
@@ -2329,6 +2490,21 @@ function AdmCadastros({st, setSt, toast}){
     }catch(e){toast('Erro ao '+acao+' placa: '+e.message);}
   };
   const salvarVinculo=async()=>{const u=cad.usuarios.find(x=>x.itemId===editVinculo.usuarioItemId),v=cad.veiculos.find(x=>x.itemId===editVinculo.veiculoItemId);if(!u||!v){toast('Selecione usuário e veículo.');return;}try{await ApiService.salvarVinculo({...editVinculo,usuarioId:u.usuarioId,titulo:u.usuarioId+' - '+v.placa});setEditVinculo(null);await carregar();toast('Vínculo salvo no SharePoint.');}catch(e){toast('Erro ao salvar vínculo: '+e.message);}};
+  const salvarPerfil=async()=>{
+    if(!String(editPerfil.titulo||'').trim()){toast('Informe o nome do perfil.');return;}
+    const subtelasValidas=(editPerfil.subtelasAcesso||[]).filter(c=>(editPerfil.areasAcesso||[]).some(a=>(AREAS_E_SUBTELAS[a]||[]).some(([codigo])=>codigo===c)));
+    try{await ApiService.salvarPerfil({...editPerfil,titulo:String(editPerfil.titulo).toUpperCase(),subtelasAcesso:subtelasValidas});setEditPerfil(null);await carregar();toast('Perfil salvo no SharePoint.');}
+    catch(e){toast('Erro ao salvar perfil: '+e.message);}
+  };
+  const alternarArea=(area)=>{
+    const marcada=(editPerfil.areasAcesso||[]).includes(area);
+    const areas=marcada?(editPerfil.areasAcesso||[]).filter(a=>a!==area):[...(editPerfil.areasAcesso||[]),area];
+    const codigos=(AREAS_E_SUBTELAS[area]||[]).map(([c])=>c);
+    const subtelas=marcada?(editPerfil.subtelasAcesso||[]).filter(c=>!codigos.includes(c)):(editPerfil.subtelasAcesso||[]);
+    setEditPerfil({...editPerfil,areasAcesso:areas,subtelasAcesso:subtelas});
+  };
+  const alternarSubtela=(codigo)=>setEditPerfil({...editPerfil,subtelasAcesso:(editPerfil.subtelasAcesso||[]).includes(codigo)?(editPerfil.subtelasAcesso||[]).filter(c=>c!==codigo):[...(editPerfil.subtelasAcesso||[]),codigo]});
+  const podeSub=(codigo)=>pode(user,codigo);
   /* A edição da placa deve sempre exibir o cadastro central. O status ou a
      classificação da frota não podem apagar as opções do seletor; o valor
      antigo continua identificado separadamente como histórico. */
@@ -2367,15 +2543,16 @@ function AdmCadastros({st, setSt, toast}){
       <div className="row" style={{flexWrap:'wrap'}}>
         <h2 className="grow">Cadastros</h2>
         <div className="subtabs">
-          <button className={'subtab'+(sub==='usuarios'?' on':'')} onClick={()=>setSub('usuarios')}>Usuários e acessos</button>
-          <button className={'subtab'+(sub==='tipos'?' on':'')} onClick={()=>setSub('tipos')}>Tipos de veículo</button>
-          <button className={'subtab'+(sub==='frota'?' on':'')} onClick={()=>setSub('frota')}>Veículos</button>
-          <button className={'subtab'+(sub==='vinculos'?' on':'')} onClick={()=>setSub('vinculos')}>Vínculos</button>
+          {podeSub('cadastro.usuarios')&&<button className={'subtab'+(sub==='usuarios'?' on':'')} onClick={()=>setSub('usuarios')}>Usuários e acessos</button>}
+          {podeSub('cadastro.tipos_veiculo')&&<button className={'subtab'+(sub==='tipos'?' on':'')} onClick={()=>setSub('tipos')}>Tipos de veículo</button>}
+          {podeSub('cadastro.veiculos')&&<button className={'subtab'+(sub==='frota'?' on':'')} onClick={()=>setSub('frota')}>Veículos</button>}
+          {podeSub('cadastro.vinculos')&&<button className={'subtab'+(sub==='vinculos'?' on':'')} onClick={()=>setSub('vinculos')}>Vínculos</button>}
+          {podeSub('cadastro.perfis')&&<button className={'subtab'+(sub==='perfis'?' on':'')} onClick={()=>setSub('perfis')}>Perfis</button>}
         </div>
       </div>
 
-      {sub==='usuarios' && <React.Fragment>
-        <div><button className="btn btn-p" onClick={()=>{setSenhaVisivel(false);setEdit({nome:'',usuarioId:proximoUsuarioId(),login:'',telefone:'',perfil:'MOTORISTA',tipoFrotaAcesso:'FROTA PESADA',ativo:true,novaSenha:'',perms:{cargas:true,premiacao:true,checklist:true,historico:true,administracao:false}})}}>+ Novo usuário</button></div>
+      {sub==='usuarios' && podeSub('cadastro.usuarios') && <React.Fragment>
+        <div><button className="btn btn-p" onClick={()=>{setSenhaVisivel(false);const p=cad.perfis.find(x=>x.titulo==='MOTORISTA');setEdit({nome:'',usuarioId:proximoUsuarioId(),login:'',telefone:'',perfil:'MOTORISTA',perfilAcessoId:p?.itemId||'',tipoFrotaAcesso:'FROTA PESADA',ativo:true,novaSenha:'',perms:{cargas:true,premiacao:true,checklist:true,historico:true,administracao:false}})}}>+ Novo usuário</button></div>
         <div className="filtros-cadastro">
           <div><label>Filtrar por nome</label><input value={fUsuario.nome} onChange={e=>setFUsuario({...fUsuario,nome:e.target.value})} placeholder="Digite o nome"/></div>
           <div><label>Perfil</label><select value={fUsuario.perfil} onChange={e=>setFUsuario({...fUsuario,perfil:e.target.value})}><option value="">Todos os perfis</option>{[...new Set(cad.usuarios.map(u=>u.perfil).filter(Boolean))].sort(compararTexto).map(p=><option key={p}>{p}</option>)}</select></div>
@@ -2401,7 +2578,7 @@ function AdmCadastros({st, setSt, toast}){
         </div>
       </React.Fragment>}
 
-      {sub==='tipos' && <React.Fragment>
+      {sub==='tipos' && podeSub('cadastro.tipos_veiculo') && <React.Fragment>
         <div><button className="btn btn-p" onClick={()=>setEditTipo({nome:'',tipoFrota:'FROTA PESADA',pbtKg:0,capacidadeCargaKg:0,toleranciaSuperiorKg:0,limiteInferiorKg:0,exigeAprovacaoAbaixo:false,ativo:true,observacao:''})}>+ Novo tipo de veículo</button></div>
         <div className="card" style={{overflowX:'auto'}}>
           <table><thead><tr><th>Tipo de veículo</th><th>Frota</th><th className="td-num">PBT</th><th className="td-num">Capacidade</th><th className="td-num">Tolerância superior</th><th className="td-num">Limite inferior</th><th>Status</th><th>Ações</th></tr></thead>
@@ -2410,7 +2587,7 @@ function AdmCadastros({st, setSt, toast}){
         <div className="aviso-box">Este cadastro é a fonte única dos tipos usados nos veículos, nas metas e nos filtros. Os limites de peso ficam armazenados para a futura auditoria, sem gerar bloqueio nesta etapa.</div>
       </React.Fragment>}
 
-      {sub==='frota' && <React.Fragment>
+      {sub==='frota' && podeSub('cadastro.veiculos') && <React.Fragment>
         <div><button className="btn btn-p" onClick={()=>setEditPlaca({placa:'',tipoFrota:'FROTA PESADA',tipoModelo:'',ativo:true,usoCompartilhado:false})}>+ Novo veículo</button></div>
         <div className="filtros-cadastro">
           <div><label>Placa</label><input value={fVeiculo.placa} onChange={e=>setFVeiculo({...fVeiculo,placa:e.target.value})} placeholder="Filtrar placa"/></div>
@@ -2435,7 +2612,7 @@ function AdmCadastros({st, setSt, toast}){
         <div className="aviso-box">A classificação da frota define qual modelo de check list o veículo recebe. Nos pesados, o tipo de veículo define também a meta da premiação; o vínculo com o motorista é usado na importação quando a planilha não traz a coluna de motorista.</div>
       </React.Fragment>}
 
-      {sub==='vinculos' && <React.Fragment>
+      {sub==='vinculos' && podeSub('cadastro.vinculos') && <React.Fragment>
         <div><button className="btn btn-p" onClick={()=>setEditVinculo({vinculoId:'VIN-'+String(cad.vinculos.length+1).padStart(3,'0'),usuarioItemId:'',veiculoItemId:'',dataInicio:HOJE,dataFim:'',ativo:true,principal:true,observacao:''})}>+ Novo vínculo</button></div>
         <div className="filtros-cadastro">
           <div><label>Placa</label><input value={fVinculo.placa} onChange={e=>setFVinculo({...fVinculo,placa:e.target.value})} placeholder="Filtrar placa"/></div>
@@ -2444,6 +2621,14 @@ function AdmCadastros({st, setSt, toast}){
           <div><label>Ordenar</label><select value={fVinculo.ordem} onChange={e=>setFVinculo({...fVinculo,ordem:e.target.value})}><option value="usuario-asc">Usuário A–Z</option><option value="usuario-desc">Usuário Z–A</option><option value="status-asc">Status A–Z</option><option value="status-desc">Status Z–A</option><option value="placa-asc">Placa crescente</option><option value="placa-desc">Placa decrescente</option></select></div>
         </div>
         <div className="card" style={{overflowX:'auto'}}><table><thead><tr><th>Vínculo</th><th>Usuário</th><th>Veículo</th><th>Início</th><th>Fim</th><th>Principal</th><th>Status</th><th></th></tr></thead><tbody>{vinculosFiltrados.map(v=><tr key={v.itemId}><td>{v.vinculoId}</td><td><b>{v.usuarioNome}</b></td><td>{v.placa}</td><td>{dataBR((v.dataInicio||'').slice(0,10))}</td><td>{v.dataFim?dataBR(v.dataFim.slice(0,10)):'—'}</td><td>{v.principal?'Sim':'Não'}</td><td><span className={'tag '+(v.dataFim?'tag-neutro':v.ativo?'tag-ok':'tag-neg')}>{statusVinculo(v)}</span></td><td><button className="btn btn-s btn-sm" onClick={()=>setEditVinculo({...v})}>Editar</button></td></tr>)}</tbody></table></div>
+      </React.Fragment>}
+
+      {sub==='perfis' && podeSub('cadastro.perfis') && <React.Fragment>
+        <div><button className="btn btn-p" onClick={()=>setEditPerfil({titulo:'',descricao:'',areasAcesso:[],subtelasAcesso:[],nivelAcesso:'SOMENTE_VISUALIZAR',permiteModulosApp:true,ativo:true})}>+ Novo perfil</button></div>
+        <div className="card" style={{overflowX:'auto'}}>
+          <table><thead><tr><th>Perfil</th><th>Descrição</th><th>Áreas</th><th>Subtelas</th><th>Nível</th><th>Módulos</th><th>Status</th><th></th></tr></thead>
+          <tbody>{cad.perfis.map(p=><tr key={p.itemId}><td><b>{p.titulo}</b></td><td>{p.descricao||'—'}</td><td>{(p.areasAcesso||[]).join(', ')||'—'}</td><td>{(p.subtelasAcesso||[]).length}</td><td><span className="tag tag-ok">{p.nivelAcesso}</span></td><td>{p.permiteModulosApp?'Sim':'Não'}</td><td><span className={'tag '+(p.ativo?'tag-ok':'tag-neutro')}>{p.ativo?'Ativo':'Inativo'}</span></td><td><button className="btn btn-s btn-sm" onClick={()=>setEditPerfil({...p,areasAcesso:[...(p.areasAcesso||[])],subtelasAcesso:[...(p.subtelasAcesso||[])]})}>Editar</button></td></tr>)}</tbody></table>
+        </div>
       </React.Fragment>}
 
       {edit &&
@@ -2455,9 +2640,11 @@ function AdmCadastros({st, setSt, toast}){
               <div><label>Telefone</label><input value={edit.telefone||''} onChange={e=>setEdit({...edit,telefone:e.target.value})}/></div>
             </div>
             <div><label>Perfil</label>
-              <select value={edit.perfil} onChange={e=>setEdit({...edit, perfil:e.target.value})}>
-                <option>MOTORISTA</option><option>ADMINISTRADOR</option><option>VISUALIZADOR</option>
-              </select></div>
+              <select value={edit.perfilAcessoId||''} onChange={e=>{const p=cad.perfis.find(x=>x.itemId===e.target.value);setEdit({...edit,perfilAcessoId:e.target.value,perfil:p?.titulo||edit.perfil})}}>
+                <option value="">Usar perfil antigo temporariamente</option>
+                {cad.perfis.filter(p=>p.ativo||p.itemId===edit.perfilAcessoId).map(p=><option key={p.itemId} value={p.itemId}>{p.titulo}</option>)}
+              </select>
+              {!edit.perfilAcessoId&&<div className="muted" style={{fontSize:12,marginTop:5}}>Sem vínculo novo: permanece o perfil antigo “{edit.perfil}”.</div>}</div>
             <div><label>Acesso à frota</label><select value={edit.tipoFrotaAcesso} onChange={e=>setEdit({...edit,tipoFrotaAcesso:e.target.value})}><option>FROTA PESADA</option><option>FROTA LEVE</option><option>AMBAS</option></select></div>
             <div><label>Status do usuário</label><select value={edit.ativo?'s':'n'} onChange={e=>setEdit({...edit,ativo:e.target.value==='s'})}><option value="s">Ativo</option><option value="n">Inativo</option></select></div>
             <div>
@@ -2498,6 +2685,24 @@ function AdmCadastros({st, setSt, toast}){
           </div>
         </Modal>}
       {editVinculo && <Modal titulo="Vínculo usuário × veículo" onClose={()=>setEditVinculo(null)}><div style={{display:'flex',flexDirection:'column',gap:12}}><div><label>Usuário</label><select value={editVinculo.usuarioItemId} onChange={e=>setEditVinculo({...editVinculo,usuarioItemId:e.target.value})}><option value="">Selecionar...</option>{cad.usuarios.filter(u=>u.ativo).map(u=><option key={u.itemId} value={u.itemId}>{u.nome}</option>)}</select></div><div><label>Veículo</label><select value={editVinculo.veiculoItemId} onChange={e=>setEditVinculo({...editVinculo,veiculoItemId:e.target.value})}><option value="">Selecionar...</option>{cad.veiculos.filter(v=>v.ativo&&!v.usoCompartilhado).map(v=><option key={v.itemId} value={v.itemId}>{v.placa}</option>)}</select></div><div className="form-grid"><div><label>Início</label><input type="date" value={(editVinculo.dataInicio||'').slice(0,10)} onChange={e=>setEditVinculo({...editVinculo,dataInicio:e.target.value})}/></div><div><label>Fim</label><input type="date" value={(editVinculo.dataFim||'').slice(0,10)} onChange={e=>setEditVinculo({...editVinculo,dataFim:e.target.value,ativo:!e.target.value})}/></div></div><div><label>Principal?</label><select value={editVinculo.principal?'s':'n'} onChange={e=>setEditVinculo({...editVinculo,principal:e.target.value==='s'})}><option value="s">Sim</option><option value="n">Não</option></select></div><div><label>Observação</label><textarea value={editVinculo.observacao||''} onChange={e=>setEditVinculo({...editVinculo,observacao:e.target.value})}/></div><button className="btn btn-p" onClick={salvarVinculo}>Salvar vínculo</button></div></Modal>}
+      {editPerfil && <Modal titulo={editPerfil.itemId?'Editar perfil':'Novo perfil'} onClose={()=>setEditPerfil(null)}>
+        <div style={{display:'flex',flexDirection:'column',gap:12}}>
+          <div><label>Nome do perfil</label><input value={editPerfil.titulo||''} onChange={e=>setEditPerfil({...editPerfil,titulo:e.target.value.toUpperCase()})}/></div>
+          <div><label>Descrição</label><textarea value={editPerfil.descricao||''} onChange={e=>setEditPerfil({...editPerfil,descricao:e.target.value})}/></div>
+          <div className="form-grid">
+            <div><label>Nível de acesso</label><select value={editPerfil.nivelAcesso||'SOMENTE_VISUALIZAR'} onChange={e=>setEditPerfil({...editPerfil,nivelAcesso:e.target.value})}><option>SOMENTE_VISUALIZAR</option><option>GERENCIAR</option><option>ADMIN_COMPLETO</option></select></div>
+            <div><label>Permite módulos do app?</label><select value={editPerfil.permiteModulosApp?'s':'n'} onChange={e=>setEditPerfil({...editPerfil,permiteModulosApp:e.target.value==='s'})}><option value="s">Sim</option><option value="n">Não</option></select></div>
+            <div><label>Status</label><select value={editPerfil.ativo?'s':'n'} onChange={e=>setEditPerfil({...editPerfil,ativo:e.target.value==='s'})}><option value="s">Ativo</option><option value="n">Inativo</option></select></div>
+          </div>
+          <div><label>Áreas e subtelas</label>
+            {Object.entries(AREAS_E_SUBTELAS).map(([area,subtelas])=><div key={area} className="card" style={{marginTop:8,padding:12}}>
+              <label style={{display:'flex',gap:8,alignItems:'center',cursor:'pointer'}}><input type="checkbox" checked={(editPerfil.areasAcesso||[]).includes(area)} onChange={()=>alternarArea(area)}/><b>{ROTULOS_AREAS[area]}</b></label>
+              {(editPerfil.areasAcesso||[]).includes(area)&&subtelas.length>0&&<div className="subtabs" style={{marginTop:8}}>{subtelas.map(([codigo,rotulo])=><button type="button" key={codigo} className={'subtab'+((editPerfil.subtelasAcesso||[]).includes(codigo)?' on':'')} onClick={()=>alternarSubtela(codigo)}>{rotulo}</button>)}</div>}
+            </div>)}
+          </div>
+          <button className="btn btn-p" onClick={salvarPerfil}>Salvar perfil</button>
+        </div>
+      </Modal>}
       {editTipo && <Modal titulo={editTipo.itemId?'Editar tipo de veículo':'Novo tipo de veículo'} onClose={()=>setEditTipo(null)}>
         <div className="form-grid">
           <div style={{gridColumn:'1/-1'}}><label>Nome do tipo de veículo</label><input value={editTipo.nome} onChange={e=>setEditTipo({...editTipo,nome:e.target.value.toUpperCase()})}/></div>
@@ -2519,10 +2724,18 @@ function AdmCadastros({st, setSt, toast}){
 /* ================= SHELL ADM ================= */
 function AdmApp({st, setSt, user, onSair, toast}){
   const dados = usarDadosMensais(st);
-  const [aba,setAba]=useState('painel');
-  const abas=[['painel','Painel'],['importar','Importar'],['contest','Contestações'],['check','Check list'],['prem','Premiação'],['cad','Cadastros']];
+  const abas=[
+    pode(user,'painel_rh.visualizar')&&['rh','Fechamento RH'],
+    pode(user,'painel.visualizar')&&['painel','Painel'],
+    pode(user,'importar.criar')&&['importar','Importar'],
+    pode(user,'contestacoes.visualizar')&&['contest','Contestações'],
+    (pode(user,'checklist.aprovacao')||pode(user,'checklist.perguntas')||pode(user,'checklist.relatorio'))&&['check','Check list'],
+    (pode(user,'premiacao.visualizar')||pode(user,'metas.visualizar')||pode(user,'descontos.visualizar'))&&['prem','Premiação'],
+    (pode(user,'cadastro.usuarios')||pode(user,'cadastro.tipos_veiculo')||pode(user,'cadastro.veiculos')||pode(user,'cadastro.vinculos')||pode(user,'cadastro.perfis'))&&['cad','Cadastros']
+  ].filter(Boolean);
+  const [aba,setAba]=useState(abas[0]?.[0]||'');
   useEffect(()=>{
-    if(CONFIG.MODO_DEMONSTRACAO) return;
+    if(CONFIG.MODO_DEMONSTRACAO||!pode(user,'checklist.administrar')) return;
     ApiService.admListarChecklists().then(r=>{
       const vindos=(r.itens||r.checklists||[]).map(x=>({
         id:x.protocolo||x.id, idLocal:x.idLocal||'', motorista:x.motoristaNome||'', placa:x.placa||'',
@@ -2547,12 +2760,13 @@ function AdmApp({st, setSt, user, onSair, toast}){
         </div>
       </div>
       <div className="abody">
+        {aba==='rh' && <PainelRH st={st} dados={dados}/>}
         {aba==='painel' && <AdmPainel st={st} dados={dados}/>}
         {aba==='importar' && <AdmImportar st={st} setSt={setSt} toast={toast}/>}
         {aba==='contest' && <AdmContestacoes st={st} setSt={setSt} toast={toast}/>}
-        {aba==='check' && <AdmChecklist st={st} setSt={setSt} toast={toast}/>}
-        {aba==='prem' && <AdmPremiacao st={st} setSt={setSt} toast={toast}/>}
-        {aba==='cad' && <AdmCadastros st={st} setSt={setSt} toast={toast}/>}
+        {aba==='check' && <AdmChecklist st={st} setSt={setSt} toast={toast} user={user}/>}
+        {aba==='prem' && <AdmPremiacao st={st} setSt={setSt} toast={toast} user={user}/>}
+        {aba==='cad' && <AdmCadastros st={st} setSt={setSt} toast={toast} user={user}/>}
       </div>
     </div>
   );
@@ -2566,16 +2780,16 @@ function App(){
   const tRef = useRef(null);
   const toast=(m)=>{ setToastMsg(m); clearTimeout(tRef.current); tRef.current=setTimeout(()=>setToastMsg(''),3200); };
   const userAtual = user ? st.usuarios.find(u=>u.id===user.id) || user : null;
-  const perfilAtual = String(userAtual?.perfil||'').trim().toLowerCase();
-  const ehMotorista = perfilAtual==='motorista';
-  const ehAdministrador = perfilAtual==='adm' || perfilAtual==='administrador';
-  const ehVisualizador = perfilAtual==='visualizador';
+  const ehMotorista = temPerfil(userAtual,'MOTORISTA');
+  const acessoGestao = pode(userAtual,'painel_rh.visualizar')||
+    pode(userAtual,'painel.visualizar')||pode(userAtual,'premiacao.visualizar')&&
+    !ehMotorista||permissoesDoUsuario(userAtual).has('*');
   return (
     <React.Fragment>
       {!userAtual && <Login st={st} onLogin={setUser}/>}
-      {userAtual && ehMotorista && <MotoristaApp st={st} setSt={setSt} user={userAtual} onSair={()=>{ApiService.sair();setUser(null);}} toast={toast}/>}
-      {userAtual && (ehAdministrador || ehVisualizador) && <AdmApp st={st} setSt={setSt} user={userAtual} onSair={()=>{ApiService.sair();setUser(null);}} toast={toast}/>}
-      {userAtual && !ehMotorista && !ehAdministrador && !ehVisualizador && (
+      {userAtual && ehMotorista && !acessoGestao && <MotoristaApp st={st} setSt={setSt} user={userAtual} onSair={()=>{ApiService.sair();setUser(null);}} toast={toast}/>}
+      {userAtual && acessoGestao && <AdmApp st={st} setSt={setSt} user={userAtual} onSair={()=>{ApiService.sair();setUser(null);}} toast={toast}/>}
+      {userAtual && !ehMotorista && !acessoGestao && (
         <div className="login-wrap"><div className="login-card">
           <div className="marca">Bocchi <em>Frota</em></div>
           <div className="erro-box">O perfil “{userAtual.perfil||'não informado'}” não está configurado para acesso.</div>
