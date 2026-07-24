@@ -154,7 +154,35 @@ th.td-num{text-align:right}
 @media(min-width:640px){.overlay{align-items:center; padding:20px}}
 .modal{background:var(--branco); width:100%; max-width:480px; border-radius:20px 20px 0 0; padding:22px 20px; max-height:88vh; overflow-y:auto}
 @media(min-width:640px){.modal{border-radius:20px}}
+.modal.modal-lg{max-width:900px}
 .modal h3{margin-bottom:12px}
+.perfil-acessos{display:flex; flex-direction:column; gap:10px; margin-top:8px}
+.perfil-area{border:1px solid var(--linha); border-radius:14px; background:#fff; overflow:hidden; box-shadow:0 3px 10px rgba(20,54,40,.06); transition:border-color .18s,box-shadow .18s}
+.perfil-area.aberta{border-color:rgba(25,91,65,.48); box-shadow:0 5px 16px rgba(20,54,40,.11)}
+.perfil-area-cabecalho{width:100%; min-height:60px; padding:14px 16px; display:grid; grid-template-columns:24px minmax(0,1fr) auto; align-items:center; gap:12px; text-align:left; background:#fff; color:var(--tinta); cursor:pointer}
+.perfil-area-cabecalho:hover{background:#f7faf8}
+.perfil-area.aberta .perfil-area-cabecalho{background:#f2f8f4}
+.perfil-area-cabecalho input{width:18px; height:18px; accent-color:var(--mata); pointer-events:none}
+.perfil-area-titulo{display:flex; flex-direction:column; gap:3px}
+.perfil-area-titulo b{font-size:14px; color:var(--mata)}
+.perfil-area-resumo{font-size:12px; color:var(--cinza); font-weight:500}
+.perfil-area-seta{width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; background:#edf3ef; color:var(--mata); font-size:18px; font-weight:800; transition:transform .2s,background .2s}
+.perfil-area.aberta .perfil-area-seta{transform:rotate(180deg); background:var(--mata); color:#fff}
+.perfil-subtelas{padding:14px 16px 16px; border-top:1px solid var(--linha); background:#fbfcfb}
+.perfil-subtelas-titulo{display:flex; justify-content:space-between; gap:12px; align-items:center; margin-bottom:10px}
+.perfil-subtelas-titulo span:first-child{font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:var(--cinza)}
+.perfil-subtelas-grid{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px}
+.perfil-subtela{min-height:48px; padding:11px 13px; border:1.5px solid var(--linha); border-radius:10px; background:#fff; display:flex; align-items:center; gap:10px; text-align:left; color:var(--tinta); font-family:'Archivo'; font-weight:700; cursor:pointer}
+.perfil-subtela:hover{border-color:rgba(25,91,65,.55); background:#f7faf8}
+.perfil-subtela.on{border-color:var(--mata); background:#e9f4ed; color:var(--mata)}
+.perfil-subtela-check{width:20px; height:20px; flex:0 0 20px; border:1.5px solid #aab5ae; border-radius:5px; display:flex; align-items:center; justify-content:center; background:#fff; color:#fff; font-size:13px}
+.perfil-subtela.on .perfil-subtela-check{background:var(--mata); border-color:var(--mata)}
+.perfil-sem-subtelas{padding:12px 14px; border-radius:10px; background:#f1f3f2; color:var(--cinza); font-size:12.5px}
+@media(max-width:639px){
+  .modal.modal-lg{max-width:none}
+  .perfil-subtelas-grid{grid-template-columns:1fr}
+  .perfil-area-cabecalho{padding:13px 12px}
+}
 .toast{position:fixed; bottom:88px; left:50%; transform:translateX(-50%); background:var(--tinta); color:#fff; padding:11px 18px; border-radius:99px; font-weight:600; font-size:13.5px; z-index:200; box-shadow:var(--sombra); white-space:nowrap; max-width:92vw; overflow:hidden; text-overflow:ellipsis}
 .aviso-box{background:var(--aviso); border-radius:10px; padding:10px 12px; font-size:12.5px; color:#6B5200}
 .erro-box{background:var(--erro-claro); border-radius:10px; padding:10px 12px; font-size:13px; color:var(--erro)}
@@ -731,10 +759,10 @@ function apuracaoMes(st, dados, motNome, mes){
 
 /* ================= COMPONENTES BASE ================= */
 function Toast({msg}){ return msg ? <div className="toast">{msg}</div> : null; }
-function Modal({titulo, onClose, children}){
+function Modal({titulo, onClose, children, large=false}){
   return (
     <div className="overlay" onClick={e=>{if(e.target===e.currentTarget) onClose();}}>
-      <div className="modal">
+      <div className={'modal'+(large?' modal-lg':'')}>
         <div className="row" style={{marginBottom:8}}>
           <h3 className="grow">{titulo}</h3>
           <button className="btn btn-g btn-sm" onClick={onClose}>Fechar</button>
@@ -2685,7 +2713,7 @@ function AdmCadastros({st, setSt, toast, user}){
           </div>
         </Modal>}
       {editVinculo && <Modal titulo="Vínculo usuário × veículo" onClose={()=>setEditVinculo(null)}><div style={{display:'flex',flexDirection:'column',gap:12}}><div><label>Usuário</label><select value={editVinculo.usuarioItemId} onChange={e=>setEditVinculo({...editVinculo,usuarioItemId:e.target.value})}><option value="">Selecionar...</option>{cad.usuarios.filter(u=>u.ativo).map(u=><option key={u.itemId} value={u.itemId}>{u.nome}</option>)}</select></div><div><label>Veículo</label><select value={editVinculo.veiculoItemId} onChange={e=>setEditVinculo({...editVinculo,veiculoItemId:e.target.value})}><option value="">Selecionar...</option>{cad.veiculos.filter(v=>v.ativo&&!v.usoCompartilhado).map(v=><option key={v.itemId} value={v.itemId}>{v.placa}</option>)}</select></div><div className="form-grid"><div><label>Início</label><input type="date" value={(editVinculo.dataInicio||'').slice(0,10)} onChange={e=>setEditVinculo({...editVinculo,dataInicio:e.target.value})}/></div><div><label>Fim</label><input type="date" value={(editVinculo.dataFim||'').slice(0,10)} onChange={e=>setEditVinculo({...editVinculo,dataFim:e.target.value,ativo:!e.target.value})}/></div></div><div><label>Principal?</label><select value={editVinculo.principal?'s':'n'} onChange={e=>setEditVinculo({...editVinculo,principal:e.target.value==='s'})}><option value="s">Sim</option><option value="n">Não</option></select></div><div><label>Observação</label><textarea value={editVinculo.observacao||''} onChange={e=>setEditVinculo({...editVinculo,observacao:e.target.value})}/></div><button className="btn btn-p" onClick={salvarVinculo}>Salvar vínculo</button></div></Modal>}
-      {editPerfil && <Modal titulo={editPerfil.itemId?'Editar perfil':'Novo perfil'} onClose={()=>setEditPerfil(null)}>
+      {editPerfil && <Modal large titulo={editPerfil.itemId?'Editar perfil':'Novo perfil'} onClose={()=>setEditPerfil(null)}>
         <div style={{display:'flex',flexDirection:'column',gap:12}}>
           <div><label>Nome do perfil</label><input value={editPerfil.titulo||''} onChange={e=>setEditPerfil({...editPerfil,titulo:e.target.value.toUpperCase()})}/></div>
           <div><label>Descrição</label><textarea value={editPerfil.descricao||''} onChange={e=>setEditPerfil({...editPerfil,descricao:e.target.value})}/></div>
@@ -2695,10 +2723,39 @@ function AdmCadastros({st, setSt, toast, user}){
             <div><label>Status</label><select value={editPerfil.ativo?'s':'n'} onChange={e=>setEditPerfil({...editPerfil,ativo:e.target.value==='s'})}><option value="s">Ativo</option><option value="n">Inativo</option></select></div>
           </div>
           <div><label>Áreas e subtelas</label>
-            {Object.entries(AREAS_E_SUBTELAS).map(([area,subtelas])=><div key={area} className="card" style={{marginTop:8,padding:12}}>
-              <label style={{display:'flex',gap:8,alignItems:'center',cursor:'pointer'}}><input type="checkbox" checked={(editPerfil.areasAcesso||[]).includes(area)} onChange={()=>alternarArea(area)}/><b>{ROTULOS_AREAS[area]}</b></label>
-              {(editPerfil.areasAcesso||[]).includes(area)&&subtelas.length>0&&<div className="subtabs" style={{marginTop:8}}>{subtelas.map(([codigo,rotulo])=><button type="button" key={codigo} className={'subtab'+((editPerfil.subtelasAcesso||[]).includes(codigo)?' on':'')} onClick={()=>alternarSubtela(codigo)}>{rotulo}</button>)}</div>}
-            </div>)}
+            <div className="perfil-acessos">
+              {Object.entries(AREAS_E_SUBTELAS).map(([area,subtelas])=>{
+                const areaAtiva=(editPerfil.areasAcesso||[]).includes(area);
+                const qtdMarcadas=subtelas.filter(([codigo])=>(editPerfil.subtelasAcesso||[]).includes(codigo)).length;
+                return <div key={area} className={'perfil-area'+(areaAtiva?' aberta':'')}>
+                  <button type="button" className="perfil-area-cabecalho" onClick={()=>alternarArea(area)} aria-expanded={areaAtiva}>
+                    <input type="checkbox" checked={areaAtiva} readOnly tabIndex="-1"/>
+                    <span className="perfil-area-titulo">
+                      <b>{ROTULOS_AREAS[area]}</b>
+                      <span className="perfil-area-resumo">{areaAtiva?(subtelas.length?qtdMarcadas+' de '+subtelas.length+' subtelas liberadas':'Área liberada'):'Clique para liberar e abrir'}</span>
+                    </span>
+                    <span className="perfil-area-seta" aria-hidden="true">⌄</span>
+                  </button>
+                  {areaAtiva&&<div className="perfil-subtelas">
+                    {subtelas.length>0?<React.Fragment>
+                      <div className="perfil-subtelas-titulo">
+                        <span>Subtelas disponíveis</span>
+                        <span className="muted">{qtdMarcadas}/{subtelas.length} selecionadas</span>
+                      </div>
+                      <div className="perfil-subtelas-grid">
+                        {subtelas.map(([codigo,rotulo])=>{
+                          const subtelaAtiva=(editPerfil.subtelasAcesso||[]).includes(codigo);
+                          return <button type="button" key={codigo} className={'perfil-subtela'+(subtelaAtiva?' on':'')} onClick={()=>alternarSubtela(codigo)}>
+                            <span className="perfil-subtela-check">{subtelaAtiva?'✓':''}</span>
+                            <span>{rotulo}</span>
+                          </button>;
+                        })}
+                      </div>
+                    </React.Fragment>:<div className="perfil-sem-subtelas">Esta área não possui subdivisões. Ao liberá-la, a tela principal já fica disponível para o perfil.</div>}
+                  </div>}
+                </div>;
+              })}
+            </div>
           </div>
           <button className="btn btn-p" onClick={salvarPerfil}>Salvar perfil</button>
         </div>
