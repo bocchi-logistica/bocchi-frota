@@ -218,7 +218,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 90000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '1.10.5-sem-cadastros-fixos'
+  VERSAO: '1.10.7-painel-rh-api'
 };
 
 /* ============================================================================
@@ -1674,20 +1674,44 @@ function PainelRH({st,dados}){
   const [quadrimestre,setQuadrimestre]=useState('2');
   const [nome,setNome]=useState('');
   const [aberto,setAberto]=useState('');
+  const [usuariosRH,setUsuariosRH]=useState([]);
   const [apuracoesRH,setApuracoesRH]=useState({});
   const [carregandoRH,setCarregandoRH]=useState(false);
   const [erroRH,setErroRH]=useState('');
   const mesesPorQuad={'1':['01','02','03','04'],'2':['05','06','07','08'],'3':['09','10','11','12']};
   const meses=(mesesPorQuad[quadrimestre]||mesesPorQuad['1']).map(m=>m+'/'+ano);
-  const motoristas=st.usuarios
+  const motoristas=usuariosRH
     .filter(u=>normalizarPerfil(u.perfil)==='MOTORISTA')
+    .filter(u=>u.ativo!==false)
     .filter(u=>String(u.nome||'').toLocaleLowerCase('pt-BR').includes(nome.toLocaleLowerCase('pt-BR')))
     .sort((a,b)=>String(a.nome).localeCompare(String(b.nome),'pt-BR'));
   useEffect(()=>{
+    if(CONFIG.MODO_DEMONSTRACAO){
+      setUsuariosRH(st.usuarios||[]);
+      return;
+    }
+    let ativo=true;
+    setCarregandoRH(true);
+    setErroRH('');
+    ApiService.admCadastros()
+      .then(r=>{
+        if(!ativo) return;
+        setUsuariosRH(Array.isArray(r.usuarios)?r.usuarios:[]);
+      })
+      .catch(e=>{
+        if(!ativo) return;
+        setUsuariosRH([]);
+        setErroRH('Não foi possível carregar os motoristas: '+e.message);
+      })
+      .finally(()=>{if(ativo)setCarregandoRH(false)});
+    return()=>{ativo=false};
+  },[]);
+  useEffect(()=>{
     if(CONFIG.MODO_DEMONSTRACAO) return;
     let ativo=true;
-    const nomes=[...new Set(st.usuarios
+    const nomes=[...new Set(usuariosRH
       .filter(u=>normalizarPerfil(u.perfil)==='MOTORISTA')
+      .filter(u=>u.ativo!==false)
       .map(u=>String(u.nome||'').trim()).filter(Boolean))];
     if(!nomes.length) return;
     setCarregandoRH(true); setErroRH('');
@@ -1712,7 +1736,7 @@ function PainelRH({st,dados}){
       if(ativo&&falhas) setErroRH(`${falhas} motorista(s) não puderam ser calculados. Abra a auditoria para conferir.`);
     })().finally(()=>{if(ativo)setCarregandoRH(false)});
     return()=>{ativo=false};
-  },[st.usuarios]);
+  },[usuariosRH]);
   const linhas=motoristas.map(u=>{
     const chave=normalizar(u.nome);
     const vindas=Array.isArray(apuracoesRH[chave])?apuracoesRH[chave]:[];
@@ -1774,8 +1798,70 @@ function PainelRH({st,dados}){
 
 function AdmPainel({st, dados}){
   const [mes,setMes]=useState(MES_ATUAL);
-  const motoristas = st.usuarios.filter(u=>u.perfil==='motorista');
-  const linhas = motoristas.map(u=>({u, ...apuracaoMes(st, dados, u.nome, mes)}))
+  const [usuariosPainel,setUsuariosPainel]=useState([]);
+  const [apuracoesPainel,setApuracoesPainel]=useState({});
+  const [carregandoPainel,setCarregandoPainel]=useState(false);
+  const [erroPainel,setErroPainel]=useState('');
+  const motoristas = usuariosPainel
+    .filter(u=>normalizarPerfil(u.perfil)==='MOTORISTA')
+    .filter(u=>u.ativo!==false);
+  useEffect(()=>{
+    if(CONFIG.MODO_DEMONSTRACAO){
+      setUsuariosPainel(st.usuarios||[]);
+      return;
+    }
+    let ativo=true;
+    setCarregandoPainel(true);
+    setErroPainel('');
+    ApiService.admCadastros()
+      .then(r=>{
+        if(!ativo) return;
+        setUsuariosPainel(Array.isArray(r.usuarios)?r.usuarios:[]);
+      })
+      .catch(e=>{
+        if(!ativo) return;
+        setUsuariosPainel([]);
+        setErroPainel('Não foi possível carregar os motoristas: '+e.message);
+      })
+      .finally(()=>{if(ativo)setCarregandoPainel(false)});
+    return()=>{ativo=false};
+  },[]);
+  useEffect(()=>{
+    if(CONFIG.MODO_DEMONSTRACAO) return;
+    const nomes=[...new Set(motoristas.map(u=>String(u.nome||'').trim()).filter(Boolean))];
+    if(!nomes.length){
+      setApuracoesPainel({});
+      return;
+    }
+    let ativo=true;
+    setCarregandoPainel(true);
+    setErroPainel('');
+    (async()=>{
+      const saida={};
+      for(let i=0;i<nomes.length;i+=3){
+        const lote=nomes.slice(i,i+3);
+        const resultados=await Promise.all(lote.map(async nome=>{
+          try{
+            const r=await ApiService.obterPremiacaoMotorista(nome);
+            const apuracao=(r.apuracoes||[]).find(a=>a.mes===mes)||null;
+            return [normalizar(nome),apuracao?{...apuracao,motoristaNome:nome}:null];
+          }catch(e){
+            return [normalizar(nome),{erro:e.message,motoristaNome:nome}];
+          }
+        }));
+        resultados.forEach(([chave,apuracao])=>{saida[chave]=apuracao});
+        if(ativo)setApuracoesPainel({...saida});
+      }
+      const falhas=Object.values(saida).filter(a=>a&&a.erro).length;
+      if(ativo&&falhas)setErroPainel(`${falhas} motorista(s) não puderam ser calculados.`);
+    })().finally(()=>{if(ativo)setCarregandoPainel(false)});
+    return()=>{ativo=false};
+  },[usuariosPainel,mes]);
+  const linhas = motoristas.map(u=>{
+    const oficial=apuracoesPainel[normalizar(u.nome)];
+    const stMotorista={...st,apuracoes:oficial&&!oficial.erro?[oficial]:[]};
+    return {u, ...apuracaoMes(stMotorista,dados,u.nome,mes)};
+  })
     .sort((a,b)=>b.fat-a.fat);
   const totFat = linhas.reduce((s,l)=>s+l.fat,0);
   const pendCt = st.contestacoes.filter(c=>c.status==='pendente').length;
@@ -1794,6 +1880,8 @@ function AdmPainel({st, dados}){
         <div className="card kpi"><div className="l">Contestações pendentes</div><div className="v num" style={{color:pendCt?'var(--erro)':'var(--mata)'}}>{pendCt}</div></div>
         <div className="card kpi"><div className="l">Check lists p/ aprovar</div><div className="v num" style={{color:pendCk?'var(--colheita-escura)':'var(--mata)'}}>{pendCk}</div></div>
       </div>
+      {carregandoPainel&&<div className="aviso-box">Carregando o painel com dados do SharePoint...</div>}
+      {erroPainel&&<div className="aviso-box" style={{color:'var(--erro)'}}>{erroPainel}</div>}
       <div className="card" style={{overflowX:'auto'}}>
         <table>
           <thead><tr><th>Motorista</th><th>Tipo</th><th className="td-num">Cargas</th><th className="td-num">Peso (t)</th><th className="td-num">Faturamento</th><th className="td-num">% Start</th><th className="td-num">Produtiv. est.</th><th className="td-num">Descontos</th><th className="td-num">Apurado</th></tr></thead>
