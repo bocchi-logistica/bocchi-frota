@@ -525,6 +525,9 @@ const ApiService = {
     return this._req('GET','/cargas/me'+q);
   },
   obterPremiacao(){ return this._req('GET','/premiacao/me'); },
+  obterPremiacaoMotorista(nome){
+    return this._req('GET','/premiacao/me?motoristaNome='+encodeURIComponent(nome));
+  },
   admPremiacao(competencia=''){
     const q=competencia?'?competencia='+encodeURIComponent(competencia):'';
     return this._req('GET','/admin/premiacao'+q);
@@ -763,7 +766,10 @@ function usarDadosMensais(st){
   },[st.resumos, st.cargas]);
 }
 function apuracaoMes(st, dados, motNome, mes){
-  const calculada=(st.apuracoes||[]).find(a=>a.mes===mes);
+  const calculada=(st.apuracoes||[]).find(a=>
+    a.mes===mes &&
+    (!a.motoristaNome || normalizar(a.motoristaNome)===normalizar(motNome))
+  );
   if(calculada){
     return {
       fat:Number(calculada.faturamento ?? calculada.realizadoInformado ?? calculada.realizado ?? 0),
@@ -1682,14 +1688,50 @@ function PainelRH({st,dados}){
   const [quadrimestre,setQuadrimestre]=useState('2');
   const [nome,setNome]=useState('');
   const [aberto,setAberto]=useState('');
+  const [apuracoesRH,setApuracoesRH]=useState({});
+  const [carregandoRH,setCarregandoRH]=useState(false);
+  const [erroRH,setErroRH]=useState('');
   const mesesPorQuad={'1':['01','02','03','04'],'2':['05','06','07','08'],'3':['09','10','11','12']};
   const meses=(mesesPorQuad[quadrimestre]||mesesPorQuad['1']).map(m=>m+'/'+ano);
   const motoristas=st.usuarios
     .filter(u=>normalizarPerfil(u.perfil)==='MOTORISTA')
     .filter(u=>String(u.nome||'').toLocaleLowerCase('pt-BR').includes(nome.toLocaleLowerCase('pt-BR')))
     .sort((a,b)=>String(a.nome).localeCompare(String(b.nome),'pt-BR'));
+  useEffect(()=>{
+    if(CONFIG.MODO_DEMONSTRACAO) return;
+    let ativo=true;
+    const nomes=[...new Set(st.usuarios
+      .filter(u=>normalizarPerfil(u.perfil)==='MOTORISTA')
+      .map(u=>String(u.nome||'').trim()).filter(Boolean))];
+    if(!nomes.length) return;
+    setCarregandoRH(true); setErroRH('');
+    (async()=>{
+      const saida={};
+      /* Limita a três consultas simultâneas para não sobrecarregar o Graph. */
+      for(let i=0;i<nomes.length;i+=3){
+        const lote=nomes.slice(i,i+3);
+        const resultados=await Promise.all(lote.map(async nome=>{
+          try{
+            const r=await ApiService.obterPremiacaoMotorista(nome);
+            return [normalizar(nome),(r.apuracoes||[]).map(a=>({...a,motoristaNome:nome}))];
+          }catch(e){ return [normalizar(nome),null,e.message]; }
+        }));
+        resultados.forEach(([chave,aps,erro])=>{
+          if(aps) saida[chave]=aps;
+          else saida[chave]={erro};
+        });
+        if(ativo) setApuracoesRH({...saida});
+      }
+      const falhas=Object.values(saida).filter(v=>!Array.isArray(v)).length;
+      if(ativo&&falhas) setErroRH(`${falhas} motorista(s) não puderam ser calculados. Abra a auditoria para conferir.`);
+    })().finally(()=>{if(ativo)setCarregandoRH(false)});
+    return()=>{ativo=false};
+  },[st.usuarios]);
   const linhas=motoristas.map(u=>{
-    const apuracoes=meses.map(m=>apuracaoMes(st,dados,u.nome,m));
+    const chave=normalizar(u.nome);
+    const vindas=Array.isArray(apuracoesRH[chave])?apuracoesRH[chave]:[];
+    const stMotorista={...st,apuracoes:vindas};
+    const apuracoes=meses.map(m=>apuracaoMes(stMotorista,dados,u.nome,m));
     const acumulado=apuracoes.reduce((s,a)=>s+Number(a.apurado||0),0);
     return {u,apuracoes,acumulado,pagar:Math.max(0,acumulado)};
   });
@@ -1714,6 +1756,8 @@ function PainelRH({st,dados}){
       <div className="card kpi"><div className="l">Total previsto para folha</div><div className="v num">{brl(total)}</div></div>
       <div className="card kpi"><div className="l">Período</div><div className="v" style={{fontSize:18}}>{quadrimestre}º quadrimestre/{ano}</div></div>
     </div>
+    {carregandoRH&&<div className="aviso-box">Calculando a premiação de todos os motoristas no SharePoint...</div>}
+    {erroRH&&<div className="aviso-box" style={{color:'var(--erro)'}}>{erroRH}</div>}
     <div className="card" style={{overflowX:'auto'}}>
       <table>
         <thead><tr><th>Motorista</th>{meses.map(m=><th key={m} className="td-num">{mesLabel(m)}</th>)}<th className="td-num">Acumulado</th><th className="td-num">Valor a pagar</th><th></th></tr></thead>
