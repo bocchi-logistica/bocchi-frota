@@ -570,8 +570,8 @@ const ApiService = {
   alterarStatusApuracao(itemId,status){
     return this._req('POST','/admin/apuracoes/status',{itemId,status});
   },
-  alterarStatusQuadrimestre(ano,quadrimestre,acao){
-    return this._req('POST','/admin/apuracoes/quadrimestre/status',{ano,quadrimestre,acao});
+  alterarStatusQuadrimestre(ano,quadrimestre,acao,motoristaId=''){
+    return this._req('POST','/admin/apuracoes/quadrimestre/status',{ano,quadrimestre,acao,motoristaId});
   },
   admPremiacao(competencia=''){
     const q=competencia?'?competencia='+encodeURIComponent(competencia):'';
@@ -1916,7 +1916,7 @@ function PainelRH({st,dados,user}){
   const totalFechados=itensQuadrimestre.filter(a=>String(a.status||'').toUpperCase()==='FECHADO').length;
   const quadrimestreFechado=totalEsperado>0&&totalFechados===totalEsperado;
   const podeFechar=totalEsperado>0&&itensQuadrimestre.length===totalEsperado&&
-    itensQuadrimestre.every(a=>String(a.status||'').toUpperCase()==='CALCULADO');
+    itensQuadrimestre.every(a=>['CALCULADO','FECHADO'].includes(String(a.status||'').toUpperCase()));
   const podeFecharPeloPerfil=pode(user,'quadrimestre.fechar');
   const podeReabrirPeloPerfil=pode(user,'quadrimestre.reabrir');
   const alterarFechamento=async()=>{
@@ -1934,9 +1934,17 @@ function PainelRH({st,dados,user}){
       ?'Fechando o quadrimestre e bloqueando os lançamentos. Aguarde...'
       :'Reabrindo o quadrimestre e liberando os lançamentos. Aguarde...');
     try{
-      const resposta=await executarComRetentativaGraph(()=>
-        ApiService.alterarStatusQuadrimestre(ano,quadrimestre,acao)
-      );
+      let totalAlterado=0;
+      for(let indice=0;indice<motoristas.length;indice++){
+        const motorista=motoristas[indice];
+        setProgressoRH(
+          `${acao==='FECHAR'?'Fechando':'Reabrindo'} ${indice+1} de ${motoristas.length}: ${motorista.nome||'Motorista'}`
+        );
+        const respostaMotorista=await executarComRetentativaGraph(()=>
+          ApiService.alterarStatusQuadrimestre(ano,quadrimestre,acao,idUsuario(motorista))
+        );
+        totalAlterado+=Number(respostaMotorista.total||0);
+      }
       const atualizadas=await ApiService.obterApuracoesSalvas();
       const porMotorista={};
       (atualizadas.apuracoes||[]).forEach(item=>{
@@ -1947,8 +1955,8 @@ function PainelRH({st,dados,user}){
       });
       setApuracoesRH(porMotorista);
       setSucessoRH(acao==='FECHAR'
-        ?`Quadrimestre fechado com sucesso. ${resposta.total||0} apuração(ões) foram bloqueadas.`
-        :`Quadrimestre reaberto com sucesso. ${resposta.total||0} apuração(ões) voltaram para PENDENTE.`);
+        ?`Quadrimestre fechado com sucesso. ${totalAlterado} apuração(ões) foram bloqueadas.`
+        :`Quadrimestre reaberto com sucesso. ${totalAlterado} apuração(ões) voltaram para PENDENTE.`);
     }catch(e){setErroRH('Falha ao alterar o fechamento: '+e.message)}
     finally{setCarregandoRH(false);setProgressoRH('')}
   };
