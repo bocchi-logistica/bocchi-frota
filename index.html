@@ -304,7 +304,11 @@ const ACESSO_NOVO_POR_PERMISSAO = {
   'cadastro.tipos_veiculo':{area:'CADASTROS',subtela:'CADASTRO_TIPOS_VEICULO'},
   'cadastro.veiculos':{area:'CADASTROS',subtela:'CADASTRO_VEICULOS'},
   'cadastro.vinculos':{area:'CADASTROS',subtela:'CADASTRO_VINCULOS'},
-  'cadastro.perfis':{area:'CADASTROS',subtela:'CADASTRO_PERFIS'}
+  'cadastro.perfis':{area:'CADASTROS',subtela:'CADASTRO_PERFIS'},
+  'apuracao.mensal.atualizar':{area:'PAINEL',subtela:'ATUALIZARAPURACAOMENSAL_PAINEL',editar:true},
+  'quadrimestre.atualizar':{area:'RH_FECHAMENTO',subtela:'ATUALIZARAPURACOESDOQUADRIMESTRE_RH_FECHAMENTO',editar:true},
+  'quadrimestre.fechar':{area:'RH_FECHAMENTO',subtela:'FECHARQUADRIMESTRE_RH_FECHAMENTO',editar:true},
+  'quadrimestre.reabrir':{area:'RH_FECHAMENTO',subtela:'REABRIQUADRIMESTRE_RH_FECHAMENTO',editar:true}
 };
 function podePeloPerfilNovo(user,permissao){
   if(!user?.acessosPerfilDefinidos)return null;
@@ -553,6 +557,21 @@ const ApiService = {
   obterPremiacao(){ return this._req('GET','/premiacao/me'); },
   obterPremiacaoMotorista(nome){
     return this._req('GET','/premiacao/me?motoristaNome='+encodeURIComponent(nome));
+  },
+  obterApuracoesSalvas(competencia='',motoristaId=''){
+    const q=new URLSearchParams();
+    if(competencia)q.set('competencia',competencia);
+    if(motoristaId)q.set('motoristaId',motoristaId);
+    return this._req('GET','/admin/apuracoes'+(q.toString()?'?'+q.toString():''));
+  },
+  salvarApuracoes(motoristaId,apuracoes,origem='PAINEL_MENSAL'){
+    return this._req('POST','/admin/apuracoes/salvar',{motoristaId,apuracoes,origem});
+  },
+  alterarStatusApuracao(itemId,status){
+    return this._req('POST','/admin/apuracoes/status',{itemId,status});
+  },
+  alterarStatusQuadrimestre(ano,quadrimestre,acao){
+    return this._req('POST','/admin/apuracoes/quadrimestre/status',{ano,quadrimestre,acao});
   },
   admPremiacao(competencia=''){
     const q=competencia?'?competencia='+encodeURIComponent(competencia):'';
@@ -810,6 +829,32 @@ function apuracaoMes(st, dados, motNome, mes){
   const descs = st.descontos.filter(x=>x.motorista===motNome && x.mes===mes);
   const totDesc = descs.reduce((s,x)=>s+x.valor,0);
   return {fat, prod, descs, totDesc, apurado: prod + totDesc, meta, tipo, temDados: !!d, nCargas: d?d.n:0, peso: d?d.peso:0, detalhe: d?d.detalhe:false};
+}
+
+function apuracaoSalvaParaTela(item,motoristaNome=''){
+  const competencia=String(item?.competencia||'');
+  return {
+    ...item,
+    mes:competenciaValidaTela(competencia)
+      ? competencia.slice(5,7)+'/'+competencia.slice(0,4)
+      : '',
+    motoristaNome,
+    tipoVeiculo:String(item?.tipoVeiculo||''),
+    premioBruto:Number(item?.valorMeta||0),
+    totalDescontos:Number(item?.valorDescontos||0),
+    apurado:Number(item?.apuradoMes||0),
+    descontos:[],
+    meta:null,
+    quantidadeCargas:0,
+    pesoTon:0,
+    faturamento:0,
+    origemSalva:true,
+    status:String(item?.status||'PENDENTE'),
+    atualizadoEm:String(item?.atualizadoEm||'')
+  };
+}
+function competenciaValidaTela(valor){
+  return /^\d{4}-(0[1-9]|1[0-2])$/.test(String(valor||''));
 }
 
 /* ================= COMPONENTES BASE ================= */
@@ -1692,7 +1737,7 @@ function MotoristaApp({st, setSt, user, onSair, toast}){
 }
 
 /* ================= ADM: PAINEL ================= */
-function PainelRH({st,dados}){
+function PainelRH({st,dados,user}){
   const anoAtual=String(new Date().getFullYear());
   const [ano,setAno]=useState(anoAtual);
   const [quadrimestre,setQuadrimestre]=useState('2');
@@ -1738,35 +1783,90 @@ function PainelRH({st,dados}){
   useEffect(()=>{
     if(CONFIG.MODO_DEMONSTRACAO) return;
     let ativo=true;
-    const nomes=[...new Set(usuariosRH
-      .filter(u=>usuarioValidoPremiacaoPeriodo(u,vinculosRH,inicioPeriodo,fimPeriodo))
-      .map(u=>String(u.nome||'').trim()).filter(Boolean))];
-    if(!nomes.length) return;
     setCarregandoRH(true); setErroRH('');
-    (async()=>{
-      const saida={};
-      /* Limita a três consultas simultâneas para não sobrecarregar o Graph. */
-      for(let i=0;i<nomes.length;i+=3){
-        const lote=nomes.slice(i,i+3);
-        const resultados=await Promise.all(lote.map(async nome=>{
-          try{
-            const r=await ApiService.obterPremiacaoMotorista(nome);
-            return [normalizar(nome),(r.apuracoes||[]).map(a=>({...a,motoristaNome:nome}))];
-          }catch(e){ return [normalizar(nome),null,e.message]; }
-        }));
-        resultados.forEach(([chave,aps,erro])=>{
-          if(aps) saida[chave]=aps;
-          else saida[chave]={erro};
+    ApiService.obterApuracoesSalvas()
+      .then(r=>{
+        if(!ativo)return;
+        const porMotorista={};
+        (r.apuracoes||[]).forEach(item=>{
+          const chave=String(item.motoristaId||'');
+          porMotorista[chave]=porMotorista[chave]||[];
+          porMotorista[chave].push(apuracaoSalvaParaTela(item));
         });
-        if(ativo) setApuracoesRH({...saida});
-      }
-      const falhas=Object.values(saida).filter(v=>!Array.isArray(v)).length;
-      if(ativo&&falhas) setErroRH(`${falhas} motorista(s) não puderam ser calculados. Abra a auditoria para conferir.`);
-    })().finally(()=>{if(ativo)setCarregandoRH(false)});
+        setApuracoesRH(porMotorista);
+      })
+      .catch(e=>{if(ativo)setErroRH('Não foi possível carregar as apurações salvas: '+e.message)})
+      .finally(()=>{if(ativo)setCarregandoRH(false)});
     return()=>{ativo=false};
-  },[usuariosRH,vinculosRH,ano,quadrimestre]);
+  },[ano,quadrimestre]);
+  const recalcularQuadrimestre=async()=>{
+    if(!motoristas.length)return;
+    setCarregandoRH(true);setErroRH('');
+    let falhas=0;
+    try{
+      for(let i=0;i<motoristas.length;i+=2){
+        const lote=motoristas.slice(i,i+2);
+        await Promise.all(lote.map(async u=>{
+          try{
+            const r=await ApiService.obterPremiacaoMotorista(u.nome);
+            const competencias=new Set(meses.map(m=>m.slice(3)+'-'+m.slice(0,2)));
+            const apuracoes=(r.apuracoes||[]).filter(a=>competencias.has(String(a.competencia||'')));
+            await ApiService.salvarApuracoes(idUsuario(u),apuracoes,'RH_QUADRIMESTRE');
+          }catch(e){falhas++}
+        }));
+      }
+      const atualizadas=await ApiService.obterApuracoesSalvas();
+      const porMotorista={};
+      (atualizadas.apuracoes||[]).forEach(item=>{
+        const chave=String(item.motoristaId||'');
+        const u=usuariosRH.find(x=>idUsuario(x)===chave);
+        porMotorista[chave]=porMotorista[chave]||[];
+        porMotorista[chave].push(apuracaoSalvaParaTela(item,u?.nome||''));
+      });
+      setApuracoesRH(porMotorista);
+      if(falhas)setErroRH(`${falhas} motorista(s) não puderam ser atualizados. Os demais foram salvos.`);
+    }catch(e){setErroRH('Falha ao atualizar apurações: '+e.message)}
+    finally{setCarregandoRH(false)}
+  };
+  const itensQuadrimestre=motoristas.flatMap(u=>
+    (apuracoesRH[idUsuario(u)]||[]).filter(a=>
+      meses.some(m=>String(a.competencia||'')===m.slice(3)+'-'+m.slice(0,2))
+    )
+  );
+  const totalEsperado=motoristas.length*4;
+  const totalFechados=itensQuadrimestre.filter(a=>String(a.status||'').toUpperCase()==='FECHADO').length;
+  const quadrimestreFechado=totalEsperado>0&&totalFechados===totalEsperado;
+  const podeFechar=totalEsperado>0&&itensQuadrimestre.length===totalEsperado&&
+    itensQuadrimestre.every(a=>String(a.status||'').toUpperCase()==='CALCULADO');
+  const podeFecharPeloPerfil=pode(user,'quadrimestre.fechar');
+  const podeReabrirPeloPerfil=pode(user,'quadrimestre.reabrir');
+  const alterarFechamento=async()=>{
+    const acao=quadrimestreFechado?'REABRIR':'FECHAR';
+    if(acao==='FECHAR'&&!podeFechar){
+      setErroRH(`Não é possível fechar: existem apurações ausentes ou ainda não calculadas. Atualize o quadrimestre antes do fechamento.`);
+      return;
+    }
+    const pergunta=acao==='FECHAR'
+      ?`Fechar o ${quadrimestre}º quadrimestre de ${ano}? Os valores ficarão bloqueados.`
+      :`Reabrir o ${quadrimestre}º quadrimestre de ${ano}? As apurações voltarão para PENDENTE e precisarão ser atualizadas novamente.`;
+    if(!window.confirm(pergunta))return;
+    setCarregandoRH(true);setErroRH('');
+    try{
+      await ApiService.alterarStatusQuadrimestre(ano,quadrimestre,acao);
+      const atualizadas=await ApiService.obterApuracoesSalvas();
+      const porMotorista={};
+      (atualizadas.apuracoes||[]).forEach(item=>{
+        const chave=String(item.motoristaId||'');
+        const u=usuariosRH.find(x=>idUsuario(x)===chave);
+        porMotorista[chave]=porMotorista[chave]||[];
+        porMotorista[chave].push(apuracaoSalvaParaTela(item,u?.nome||''));
+      });
+      setApuracoesRH(porMotorista);
+    }catch(e){setErroRH('Falha ao alterar o fechamento: '+e.message)}
+    finally{setCarregandoRH(false)}
+  };
   const linhas=motoristas.map(u=>{
-    const chave=normalizar(u.nome);
+    const chave=idUsuario(u);
     const vindas=Array.isArray(apuracoesRH[chave])?apuracoesRH[chave]:[];
     const stMotorista={...st,apuracoes:vindas};
     const apuracoes=meses.map(m=>apuracaoMes(stMotorista,dados,u.nome,m));
@@ -1778,9 +1878,18 @@ function PainelRH({st,dados}){
     <div className="row" style={{flexWrap:'wrap'}}>
       <div className="grow">
         <h2>Fechamento de premiação — RH</h2>
-        <div className="muted">Consulta e auditoria, sem permissão para alterar lançamentos.</div>
+        <div className="muted">Exibe os últimos valores salvos. O recálculo ocorre somente quando solicitado.</div>
       </div>
-      <span className="tag tag-neutro">Somente leitura</span>
+      {pode(user,'quadrimestre.atualizar')&&<button className="btn btn-p btn-sm" disabled={carregandoRH} onClick={recalcularQuadrimestre}>
+        {carregandoRH?'Atualizando...':'Atualizar apurações do quadrimestre'}
+      </button>}
+      {((quadrimestreFechado&&podeReabrirPeloPerfil)||(!quadrimestreFechado&&podeFecharPeloPerfil))&&<button
+        className={'btn btn-sm '+(quadrimestreFechado?'btn-s':'btn-g')}
+        disabled={carregandoRH||(!quadrimestreFechado&&!podeFechar)}
+        title={!quadrimestreFechado&&!podeFechar?'Atualize e conclua todas as apurações antes de fechar.':''}
+        onClick={alterarFechamento}>
+        {quadrimestreFechado?'Reabrir quadrimestre':'Fechar quadrimestre'}
+      </button>}
     </div>
     <div className="card">
       <div className="filtros-cadastro" style={{margin:0}}>
@@ -1793,8 +1902,9 @@ function PainelRH({st,dados}){
       <div className="card kpi"><div className="l">Motoristas</div><div className="v num">{linhas.length}</div></div>
       <div className="card kpi"><div className="l">Total previsto para folha</div><div className="v num">{brl(total)}</div></div>
       <div className="card kpi"><div className="l">Período</div><div className="v" style={{fontSize:18}}>{quadrimestre}º quadrimestre/{ano}</div></div>
+      <div className="card kpi"><div className="l">Status</div><div className="v" style={{fontSize:18}}>{quadrimestreFechado?'FECHADO':podeFechar?'PRONTO PARA FECHAR':'EM APURAÇÃO'}</div></div>
     </div>
-    {carregandoRH&&<div className="aviso-box">Calculando a premiação de todos os motoristas no SharePoint...</div>}
+    {carregandoRH&&<div className="aviso-box">Atualizando ou consultando as apurações salvas...</div>}
     {erroRH&&<div className="aviso-box" style={{color:'var(--erro)'}}>{erroRH}</div>}
     <div className="card" style={{overflowX:'auto'}}>
       <table>
@@ -1824,7 +1934,7 @@ function PainelRH({st,dados}){
   </React.Fragment>;
 }
 
-function AdmPainel({st, dados}){
+function AdmPainel({st, dados, user}){
   const [mes,setMes]=useState(MES_ATUAL);
   const [usuariosPainel,setUsuariosPainel]=useState([]);
   const [vinculosPainel,setVinculosPainel]=useState([]);
@@ -1862,37 +1972,56 @@ function AdmPainel({st, dados}){
   },[]);
   useEffect(()=>{
     if(CONFIG.MODO_DEMONSTRACAO) return;
-    const nomes=[...new Set(motoristas.map(u=>String(u.nome||'').trim()).filter(Boolean))];
-    if(!nomes.length){
-      setApuracoesPainel({});
-      return;
-    }
     let ativo=true;
     setCarregandoPainel(true);
     setErroPainel('');
-    (async()=>{
-      const saida={};
-      for(let i=0;i<nomes.length;i+=3){
-        const lote=nomes.slice(i,i+3);
-        const resultados=await Promise.all(lote.map(async nome=>{
-          try{
-            const r=await ApiService.obterPremiacaoMotorista(nome);
-            const apuracao=(r.apuracoes||[]).find(a=>a.mes===mes)||null;
-            return [normalizar(nome),apuracao?{...apuracao,motoristaNome:nome}:null];
-          }catch(e){
-            return [normalizar(nome),{erro:e.message,motoristaNome:nome}];
-          }
-        }));
-        resultados.forEach(([chave,apuracao])=>{saida[chave]=apuracao});
-        if(ativo)setApuracoesPainel({...saida});
-      }
-      const falhas=Object.values(saida).filter(a=>a&&a.erro).length;
-      if(ativo&&falhas)setErroPainel(`${falhas} motorista(s) não puderam ser calculados.`);
-    })().finally(()=>{if(ativo)setCarregandoPainel(false)});
+    const competencia=anoNumero+'-'+mesNumero;
+    ApiService.obterApuracoesSalvas(competencia)
+      .then(r=>{
+        if(!ativo)return;
+        const saida={};
+        (r.apuracoes||[]).forEach(item=>{
+          const u=usuariosPainel.find(x=>idUsuario(x)===String(item.motoristaId||''));
+          saida[String(item.motoristaId||'')]=apuracaoSalvaParaTela(item,u?.nome||'');
+        });
+        setApuracoesPainel(saida);
+      })
+      .catch(e=>{if(ativo)setErroPainel('Não foi possível carregar as apurações salvas: '+e.message)})
+      .finally(()=>{if(ativo)setCarregandoPainel(false)});
     return()=>{ativo=false};
   },[usuariosPainel,vinculosPainel,mes]);
+  const recalcularMes=async()=>{
+    if(!motoristas.length)return;
+    setCarregandoPainel(true);setErroPainel('');
+    let falhas=0;
+    try{
+      for(let i=0;i<motoristas.length;i+=2){
+        const lote=motoristas.slice(i,i+2);
+        await Promise.all(lote.map(async u=>{
+          try{
+            const r=await ApiService.obterPremiacaoMotorista(u.nome);
+            const competencia=anoNumero+'-'+mesNumero;
+            const apuracao=(r.apuracoes||[]).find(a=>String(a.competencia||'')===competencia);
+            if(apuracao)await ApiService.salvarApuracoes(idUsuario(u),[apuracao]);
+          }catch(e){falhas++}
+        }));
+      }
+      const atualizadas=await ApiService.obterApuracoesSalvas(anoNumero+'-'+mesNumero);
+      const saida={};
+      (atualizadas.apuracoes||[]).forEach(item=>{
+        const u=usuariosPainel.find(x=>idUsuario(x)===String(item.motoristaId||''));
+        saida[String(item.motoristaId||'')]=apuracaoSalvaParaTela(item,u?.nome||'');
+      });
+      setApuracoesPainel(saida);
+      if(falhas)setErroPainel(`${falhas} motorista(s) não puderam ser atualizados. Os demais foram salvos.`);
+    }catch(e){setErroPainel('Falha ao atualizar o mês: '+e.message)}
+    finally{setCarregandoPainel(false)}
+  };
+  const mesFechado=Object.values(apuracoesPainel).some(
+    item=>String(item?.status||'').toUpperCase()==='FECHADO'
+  );
   const linhas = motoristas.map(u=>{
-    const oficial=apuracoesPainel[normalizar(u.nome)];
+    const oficial=apuracoesPainel[idUsuario(u)];
     const stMotorista={...st,apuracoes:oficial&&!oficial.erro?[oficial]:[]};
     return {u, ...apuracaoMes(stMotorista,dados,u.nome,mes)};
   })
@@ -1904,6 +2033,13 @@ function AdmPainel({st, dados}){
     <React.Fragment>
       <div className="row" style={{flexWrap:'wrap'}}>
         <h2 className="grow">Painel — {mesLabel(mes)}</h2>
+        {pode(user,'apuracao.mensal.atualizar')&&<button
+          className="btn btn-p btn-sm"
+          disabled={carregandoPainel||mesFechado}
+          title={mesFechado?'O quadrimestre está fechado. Reabra-o no Fechamento RH para atualizar este mês.':''}
+          onClick={recalcularMes}>
+          {carregandoPainel?'Atualizando...':mesFechado?'Quadrimestre fechado':'Atualizar cargas mensais'}
+        </button>}
         <select style={{width:'auto'}} value={mes} onChange={e=>setMes(e.target.value)}>
           {MESES_2026.slice(0,7).map(m=><option key={m} value={m}>{mesLabel(m)}</option>)}
         </select>
@@ -2617,10 +2753,16 @@ function AdmPremiacao({st, setSt, toast, user}){
 }
 
 const AREAS_E_SUBTELAS = {
-  PAINEL: [],
+  PAINEL: [
+    ['ATUALIZARAPURACAOMENSAL_PAINEL','Atualizar apuração mensal']
+  ],
   IMPORTACAO: [],
   CONTESTACOES: [],
-  RH_FECHAMENTO: [],
+  RH_FECHAMENTO: [
+    ['ATUALIZARAPURACOESDOQUADRIMESTRE_RH_FECHAMENTO','Atualizar apurações do quadrimestre'],
+    ['FECHARQUADRIMESTRE_RH_FECHAMENTO','Fechar quadrimestre'],
+    ['REABRIQUADRIMESTRE_RH_FECHAMENTO','Reabrir quadrimestre']
+  ],
   PREMIACAO: [
     ['PREMIACAO_PAINEL','Painel da premiação'],
     ['PREMIACAO_METAS','Metas'],
@@ -3033,8 +3175,8 @@ function AdmApp({st, setSt, user, onSair, toast}){
         </div>
       </div>
       <div className="abody">
-        {aba==='rh' && <PainelRH st={st} dados={dados}/>}
-        {aba==='painel' && <AdmPainel st={st} dados={dados}/>}
+        {aba==='rh' && <PainelRH st={st} dados={dados} user={user}/>}
+        {aba==='painel' && <AdmPainel st={st} dados={dados} user={user}/>}
         {aba==='importar' && <AdmImportar st={st} setSt={setSt} toast={toast}/>}
         {aba==='contest' && <AdmContestacoes st={st} setSt={setSt} toast={toast}/>}
         {aba==='check' && <AdmChecklist st={st} setSt={setSt} toast={toast} user={user}/>}
