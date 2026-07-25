@@ -219,7 +219,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 90000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '1.11.2-fechamento-quadrimestre-confirmado'
+  VERSAO: '1.11.7-vigencia-final-exclusiva'
 };
 
 /* ============================================================================
@@ -262,7 +262,13 @@ const sobrepoePeriodo=(v,inicio,fim)=>{
   const ini=String(v?.dataInicio||'').slice(0,10)||'0000-01-01';
   const encerrado=String(v?.dataFim||'').slice(0,10);
   const fimV=encerrado||'9999-12-31';
-  return ini<=fim&&fimV>=inicio;
+  /*
+   * DataInicio é inclusiva e DataFim é exclusiva:
+   * - início em 01/03: aplica-se a março;
+   * - fim em 01/03: não se aplica a março;
+   * - fim em 01/02: não se aplica a fevereiro.
+   */
+  return ini<=fim&&fimV>inicio;
 };
 const usuarioValidoPremiacaoPeriodo=(u,vinculos,inicio,fim)=>{
   if(!usuarioConfiguradoPremiacao(u)) return false;
@@ -2039,7 +2045,7 @@ function PainelRH({st,dados,user}){
     <div className="row" style={{flexWrap:'wrap'}}>
       <div className="grow">
         <h2>Fechamento de premiação — RH</h2>
-        <div className="muted">Exibe os últimos valores salvos. O recálculo ocorre somente quando solicitado. <b>Versão 1.11.6.</b></div>
+        <div className="muted">Exibe os últimos valores salvos. O recálculo ocorre somente quando solicitado. <b>Versão 1.11.7.</b></div>
       </div>
       <button
         className={'btn btn-sm '+(!periodoBloqueado&&pode(user,'quadrimestre.atualizar')?'btn-p':'btn-g')}
