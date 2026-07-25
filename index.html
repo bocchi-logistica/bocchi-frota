@@ -218,7 +218,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 90000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '1.11.1-selecao-apuracao-rh'
+  VERSAO: '1.11.2-fechamento-quadrimestre-confirmado'
 };
 
 /* ============================================================================
@@ -1825,10 +1825,12 @@ function PainelRH({st,dados,user}){
   const inicioPeriodo=`${ano}-${mesesPorQuad[quadrimestre][0]}-01`;
   const ultimoMes=mesesPorQuad[quadrimestre][3];
   const fimPeriodo=new Date(Number(ano),Number(ultimoMes),0).toISOString().slice(0,10);
-  const motoristas=usuariosRH
+  const motoristasPeriodo=usuariosRH
     .filter(u=>usuarioValidoPremiacaoPeriodo(u,vinculosRH,inicioPeriodo,fimPeriodo))
-    .filter(u=>String(u.nome||'').toLocaleLowerCase('pt-BR').includes(nome.toLocaleLowerCase('pt-BR')))
     .sort((a,b)=>String(a.nome).localeCompare(String(b.nome),'pt-BR'));
+  const motoristas=motoristasPeriodo
+    .filter(u=>String(u.nome||'').toLocaleLowerCase('pt-BR').includes(nome.toLocaleLowerCase('pt-BR')))
+    ;
   useEffect(()=>{
     if(CONFIG.MODO_DEMONSTRACAO){
       setUsuariosRH(st.usuarios||[]);
@@ -1907,12 +1909,12 @@ function PainelRH({st,dados,user}){
     setErroRH('');
     await FilaApuracaoRH.iniciar({motoristas:escolhidos,meses});
   };
-  const itensQuadrimestre=motoristas.flatMap(u=>
+  const itensQuadrimestre=motoristasPeriodo.flatMap(u=>
     (apuracoesRH[idUsuario(u)]||[]).filter(a=>
       meses.some(m=>String(a.competencia||'')===m.slice(3)+'-'+m.slice(0,2))
     )
   );
-  const totalEsperado=motoristas.length*4;
+  const totalEsperado=motoristasPeriodo.length*4;
   const totalFechados=itensQuadrimestre.filter(a=>String(a.status||'').toUpperCase()==='FECHADO').length;
   const quadrimestreFechado=totalEsperado>0&&totalFechados===totalEsperado;
   const podeFechar=totalEsperado>0&&itensQuadrimestre.length===totalEsperado&&
@@ -1921,10 +1923,6 @@ function PainelRH({st,dados,user}){
   const podeReabrirPeloPerfil=pode(user,'quadrimestre.reabrir');
   const alterarFechamento=async()=>{
     const acao=quadrimestreFechado?'REABRIR':'FECHAR';
-    if(acao==='FECHAR'&&!podeFechar){
-      setErroRH(`Não é possível fechar: existem apurações ausentes ou ainda não calculadas. Atualize o quadrimestre antes do fechamento.`);
-      return;
-    }
     const pergunta=acao==='FECHAR'
       ?`Fechar o ${quadrimestre}º quadrimestre de ${ano}? Os valores ficarão bloqueados.`
       :`Reabrir o ${quadrimestre}º quadrimestre de ${ano}? As apurações voltarão para PENDENTE e precisarão ser atualizadas novamente.`;
@@ -1935,10 +1933,10 @@ function PainelRH({st,dados,user}){
       :'Reabrindo o quadrimestre e liberando os lançamentos. Aguarde...');
     try{
       let totalAlterado=0;
-      for(let indice=0;indice<motoristas.length;indice++){
-        const motorista=motoristas[indice];
+      for(let indice=0;indice<motoristasPeriodo.length;indice++){
+        const motorista=motoristasPeriodo[indice];
         setProgressoRH(
-          `${acao==='FECHAR'?'Fechando':'Reabrindo'} ${indice+1} de ${motoristas.length}: ${motorista.nome||'Motorista'}`
+          `${acao==='FECHAR'?'Fechando':'Reabrindo'} ${indice+1} de ${motoristasPeriodo.length}: ${motorista.nome||'Motorista'}`
         );
         const respostaMotorista=await executarComRetentativaGraph(()=>
           ApiService.alterarStatusQuadrimestre(ano,quadrimestre,acao,idUsuario(motorista))
@@ -1957,7 +1955,20 @@ function PainelRH({st,dados,user}){
       setSucessoRH(acao==='FECHAR'
         ?`Quadrimestre fechado com sucesso. ${totalAlterado} apuração(ões) foram bloqueadas.`
         :`Quadrimestre reaberto com sucesso. ${totalAlterado} apuração(ões) voltaram para PENDENTE.`);
-    }catch(e){setErroRH('Falha ao alterar o fechamento: '+e.message)}
+    }catch(e){
+      setErroRH('Falha ao alterar o fechamento: '+e.message);
+      try{
+        const atuais=await ApiService.obterApuracoesSalvas();
+        const porMotorista={};
+        (atuais.apuracoes||[]).forEach(item=>{
+          const chave=String(item.motoristaId||'');
+          const u=usuariosRH.find(x=>idUsuario(x)===chave);
+          porMotorista[chave]=porMotorista[chave]||[];
+          porMotorista[chave].push(apuracaoSalvaParaTela(item,u?.nome||''));
+        });
+        setApuracoesRH(porMotorista);
+      }catch(_){}
+    }
     finally{setCarregandoRH(false);setProgressoRH('')}
   };
   const linhas=motoristas.map(u=>{
@@ -1973,15 +1984,15 @@ function PainelRH({st,dados,user}){
     <div className="row" style={{flexWrap:'wrap'}}>
       <div className="grow">
         <h2>Fechamento de premiação — RH</h2>
-        <div className="muted">Exibe os últimos valores salvos. O recálculo ocorre somente quando solicitado.</div>
+        <div className="muted">Exibe os últimos valores salvos. O recálculo ocorre somente quando solicitado. <b>Versão 1.11.3.</b></div>
       </div>
       {pode(user,'quadrimestre.atualizar')&&<button className="btn btn-p btn-sm" disabled={carregandoRH||filaRH.rodando} onClick={recalcularQuadrimestre}>
         {filaRH.rodando?'Atualização em andamento':'Atualizar selecionados'}
       </button>}
       {((quadrimestreFechado&&podeReabrirPeloPerfil)||(!quadrimestreFechado&&podeFecharPeloPerfil))&&<button
         className={'btn btn-sm '+(quadrimestreFechado?'btn-s':'btn-g')}
-        disabled={carregandoRH||(!quadrimestreFechado&&!podeFechar)}
-        title={!quadrimestreFechado&&!podeFechar?'Atualize e conclua todas as apurações antes de fechar.':''}
+        disabled={carregandoRH}
+        title={!quadrimestreFechado&&!podeFechar?'Ao clicar, o sistema informará exatamente quais apurações impedem o fechamento.':''}
         onClick={alterarFechamento}>
         {quadrimestreFechado?'Reabrir quadrimestre':'Fechar quadrimestre'}
       </button>}
