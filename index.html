@@ -614,6 +614,26 @@ obterPerguntas(tipoFrota='TODAS', opcoes={}){
   }
 };
 
+const aguardar = ms => new Promise(resolve => setTimeout(resolve, ms));
+function erroTemporarioGraph(error){
+  const status=Number(error?.status||0);
+  const texto=String(error?.message||'')+' '+JSON.stringify(error?.detalhe||{});
+  return [408,425,429,500,502,503,504].includes(status) &&
+    (status!==500 || /429|throttl|temporari|limite|muitas tentativas/i.test(texto));
+}
+async function executarComRetentativaGraph(operacao,maxTentativas=4){
+  let ultimoErro;
+  for(let tentativa=1;tentativa<=maxTentativas;tentativa++){
+    try{return await operacao()}
+    catch(error){
+      ultimoErro=error;
+      if(!erroTemporarioGraph(error)||tentativa===maxTentativas)throw error;
+      await aguardar(Math.min(30000,4000*Math.pow(2,tentativa-1)));
+    }
+  }
+  throw ultimoErro;
+}
+
 /* ============================================================================
    ALTERAÇÃO V6 — FILA DE ENVIO (internet instável)
    O checklist é gravado no IndexedDB ANTES da tentativa de envio.
@@ -1748,6 +1768,7 @@ function PainelRH({st,dados,user}){
   const [apuracoesRH,setApuracoesRH]=useState({});
   const [carregandoRH,setCarregandoRH]=useState(false);
   const [erroRH,setErroRH]=useState('');
+  const [progressoRH,setProgressoRH]=useState('');
   const mesesPorQuad={'1':['01','02','03','04'],'2':['05','06','07','08'],'3':['09','10','11','12']};
   const meses=(mesesPorQuad[quadrimestre]||mesesPorQuad['1']).map(m=>m+'/'+ano);
   const inicioPeriodo=`${ano}-${mesesPorQuad[quadrimestre][0]}-01`;
@@ -1800,21 +1821,26 @@ function PainelRH({st,dados,user}){
     return()=>{ativo=false};
   },[ano,quadrimestre]);
   const recalcularQuadrimestre=async()=>{
-    if(!motoristas.length)return;
-    setCarregandoRH(true);setErroRH('');
-    let falhas=0;
+    if(!motoristas.length||carregandoRH)return;
+    setCarregandoRH(true);setErroRH('');setProgressoRH('');
+    const falhas=[];
     try{
-      for(let i=0;i<motoristas.length;i+=2){
-        const lote=motoristas.slice(i,i+2);
-        await Promise.all(lote.map(async u=>{
-          try{
+      for(let i=0;i<motoristas.length;i++){
+        const u=motoristas[i];
+        setProgressoRH(`Processando ${i+1} de ${motoristas.length}: ${u.nome}`);
+        try{
+          await executarComRetentativaGraph(async()=>{
             const r=await ApiService.obterPremiacaoMotorista(u.nome);
             const competencias=new Set(meses.map(m=>m.slice(3)+'-'+m.slice(0,2)));
             const apuracoes=(r.apuracoes||[]).filter(a=>competencias.has(String(a.competencia||'')));
             await ApiService.salvarApuracoes(idUsuario(u),apuracoes,'RH_QUADRIMESTRE');
-          }catch(e){falhas++}
-        }));
+          });
+        }catch(e){
+          falhas.push(`${u.nome}: ${e.message}`);
+        }
+        if(i<motoristas.length-1)await aguardar(1800);
       }
+      setProgressoRH('Carregando os resultados salvos...');
       const atualizadas=await ApiService.obterApuracoesSalvas();
       const porMotorista={};
       (atualizadas.apuracoes||[]).forEach(item=>{
@@ -1824,9 +1850,9 @@ function PainelRH({st,dados,user}){
         porMotorista[chave].push(apuracaoSalvaParaTela(item,u?.nome||''));
       });
       setApuracoesRH(porMotorista);
-      if(falhas)setErroRH(`${falhas} motorista(s) não puderam ser atualizados. Os demais foram salvos.`);
+      if(falhas.length)setErroRH(`${falhas.length} motorista(s) não puderam ser atualizados: ${falhas.join(' | ')}`);
     }catch(e){setErroRH('Falha ao atualizar apurações: '+e.message)}
-    finally{setCarregandoRH(false)}
+    finally{setCarregandoRH(false);setProgressoRH('')}
   };
   const itensQuadrimestre=motoristas.flatMap(u=>
     (apuracoesRH[idUsuario(u)]||[]).filter(a=>
@@ -1904,7 +1930,7 @@ function PainelRH({st,dados,user}){
       <div className="card kpi"><div className="l">Período</div><div className="v" style={{fontSize:18}}>{quadrimestre}º quadrimestre/{ano}</div></div>
       <div className="card kpi"><div className="l">Status</div><div className="v" style={{fontSize:18}}>{quadrimestreFechado?'FECHADO':podeFechar?'PRONTO PARA FECHAR':'EM APURAÇÃO'}</div></div>
     </div>
-    {carregandoRH&&<div className="aviso-box">Atualizando ou consultando as apurações salvas...</div>}
+    {carregandoRH&&<div className="aviso-box">{progressoRH||'Atualizando ou consultando as apurações salvas...'}</div>}
     {erroRH&&<div className="aviso-box" style={{color:'var(--erro)'}}>{erroRH}</div>}
     <div className="card" style={{overflowX:'auto'}}>
       <table>
@@ -1941,6 +1967,7 @@ function AdmPainel({st, dados, user}){
   const [apuracoesPainel,setApuracoesPainel]=useState({});
   const [carregandoPainel,setCarregandoPainel]=useState(false);
   const [erroPainel,setErroPainel]=useState('');
+  const [progressoPainel,setProgressoPainel]=useState('');
   const [mesNumero,anoNumero]=String(mes).split('/');
   const inicioMes=`${anoNumero}-${mesNumero}-01`;
   const fimMes=new Date(Number(anoNumero),Number(mesNumero),0).toISOString().slice(0,10);
@@ -1991,21 +2018,26 @@ function AdmPainel({st, dados, user}){
     return()=>{ativo=false};
   },[usuariosPainel,vinculosPainel,mes]);
   const recalcularMes=async()=>{
-    if(!motoristas.length)return;
-    setCarregandoPainel(true);setErroPainel('');
-    let falhas=0;
+    if(!motoristas.length||carregandoPainel)return;
+    setCarregandoPainel(true);setErroPainel('');setProgressoPainel('');
+    const falhas=[];
     try{
-      for(let i=0;i<motoristas.length;i+=2){
-        const lote=motoristas.slice(i,i+2);
-        await Promise.all(lote.map(async u=>{
-          try{
+      for(let i=0;i<motoristas.length;i++){
+        const u=motoristas[i];
+        setProgressoPainel(`Processando ${i+1} de ${motoristas.length}: ${u.nome}`);
+        try{
+          await executarComRetentativaGraph(async()=>{
             const r=await ApiService.obterPremiacaoMotorista(u.nome);
             const competencia=anoNumero+'-'+mesNumero;
             const apuracao=(r.apuracoes||[]).find(a=>String(a.competencia||'')===competencia);
             if(apuracao)await ApiService.salvarApuracoes(idUsuario(u),[apuracao]);
-          }catch(e){falhas++}
-        }));
+          });
+        }catch(e){
+          falhas.push(`${u.nome}: ${e.message}`);
+        }
+        if(i<motoristas.length-1)await aguardar(1800);
       }
+      setProgressoPainel('Carregando os resultados salvos...');
       const atualizadas=await ApiService.obterApuracoesSalvas(anoNumero+'-'+mesNumero);
       const saida={};
       (atualizadas.apuracoes||[]).forEach(item=>{
@@ -2013,9 +2045,9 @@ function AdmPainel({st, dados, user}){
         saida[String(item.motoristaId||'')]=apuracaoSalvaParaTela(item,u?.nome||'');
       });
       setApuracoesPainel(saida);
-      if(falhas)setErroPainel(`${falhas} motorista(s) não puderam ser atualizados. Os demais foram salvos.`);
+      if(falhas.length)setErroPainel(`${falhas.length} motorista(s) não puderam ser atualizados: ${falhas.join(' | ')}`);
     }catch(e){setErroPainel('Falha ao atualizar o mês: '+e.message)}
-    finally{setCarregandoPainel(false)}
+    finally{setCarregandoPainel(false);setProgressoPainel('')}
   };
   const mesFechado=Object.values(apuracoesPainel).some(
     item=>String(item?.status||'').toUpperCase()==='FECHADO'
@@ -2050,7 +2082,7 @@ function AdmPainel({st, dados, user}){
         <div className="card kpi"><div className="l">Contestações pendentes</div><div className="v num" style={{color:pendCt?'var(--erro)':'var(--mata)'}}>{pendCt}</div></div>
         <div className="card kpi"><div className="l">Check lists p/ aprovar</div><div className="v num" style={{color:pendCk?'var(--colheita-escura)':'var(--mata)'}}>{pendCk}</div></div>
       </div>
-      {carregandoPainel&&<div className="aviso-box">Carregando o painel com dados do SharePoint...</div>}
+      {carregandoPainel&&<div className="aviso-box">{progressoPainel||'Carregando o painel com dados do SharePoint...'}</div>}
       {erroPainel&&<div className="aviso-box" style={{color:'var(--erro)'}}>{erroPainel}</div>}
       <div className="card" style={{overflowX:'auto'}}>
         <table>
