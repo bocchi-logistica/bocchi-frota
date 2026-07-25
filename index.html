@@ -218,7 +218,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 90000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '1.10.9-premiacao-historico-vinculo'
+  VERSAO: '1.11.1-selecao-apuracao-rh'
 };
 
 /* ============================================================================
@@ -1756,6 +1756,53 @@ function MotoristaApp({st, setSt, user, onSair, toast}){
   );
 }
 
+/* Fila mantida fora da tela: continua enquanto o usuário navega dentro do aplicativo. */
+const FilaApuracaoRH=(()=>{
+  let estado={rodando:false,total:0,atual:0,motorista:'',falhas:[],concluidos:0,finalizadaEm:''};
+  const ouvintes=new Set();
+  const publicar=()=>ouvintes.forEach(fn=>fn({...estado}));
+  const confirmarGravacao=async(motoristaId,competencias)=>{
+    const r=await ApiService.obterApuracoesSalvas('',motoristaId);
+    const existentes=new Set((r.apuracoes||[]).map(a=>String(a.competencia||'')));
+    return competencias.every(c=>existentes.has(c));
+  };
+  const iniciar=async({motoristas,meses})=>{
+    if(estado.rodando||!motoristas.length)return false;
+    estado={rodando:true,total:motoristas.length,atual:0,motorista:'',falhas:[],concluidos:0,finalizadaEm:''};
+    publicar();
+    const competencias=meses.map(m=>m.slice(3)+'-'+m.slice(0,2));
+    for(let i=0;i<motoristas.length;i++){
+      const u=motoristas[i];
+      estado={...estado,atual:i+1,motorista:u.nome};publicar();
+      try{
+        await executarComRetentativaGraph(async()=>{
+          const r=await ApiService.obterPremiacaoMotorista(u.nome);
+          const conjunto=new Set(competencias);
+          const apuracoes=(r.apuracoes||[]).filter(a=>conjunto.has(String(a.competencia||'')));
+          await ApiService.salvarApuracoes(idUsuario(u),apuracoes,'RH_QUADRIMESTRE');
+        });
+        estado={...estado,concluidos:estado.concluidos+1};publicar();
+      }catch(e){
+        let gravado=false;
+        if(/failed to fetch|network|fetch/i.test(String(e?.message||e))){
+          try{gravado=await confirmarGravacao(idUsuario(u),competencias)}catch(_){}
+        }
+        if(gravado)estado={...estado,concluidos:estado.concluidos+1};
+        else estado={...estado,falhas:[...estado.falhas,`${u.nome}: ${e.message}`]};
+        publicar();
+      }
+      if(i<motoristas.length-1)await aguardar(1800);
+    }
+    estado={...estado,rodando:false,motorista:'',finalizadaEm:agoraISO()};publicar();
+    return true;
+  };
+  return{
+    iniciar,
+    obter:()=>({...estado}),
+    assinar(fn){ouvintes.add(fn);fn({...estado});return()=>ouvintes.delete(fn)}
+  };
+})();
+
 /* ================= ADM: PAINEL ================= */
 function PainelRH({st,dados,user}){
   const anoAtual=String(new Date().getFullYear());
@@ -1769,6 +1816,10 @@ function PainelRH({st,dados,user}){
   const [carregandoRH,setCarregandoRH]=useState(false);
   const [erroRH,setErroRH]=useState('');
   const [progressoRH,setProgressoRH]=useState('');
+  const [sucessoRH,setSucessoRH]=useState('');
+  const [modoAtualizacao,setModoAtualizacao]=useState('PENDENTES');
+  const [selecionados,setSelecionados]=useState([]);
+  const [filaRH,setFilaRH]=useState(FilaApuracaoRH.obter());
   const mesesPorQuad={'1':['01','02','03','04'],'2':['05','06','07','08'],'3':['09','10','11','12']};
   const meses=(mesesPorQuad[quadrimestre]||mesesPorQuad['1']).map(m=>m+'/'+ano);
   const inicioPeriodo=`${ano}-${mesesPorQuad[quadrimestre][0]}-01`;
@@ -1820,39 +1871,41 @@ function PainelRH({st,dados,user}){
       .finally(()=>{if(ativo)setCarregandoRH(false)});
     return()=>{ativo=false};
   },[ano,quadrimestre]);
+  useEffect(()=>FilaApuracaoRH.assinar(setFilaRH),[]);
+  useEffect(()=>{
+    if(!filaRH.rodando&&filaRH.finalizadaEm){
+      setCarregandoRH(true);
+      ApiService.obterApuracoesSalvas().then(atualizadas=>{
+        const porMotorista={};
+        (atualizadas.apuracoes||[]).forEach(item=>{
+          const chave=String(item.motoristaId||'');
+          const u=usuariosRH.find(x=>idUsuario(x)===chave);
+          porMotorista[chave]=porMotorista[chave]||[];
+          porMotorista[chave].push(apuracaoSalvaParaTela(item,u?.nome||''));
+        });
+        setApuracoesRH(porMotorista);
+        if(filaRH.falhas.length)setErroRH(`${filaRH.falhas.length} motorista(s) não puderam ser atualizados: ${filaRH.falhas.join(' | ')}`);
+        else setErroRH('');
+      }).catch(e=>setErroRH('A atualização terminou, mas não foi possível recarregar a tabela: '+e.message))
+        .finally(()=>setCarregandoRH(false));
+    }
+  },[filaRH.finalizadaEm]);
   const recalcularQuadrimestre=async()=>{
-    if(!motoristas.length||carregandoRH)return;
-    setCarregandoRH(true);setErroRH('');setProgressoRH('');
-    const falhas=[];
-    try{
-      for(let i=0;i<motoristas.length;i++){
-        const u=motoristas[i];
-        setProgressoRH(`Processando ${i+1} de ${motoristas.length}: ${u.nome}`);
-        try{
-          await executarComRetentativaGraph(async()=>{
-            const r=await ApiService.obterPremiacaoMotorista(u.nome);
-            const competencias=new Set(meses.map(m=>m.slice(3)+'-'+m.slice(0,2)));
-            const apuracoes=(r.apuracoes||[]).filter(a=>competencias.has(String(a.competencia||'')));
-            await ApiService.salvarApuracoes(idUsuario(u),apuracoes,'RH_QUADRIMESTRE');
-          });
-        }catch(e){
-          falhas.push(`${u.nome}: ${e.message}`);
-        }
-        if(i<motoristas.length-1)await aguardar(1800);
-      }
-      setProgressoRH('Carregando os resultados salvos...');
-      const atualizadas=await ApiService.obterApuracoesSalvas();
-      const porMotorista={};
-      (atualizadas.apuracoes||[]).forEach(item=>{
-        const chave=String(item.motoristaId||'');
-        const u=usuariosRH.find(x=>idUsuario(x)===chave);
-        porMotorista[chave]=porMotorista[chave]||[];
-        porMotorista[chave].push(apuracaoSalvaParaTela(item,u?.nome||''));
-      });
-      setApuracoesRH(porMotorista);
-      if(falhas.length)setErroRH(`${falhas.length} motorista(s) não puderam ser atualizados: ${falhas.join(' | ')}`);
-    }catch(e){setErroRH('Falha ao atualizar apurações: '+e.message)}
-    finally{setCarregandoRH(false);setProgressoRH('')}
+    if(filaRH.rodando)return;
+    const competencias=meses.map(m=>m.slice(3)+'-'+m.slice(0,2));
+    const pendentes=motoristas.filter(u=>{
+      const itens=(apuracoesRH[idUsuario(u)]||[]).filter(a=>competencias.includes(String(a.competencia||'')));
+      return itens.length<4||itens.some(a=>['PENDENTE','ERRO'].includes(String(a.status||'').toUpperCase()));
+    });
+    const escolhidos=modoAtualizacao==='TODOS'?motoristas:
+      modoAtualizacao==='PENDENTES'?pendentes:
+      motoristas.filter(u=>selecionados.includes(idUsuario(u)));
+    if(!escolhidos.length){
+      setErroRH(modoAtualizacao==='SELECIONADOS'?'Selecione pelo menos um motorista.':'Não há motoristas pendentes ou com erro neste quadrimestre.');
+      return;
+    }
+    setErroRH('');
+    await FilaApuracaoRH.iniciar({motoristas:escolhidos,meses});
   };
   const itensQuadrimestre=motoristas.flatMap(u=>
     (apuracoesRH[idUsuario(u)]||[]).filter(a=>
@@ -1876,9 +1929,14 @@ function PainelRH({st,dados,user}){
       ?`Fechar o ${quadrimestre}º quadrimestre de ${ano}? Os valores ficarão bloqueados.`
       :`Reabrir o ${quadrimestre}º quadrimestre de ${ano}? As apurações voltarão para PENDENTE e precisarão ser atualizadas novamente.`;
     if(!window.confirm(pergunta))return;
-    setCarregandoRH(true);setErroRH('');
+    setCarregandoRH(true);setErroRH('');setSucessoRH('');
+    setProgressoRH(acao==='FECHAR'
+      ?'Fechando o quadrimestre e bloqueando os lançamentos. Aguarde...'
+      :'Reabrindo o quadrimestre e liberando os lançamentos. Aguarde...');
     try{
-      await ApiService.alterarStatusQuadrimestre(ano,quadrimestre,acao);
+      const resposta=await executarComRetentativaGraph(()=>
+        ApiService.alterarStatusQuadrimestre(ano,quadrimestre,acao)
+      );
       const atualizadas=await ApiService.obterApuracoesSalvas();
       const porMotorista={};
       (atualizadas.apuracoes||[]).forEach(item=>{
@@ -1888,8 +1946,11 @@ function PainelRH({st,dados,user}){
         porMotorista[chave].push(apuracaoSalvaParaTela(item,u?.nome||''));
       });
       setApuracoesRH(porMotorista);
+      setSucessoRH(acao==='FECHAR'
+        ?`Quadrimestre fechado com sucesso. ${resposta.total||0} apuração(ões) foram bloqueadas.`
+        :`Quadrimestre reaberto com sucesso. ${resposta.total||0} apuração(ões) voltaram para PENDENTE.`);
     }catch(e){setErroRH('Falha ao alterar o fechamento: '+e.message)}
-    finally{setCarregandoRH(false)}
+    finally{setCarregandoRH(false);setProgressoRH('')}
   };
   const linhas=motoristas.map(u=>{
     const chave=idUsuario(u);
@@ -1906,8 +1967,8 @@ function PainelRH({st,dados,user}){
         <h2>Fechamento de premiação — RH</h2>
         <div className="muted">Exibe os últimos valores salvos. O recálculo ocorre somente quando solicitado.</div>
       </div>
-      {pode(user,'quadrimestre.atualizar')&&<button className="btn btn-p btn-sm" disabled={carregandoRH} onClick={recalcularQuadrimestre}>
-        {carregandoRH?'Atualizando...':'Atualizar apurações do quadrimestre'}
+      {pode(user,'quadrimestre.atualizar')&&<button className="btn btn-p btn-sm" disabled={carregandoRH||filaRH.rodando} onClick={recalcularQuadrimestre}>
+        {filaRH.rodando?'Atualização em andamento':'Atualizar selecionados'}
       </button>}
       {((quadrimestreFechado&&podeReabrirPeloPerfil)||(!quadrimestreFechado&&podeFecharPeloPerfil))&&<button
         className={'btn btn-sm '+(quadrimestreFechado?'btn-s':'btn-g')}
@@ -1922,28 +1983,36 @@ function PainelRH({st,dados,user}){
         <div><label>Motorista</label><input value={nome} onChange={e=>setNome(e.target.value)} placeholder="Filtrar por nome"/></div>
         <div><label>Ano</label><select value={ano} onChange={e=>setAno(e.target.value)}>{[2025,2026,2027,2028].map(a=><option key={a}>{a}</option>)}</select></div>
         <div><label>Pagamento</label><select value={quadrimestre} onChange={e=>setQuadrimestre(e.target.value)}><option value="1">1º quadrimestre — jan a abr</option><option value="2">2º quadrimestre — mai a ago</option><option value="3">3º quadrimestre — set a dez</option></select></div>
+        <div><label>Quem atualizar</label><select value={modoAtualizacao} disabled={filaRH.rodando} onChange={e=>setModoAtualizacao(e.target.value)}>
+          <option value="PENDENTES">Somente pendentes/erros</option>
+          <option value="TODOS">Todos os motoristas</option>
+          <option value="SELECIONADOS">Motoristas selecionados</option>
+        </select></div>
       </div>
     </div>
+    {filaRH.rodando&&<div className="aviso-box"><b>Atualização em andamento:</b> {filaRH.atual} de {filaRH.total}{filaRH.motorista?' — '+filaRH.motorista:''}. Você pode navegar pelas outras telas do aplicativo, mas não feche nem atualize esta página.</div>}
     <div className="cards4">
       <div className="card kpi"><div className="l">Motoristas</div><div className="v num">{linhas.length}</div></div>
       <div className="card kpi"><div className="l">Total previsto para folha</div><div className="v num">{brl(total)}</div></div>
       <div className="card kpi"><div className="l">Período</div><div className="v" style={{fontSize:18}}>{quadrimestre}º quadrimestre/{ano}</div></div>
       <div className="card kpi"><div className="l">Status</div><div className="v" style={{fontSize:18}}>{quadrimestreFechado?'FECHADO':podeFechar?'PRONTO PARA FECHAR':'EM APURAÇÃO'}</div></div>
     </div>
-    {carregandoRH&&<div className="aviso-box">{progressoRH||'Atualizando ou consultando as apurações salvas...'}</div>}
+    {carregandoRH&&!filaRH.rodando&&<div className="aviso-box">{progressoRH||'Consultando as apurações salvas...'}</div>}
+    {sucessoRH&&<div className="aviso-box" style={{color:'var(--mata)'}}>{sucessoRH}</div>}
     {erroRH&&<div className="aviso-box" style={{color:'var(--erro)'}}>{erroRH}</div>}
     <div className="card" style={{overflowX:'auto'}}>
       <table>
-        <thead><tr><th>Motorista</th>{meses.map(m=><th key={m} className="td-num">{mesLabel(m)}</th>)}<th className="td-num">Acumulado</th><th className="td-num">Valor a pagar</th><th></th></tr></thead>
+        <thead><tr>{modoAtualizacao==='SELECIONADOS'&&<th><input type="checkbox" disabled={filaRH.rodando} checked={motoristas.length>0&&motoristas.every(u=>selecionados.includes(idUsuario(u)))} onChange={e=>setSelecionados(e.target.checked?motoristas.map(idUsuario):[])}/></th>}<th>Motorista</th>{meses.map(m=><th key={m} className="td-num">{mesLabel(m)}</th>)}<th className="td-num">Acumulado</th><th className="td-num">Valor a pagar</th><th></th></tr></thead>
         <tbody>{linhas.map(l=><React.Fragment key={l.u.id||l.u.nome}>
           <tr>
+            {modoAtualizacao==='SELECIONADOS'&&<td><input type="checkbox" disabled={filaRH.rodando} checked={selecionados.includes(idUsuario(l.u))} onChange={e=>setSelecionados(v=>e.target.checked?[...new Set([...v,idUsuario(l.u)])]:v.filter(id=>id!==idUsuario(l.u)))}/></td>}
             <td><b>{l.u.nome}</b></td>
             {l.apuracoes.map((a,i)=><td key={meses[i]} className="td-num num" style={{color:a.apurado<0?'var(--erro)':'inherit'}}>{brl(a.apurado)}</td>)}
             <td className="td-num num"><b style={{color:l.acumulado<0?'var(--erro)':'var(--mata)'}}>{brl(l.acumulado)}</b></td>
             <td className="td-num num"><b>{brl(l.pagar)}</b></td>
             <td><button className="btn btn-s btn-sm" onClick={()=>setAberto(aberto===l.u.nome?'':l.u.nome)}>{aberto===l.u.nome?'Fechar':'Auditar'}</button></td>
           </tr>
-          {aberto===l.u.nome&&<tr><td colSpan="8">
+          {aberto===l.u.nome&&<tr><td colSpan={modoAtualizacao==='SELECIONADOS'?"9":"8"}>
             <div className="cards4">{l.apuracoes.map((a,i)=><div className="card" key={meses[i]} style={{boxShadow:'none',border:'1px solid var(--linha)'}}>
               <b>{mesLabel(meses[i])}</b>
               <div className="linha-item"><span>Tipo / meta</span><span>{a.tipo||'—'}{a.meta?' · '+brl(a.meta.meta):''}</span></div>
