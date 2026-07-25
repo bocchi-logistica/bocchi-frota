@@ -1823,6 +1823,9 @@ function PainelRH({st,dados,user}){
   const [filaRH,setFilaRH]=useState(FilaApuracaoRH.obter());
   const mesesPorQuad={'1':['01','02','03','04'],'2':['05','06','07','08'],'3':['09','10','11','12']};
   const meses=(mesesPorQuad[quadrimestre]||mesesPorQuad['1']).map(m=>m+'/'+ano);
+  const competenciaAtual=new Date().toISOString().slice(0,7);
+  const mesesProcessaveis=meses.filter(m=>(m.slice(3)+'-'+m.slice(0,2))<=competenciaAtual);
+  const periodoAindaNaoIniciado=mesesProcessaveis.length===0;
   const inicioPeriodo=`${ano}-${mesesPorQuad[quadrimestre][0]}-01`;
   const ultimoMes=mesesPorQuad[quadrimestre][3];
   const fimPeriodo=new Date(Number(ano),Number(ultimoMes),0).toISOString().slice(0,10);
@@ -1894,11 +1897,15 @@ function PainelRH({st,dados,user}){
     }
   },[filaRH.finalizadaEm]);
   const recalcularQuadrimestre=async()=>{
-    if(filaRH.rodando||quadrimestreFechado)return;
-    const competencias=meses.map(m=>m.slice(3)+'-'+m.slice(0,2));
+    if(filaRH.rodando||periodoBloqueado)return;
+    if(periodoAindaNaoIniciado){
+      setErroRH(`O ${quadrimestre}º quadrimestre de ${ano} ainda não começou. Não há competências disponíveis para atualizar.`);
+      return;
+    }
+    const competencias=mesesProcessaveis.map(m=>m.slice(3)+'-'+m.slice(0,2));
     const pendentes=motoristas.filter(u=>{
       const itens=(apuracoesRH[idUsuario(u)]||[]).filter(a=>competencias.includes(String(a.competencia||'')));
-      return itens.length<4||itens.some(a=>['PENDENTE','ERRO'].includes(String(a.status||'').toUpperCase()));
+      return itens.length<competencias.length||itens.some(a=>['PENDENTE','ERRO'].includes(String(a.status||'').toUpperCase()));
     });
     const escolhidos=modoAtualizacao==='TODOS'?motoristas:
       modoAtualizacao==='PENDENTES'?pendentes:
@@ -1908,26 +1915,69 @@ function PainelRH({st,dados,user}){
       return;
     }
     setErroRH('');
-    await FilaApuracaoRH.iniciar({motoristas:escolhidos,meses});
+    await FilaApuracaoRH.iniciar({motoristas:escolhidos,meses:mesesProcessaveis});
   };
-  const itensQuadrimestre=motoristasPeriodo.flatMap(u=>
-    (apuracoesRH[idUsuario(u)]||[]).filter(a=>
-      meses.some(m=>String(a.competencia||'')===m.slice(3)+'-'+m.slice(0,2))
-    )
+  /*
+   * A conferência é mensal. Um motorista só gera uma competência esperada
+   * quando está configurado para a premiação e possui vínculo sobreposto ao mês.
+   * Na ausência total de histórico de vínculo para o usuário, preserva-se a
+   * compatibilidade atual: usuário ativo é aplicável aos quatro meses.
+   */
+  const competenciasEsperadas=motoristasPeriodo.flatMap(u=>mesesProcessaveis
+    .map(m=>{
+      const competencia=m.slice(3)+'-'+m.slice(0,2);
+      const [anoMes,mesNumero]=competencia.split('-').map(Number);
+      const inicioMes=`${anoMes}-${String(mesNumero).padStart(2,'0')}-01`;
+      const fimMes=new Date(anoMes,mesNumero,0).toISOString().slice(0,10);
+      return usuarioValidoPremiacaoPeriodo(u,vinculosRH,inicioMes,fimMes)
+        ?{u,competencia,chave:idUsuario(u)+'|'+competencia}
+        :null;
+    })
+    .filter(Boolean)
   );
-  const totalEsperado=motoristasPeriodo.length*4;
-  const totalFechados=itensQuadrimestre.filter(a=>String(a.status||'').toUpperCase()==='FECHADO').length;
-  const quadrimestreFechado=itensQuadrimestre.length>0&&
-    itensQuadrimestre.every(a=>String(a.status||'').toUpperCase()==='FECHADO');
-  const podeFechar=itensQuadrimestre.length>0&&
-    itensQuadrimestre.every(a=>['CALCULADO','FECHADO'].includes(String(a.status||'').toUpperCase()));
-  const totalAusentes=Math.max(0,totalEsperado-itensQuadrimestre.length);
+  const apuracoesPorChave=new Map();
+  motoristasPeriodo.forEach(u=>(apuracoesRH[idUsuario(u)]||[]).forEach(a=>{
+    const competencia=String(a.competencia||'');
+    if(meses.some(m=>competencia===m.slice(3)+'-'+m.slice(0,2))){
+      apuracoesPorChave.set(idUsuario(u)+'|'+competencia,a);
+    }
+  }));
+  const itensQuadrimestre=[...apuracoesPorChave.values()];
+  const ausentes=competenciasEsperadas.filter(item=>!apuracoesPorChave.has(item.chave));
+  const totalEsperado=competenciasEsperadas.length;
+  const totalAusentes=ausentes.length;
+  const totalEncontrado=totalEsperado-totalAusentes;
+  const totalFechados=competenciasEsperadas.filter(item=>
+    String(apuracoesPorChave.get(item.chave)?.status||'').toUpperCase()==='FECHADO'
+  ).length;
+  const haRegistrosFechados=totalFechados>0;
+  const quadrimestreFechado=totalEsperado>0&&totalAusentes===0&&totalFechados===totalEsperado;
+  const fechadoComPendencias=haRegistrosFechados&&!quadrimestreFechado;
+  const periodoBloqueado=haRegistrosFechados;
+  const podeFechar=totalEsperado>0&&totalAusentes===0&&
+    competenciasEsperadas.every(item=>
+      ['CALCULADO','FECHADO'].includes(String(apuracoesPorChave.get(item.chave)?.status||'').toUpperCase())
+    );
   const podeFecharPeloPerfil=pode(user,'quadrimestre.fechar');
   const podeReabrirPeloPerfil=pode(user,'quadrimestre.reabrir');
   const alterarFechamento=async(acao)=>{
     if(carregandoRH)return;
     if(acao==='FECHAR'&&quadrimestreFechado)return;
-    if(acao==='REABRIR'&&!quadrimestreFechado)return;
+    if(acao==='REABRIR'&&!haRegistrosFechados)return;
+    if(acao==='FECHAR'&&new Date().toISOString().slice(0,10)<=fimPeriodo){
+      setErroRH(`O ${quadrimestre}º quadrimestre de ${ano} termina em ${dataBR(fimPeriodo)}. O fechamento definitivo só será liberado após o encerramento do período.`);
+      return;
+    }
+    if(acao==='FECHAR'&&!podeFechar){
+      const amostraAusentes=ausentes.slice(0,6).map(item=>
+        `${item.u.nome} — ${mesLabel(item.competencia.slice(5)+'/'+item.competencia.slice(0,4))}`
+      );
+      const outros=Math.max(0,ausentes.length-amostraAusentes.length);
+      setErroRH(totalAusentes
+        ?`Não é possível fechar: faltam ${totalAusentes} competência(s) aplicável(is). ${amostraAusentes.join(' | ')}${outros?` | e mais ${outros}`:''}. Atualize as pendências antes de fechar.`
+        :'Não é possível fechar: ainda existem apurações pendentes ou com erro.');
+      return;
+    }
     const pergunta=acao==='FECHAR'
       ?`Fechar o ${quadrimestre}º quadrimestre de ${ano}? Os valores ficarão bloqueados.`
       :`Reabrir o ${quadrimestre}º quadrimestre de ${ano}? As apurações voltarão para PENDENTE e precisarão ser atualizadas novamente.`;
@@ -1989,26 +2039,26 @@ function PainelRH({st,dados,user}){
     <div className="row" style={{flexWrap:'wrap'}}>
       <div className="grow">
         <h2>Fechamento de premiação — RH</h2>
-        <div className="muted">Exibe os últimos valores salvos. O recálculo ocorre somente quando solicitado. <b>Versão 1.11.5.</b></div>
+        <div className="muted">Exibe os últimos valores salvos. O recálculo ocorre somente quando solicitado. <b>Versão 1.11.6.</b></div>
       </div>
       <button
-        className={'btn btn-sm '+(!quadrimestreFechado&&pode(user,'quadrimestre.atualizar')?'btn-p':'btn-g')}
-        disabled={quadrimestreFechado||carregandoRH||filaRH.rodando||!pode(user,'quadrimestre.atualizar')}
-        title={quadrimestreFechado?'Reabra o quadrimestre para atualizar as apurações.':''}
+        className={'btn btn-sm '+(!periodoBloqueado&&pode(user,'quadrimestre.atualizar')?'btn-p':'btn-g')}
+        disabled={periodoBloqueado||periodoAindaNaoIniciado||carregandoRH||filaRH.rodando||!pode(user,'quadrimestre.atualizar')}
+        title={periodoBloqueado?'Reabra o quadrimestre para atualizar as apurações.':periodoAindaNaoIniciado?'Este quadrimestre ainda não começou.':''}
         onClick={recalcularQuadrimestre}>
         {filaRH.rodando?'Atualização em andamento':'Atualizar selecionados'}
       </button>
       <button
-        className={'btn btn-sm '+(!quadrimestreFechado&&podeFecharPeloPerfil?'btn-p':'btn-g')}
-        disabled={quadrimestreFechado||carregandoRH||filaRH.rodando||!podeFecharPeloPerfil}
-        title={!quadrimestreFechado&&!podeFechar?'Ao clicar, o sistema informará exatamente quais apurações impedem o fechamento.':''}
+        className={'btn btn-sm '+(!periodoBloqueado&&podeFecharPeloPerfil?'btn-p':'btn-g')}
+        disabled={periodoBloqueado||periodoAindaNaoIniciado||carregandoRH||filaRH.rodando||!podeFecharPeloPerfil}
+        title={!periodoBloqueado&&!podeFechar?'Ao clicar, o sistema informará exatamente quais apurações impedem o fechamento.':''}
         onClick={()=>alterarFechamento('FECHAR')}>
         Fechar quadrimestre
       </button>
       <button
-        className={'btn btn-sm '+(quadrimestreFechado&&podeReabrirPeloPerfil?'btn-p':'btn-g')}
-        disabled={!quadrimestreFechado||carregandoRH||filaRH.rodando||!podeReabrirPeloPerfil}
-        title={!quadrimestreFechado?'Disponível somente após o fechamento do quadrimestre.':''}
+        className={'btn btn-sm '+(haRegistrosFechados&&podeReabrirPeloPerfil?'btn-p':'btn-g')}
+        disabled={!haRegistrosFechados||carregandoRH||filaRH.rodando||!podeReabrirPeloPerfil}
+        title={!haRegistrosFechados?'Disponível somente após o fechamento do quadrimestre.':''}
         onClick={()=>alterarFechamento('REABRIR')}>
         Reabrir quadrimestre
       </button>
@@ -2030,11 +2080,18 @@ function PainelRH({st,dados,user}){
       <div className="card kpi"><div className="l">Motoristas</div><div className="v num">{linhas.length}</div></div>
       <div className="card kpi"><div className="l">Total previsto para folha</div><div className="v num">{brl(total)}</div></div>
       <div className="card kpi"><div className="l">Período</div><div className="v" style={{fontSize:18}}>{quadrimestre}º quadrimestre/{ano}</div></div>
-      <div className="card kpi"><div className="l">Status</div><div className="v" style={{fontSize:18}}>{quadrimestreFechado?'FECHADO':podeFechar?'PRONTO PARA FECHAR':'EM APURAÇÃO'}</div></div>
+      <div className="card kpi"><div className="l">Status</div><div className="v" style={{fontSize:18}}>{quadrimestreFechado?'FECHADO':fechadoComPendencias?'FECHADO COM PENDÊNCIAS':periodoAindaNaoIniciado?'AGUARDANDO PERÍODO':podeFechar?'PRONTO PARA FECHAR':'EM APURAÇÃO'}</div></div>
     </div>
     {totalAusentes>0&&<div className="aviso-box">
-      <b>Conferência do período:</b> {itensQuadrimestre.length} apuração(ões) encontrada(s) de {totalEsperado} esperadas.
-      {' '}{totalAusentes} competência(s) não possuem registro salvo. Isso não altera o status das apurações existentes.
+      <b>Conferência do período:</b> {totalEncontrado} de {totalEsperado} competência(s) aplicável(is) possuem apuração salva.
+      {' '}Faltam {totalAusentes}. Atualize as pendências antes de fechar o quadrimestre.
+      <div className="muted" style={{marginTop:6}}>
+        {ausentes.slice(0,8).map(item=>`${item.u.nome} — ${mesLabel(item.competencia.slice(5)+'/'+item.competencia.slice(0,4))}`).join(' | ')}
+        {ausentes.length>8?` | e mais ${ausentes.length-8}`:''}
+      </div>
+    </div>}
+    {periodoAindaNaoIniciado&&<div className="aviso-box">
+      <b>Período futuro:</b> o {quadrimestre}º quadrimestre de {ano} começa em {mesLabel(meses[0])}. A atualização será liberada quando a primeira competência iniciar.
     </div>}
     {carregandoRH&&!filaRH.rodando&&<div className="aviso-box">{progressoRH||'Consultando as apurações salvas...'}</div>}
     {sucessoRH&&<div className="aviso-box" style={{color:'var(--mata)'}}>{sucessoRH}</div>}
