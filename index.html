@@ -2194,62 +2194,80 @@ function AdmPainel({st, dados, user}){
   const [mes,setMes]=useState(MES_ATUAL);
   const [usuariosPainel,setUsuariosPainel]=useState([]);
   const [vinculosPainel,setVinculosPainel]=useState([]);
+  const [veiculosPainel,setVeiculosPainel]=useState([]);
+  const [cargasPainel,setCargasPainel]=useState([]);
   const [apuracoesPainel,setApuracoesPainel]=useState({});
   const [carregandoPainel,setCarregandoPainel]=useState(false);
   const [erroPainel,setErroPainel]=useState('');
   const [progressoPainel,setProgressoPainel]=useState('');
+  const [fMotorista,setFMotorista]=useState('');
+  const [fTipo,setFTipo]=useState('');
+  const [fSituacao,setFSituacao]=useState('');
+  const [subPainel,setSubPainel]=useState('visao');
+  const [motoristaDetalhe,setMotoristaDetalhe]=useState(null);
+  const [fBuscaDetalhe,setFBuscaDetalhe]=useState('');
+  const [fProdutoDetalhe,setFProdutoDetalhe]=useState('');
+  const [fDataInicialDetalhe,setFDataInicialDetalhe]=useState('');
+  const [fDataFinalDetalhe,setFDataFinalDetalhe]=useState('');
+  const [revisao,setRevisao]=useState(0);
   const [mesNumero,anoNumero]=String(mes).split('/');
-  const inicioMes=`${anoNumero}-${mesNumero}-01`;
+  const competencia=anoNumero+'-'+mesNumero;
+  const inicioMes=`${competencia}-01`;
   const fimMes=new Date(Number(anoNumero),Number(mesNumero),0).toISOString().slice(0,10);
-  const motoristas = usuariosPainel.filter(u=>
-    usuarioValidoPremiacaoPeriodo(u,vinculosPainel,inicioMes,fimMes)
-  );
+
   useEffect(()=>{
-    if(CONFIG.MODO_DEMONSTRACAO){
-      setUsuariosPainel(st.usuarios||[]);
-      setVinculosPainel(st.vinculos||[]);
-      return;
-    }
     let ativo=true;
-    setCarregandoPainel(true);
-    setErroPainel('');
-    ApiService.admCadastros()
-      .then(r=>{
-        if(!ativo) return;
-        setUsuariosPainel(Array.isArray(r.usuarios)?r.usuarios:[]);
-        setVinculosPainel(Array.isArray(r.vinculos)?r.vinculos:[]);
-      })
-      .catch(e=>{
-        if(!ativo) return;
-        setUsuariosPainel([]);
-        setErroPainel('Não foi possível carregar os motoristas: '+e.message);
-      })
-      .finally(()=>{if(ativo)setCarregandoPainel(false)});
-    return()=>{ativo=false};
-  },[]);
-  useEffect(()=>{
-    if(CONFIG.MODO_DEMONSTRACAO) return;
-    let ativo=true;
-    setCarregandoPainel(true);
-    setErroPainel('');
-    const competencia=anoNumero+'-'+mesNumero;
-    ApiService.obterApuracoesSalvas(competencia)
-      .then(r=>{
+    const carregar=async()=>{
+      setCarregandoPainel(true);
+      setErroPainel('');
+      try{
+        if(CONFIG.MODO_DEMONSTRACAO){
+          if(!ativo)return;
+          setUsuariosPainel(st.usuarios||[]);
+          setVinculosPainel(st.vinculos||[]);
+          setVeiculosPainel(Object.values(st.frota||{}));
+          setCargasPainel((st.cargas||[]).filter(c=>String(c.mes||c.competencia||'')===mes||String(c.competencia||'')===competencia));
+          const salvas={};
+          (st.apuracoes||[]).filter(a=>String(a.competencia||'')===competencia).forEach(a=>{salvas[String(a.motoristaId||a.usuarioId||'')]=a});
+          setApuracoesPainel(salvas);
+          return;
+        }
+        const [cadastros,cargasResp,apuracoesResp]=await Promise.all([
+          ApiService.admCadastros(),
+          ApiService.obterCargas(competencia),
+          ApiService.obterApuracoesSalvas(competencia)
+        ]);
         if(!ativo)return;
-        const saida={};
-        (r.apuracoes||[]).forEach(item=>{
-          const u=usuariosPainel.find(x=>idUsuario(x)===String(item.motoristaId||''));
-          saida[String(item.motoristaId||'')]=apuracaoSalvaParaTela(item,u?.nome||'');
+        const usuarios=Array.isArray(cadastros.usuarios)?cadastros.usuarios:[];
+        setUsuariosPainel(usuarios);
+        setVinculosPainel(Array.isArray(cadastros.vinculos)?cadastros.vinculos:[]);
+        setVeiculosPainel(Array.isArray(cadastros.veiculos)?cadastros.veiculos:[]);
+        setCargasPainel(Array.isArray(cargasResp.cargas)?cargasResp.cargas:[]);
+        const salvas={};
+        (apuracoesResp.apuracoes||[]).forEach(item=>{
+          const u=usuarios.find(x=>idUsuario(x)===String(item.motoristaId||''));
+          salvas[String(item.motoristaId||'')]=apuracaoSalvaParaTela(item,u?.nome||'');
         });
-        setApuracoesPainel(saida);
-      })
-      .catch(e=>{if(ativo)setErroPainel('Não foi possível carregar as apurações salvas: '+e.message)})
-      .finally(()=>{if(ativo)setCarregandoPainel(false)});
+        setApuracoesPainel(salvas);
+      }catch(e){
+        if(ativo)setErroPainel('Não foi possível carregar o painel: '+e.message);
+      }finally{
+        if(ativo)setCarregandoPainel(false);
+      }
+    };
+    carregar();
     return()=>{ativo=false};
-  },[usuariosPainel,vinculosPainel,mes]);
+  },[mes,revisao]);
+
+  const motoristas=usuariosPainel.filter(u=>usuarioValidoPremiacaoPeriodo(u,vinculosPainel,inicioMes,fimMes));
+  const mesFechado=Object.values(apuracoesPainel).some(
+    item=>String(item?.status||'').toUpperCase()==='FECHADO'
+  );
   const recalcularMes=async()=>{
     if(!motoristas.length||carregandoPainel)return;
-    setCarregandoPainel(true);setErroPainel('');setProgressoPainel('');
+    setCarregandoPainel(true);
+    setErroPainel('');
+    setProgressoPainel('');
     const falhas=[];
     try{
       for(let i=0;i<motoristas.length;i++){
@@ -2258,7 +2276,6 @@ function AdmPainel({st, dados, user}){
         try{
           await executarComRetentativaGraph(async()=>{
             const r=await ApiService.obterPremiacaoMotorista(u.nome);
-            const competencia=anoNumero+'-'+mesNumero;
             const apuracao=(r.apuracoes||[]).find(a=>String(a.competencia||'')===competencia);
             if(apuracao)await ApiService.salvarApuracoes(idUsuario(u),[apuracao]);
           });
@@ -2268,7 +2285,7 @@ function AdmPainel({st, dados, user}){
         if(i<motoristas.length-1)await aguardar(1800);
       }
       setProgressoPainel('Carregando os resultados salvos...');
-      const atualizadas=await ApiService.obterApuracoesSalvas(anoNumero+'-'+mesNumero);
+      const atualizadas=await ApiService.obterApuracoesSalvas(competencia);
       const saida={};
       (atualizadas.apuracoes||[]).forEach(item=>{
         const u=usuariosPainel.find(x=>idUsuario(x)===String(item.motoristaId||''));
@@ -2276,67 +2293,208 @@ function AdmPainel({st, dados, user}){
       });
       setApuracoesPainel(saida);
       if(falhas.length)setErroPainel(`${falhas.length} motorista(s) não puderam ser atualizados: ${falhas.join(' | ')}`);
-    }catch(e){setErroPainel('Falha ao atualizar o mês: '+e.message)}
-    finally{setCarregandoPainel(false);setProgressoPainel('')}
+    }catch(e){
+      setErroPainel('Falha ao atualizar a apuração mensal: '+e.message);
+    }finally{
+      setCarregandoPainel(false);
+      setProgressoPainel('');
+    }
   };
-  const mesFechado=Object.values(apuracoesPainel).some(
-    item=>String(item?.status||'').toUpperCase()==='FECHADO'
-  );
-  const linhas = motoristas.map(u=>{
-    const oficial=apuracoesPainel[idUsuario(u)];
-    const stMotorista={...st,apuracoes:oficial&&!oficial.erro?[oficial]:[]};
-    return {u, ...apuracaoMes(stMotorista,dados,u.nome,mes)};
-  })
-    .sort((a,b)=>b.fat-a.fat);
-  const totFat = linhas.reduce((s,l)=>s+l.fat,0);
-  const pendCt = st.contestacoes.filter(c=>c.status==='pendente').length;
-  const pendCk = st.checklists.filter(c=>c.status==='pendente').length;
-  return (
-    <React.Fragment>
-      <div className="row" style={{flexWrap:'wrap'}}>
-        <h2 className="grow">Painel — {mesLabel(mes)}</h2>
-        {pode(user,'apuracao.mensal.atualizar')&&<button
-          className="btn btn-p btn-sm"
-          disabled={carregandoPainel||mesFechado}
-          title={mesFechado?'O quadrimestre está fechado. Reabra-o no Fechamento RH para atualizar este mês.':''}
-          onClick={recalcularMes}>
-          {carregandoPainel?'Atualizando...':mesFechado?'Quadrimestre fechado':'Atualizar cargas mensais'}
-        </button>}
-        <select style={{width:'auto'}} value={mes} onChange={e=>setMes(e.target.value)}>
-          {MESES_2026.slice(0,7).map(m=><option key={m} value={m}>{mesLabel(m)}</option>)}
-        </select>
+  const veiculoPorPlaca=new Map((veiculosPainel||[]).map(v=>[String(v.placa||'').trim().toUpperCase(),v]));
+  const cargasPorMotorista=new Map();
+  for(const carga of cargasPainel){
+    const uid=String(carga.usuarioId||'');
+    const chave=uid||normalizar(carga.motorista||'');
+    if(!cargasPorMotorista.has(chave))cargasPorMotorista.set(chave,[]);
+    cargasPorMotorista.get(chave).push(carga);
+  }
+  const pendenciasNome=nome=>{
+    const contestacoes=(st.contestacoes||[]).filter(c=>String(c.status||'').toLowerCase()==='pendente'&&normalizar(c.motorista)===normalizar(nome)).length;
+    const checklists=(st.checklists||[]).filter(c=>String(c.status||'').toLowerCase()==='pendente'&&normalizar(c.motoristaNome||c.motorista)===normalizar(nome)).length;
+    return contestacoes+checklists;
+  };
+  const linhas=motoristas.map(u=>{
+    const uid=idUsuario(u);
+    const cargas=(cargasPorMotorista.get(uid)||cargasPorMotorista.get(normalizar(u.nome))||[]).slice().sort((a,b)=>String(b.data||'').localeCompare(String(a.data||'')));
+    const peso=cargas.reduce((s,c)=>s+Number(c.peso||c.pesoTon||0),0);
+    const frete=cargas.reduce((s,c)=>s+Number(c.freteTotal||0),0);
+    const premiacao=cargas.reduce((s,c)=>s+Number(c.valor||c.premiacao||0),0);
+    const tipos=[...new Set(cargas.map(c=>{
+      const placa=String(c.placa||'').trim().toUpperCase();
+      return String(c.tipoVeiculo||veiculoPorPlaca.get(placa)?.tipoModelo||veiculoPorPlaca.get(placa)?.tipo||'').trim();
+    }).filter(Boolean))];
+    const tipo=tipos.join(' / ');
+    const oficial=apuracoesPainel[uid];
+    const pendencias=pendenciasNome(u.nome);
+    const inconsistencias=cargas.filter(c=>!Number(c.peso||c.pesoTon||0)||!Number(c.freteTotal||0)||!String(c.tipoVeiculo||veiculoPorPlaca.get(String(c.placa||'').trim().toUpperCase())?.tipoModelo||'').trim()).length;
+    let situacao='CONFERIDO';
+    if(oficial&&String(oficial.status||'').toUpperCase()==='FECHADO')situacao='FECHADO';
+    else if(!cargas.length)situacao='SEM_MOVIMENTO';
+    else if(inconsistencias>0||!oficial)situacao='DIVERGENTE';
+    else if(pendencias>0)situacao='PENDENTE';
+    return {u,uid,cargas,peso,frete,premiacao,tipo,pendencias,inconsistencias,oficial,situacao};
+  }).sort((a,b)=>b.frete-a.frete||a.u.nome.localeCompare(b.u.nome,'pt-BR'));
+
+  const tipos=[...new Set(linhas.map(l=>l.tipo).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  const linhasFiltradas=linhas.filter(l=>(!fMotorista||l.uid===fMotorista)&&(!fTipo||l.tipo===fTipo)&&(!fSituacao||l.situacao===fSituacao));
+  const totalPeso=linhasFiltradas.reduce((s,l)=>s+l.peso,0);
+  const totalFrete=linhasFiltradas.reduce((s,l)=>s+l.frete,0);
+  const totalCargas=linhasFiltradas.reduce((s,l)=>s+l.cargas.length,0);
+  const totalPendencias=linhasFiltradas.reduce((s,l)=>s+l.pendencias,0);
+  const totalDivergencias=linhasFiltradas.filter(l=>l.situacao==='DIVERGENTE').length;
+  const totalContestacoes=(st.contestacoes||[]).filter(c=>String(c.status||'').toLowerCase()==='pendente').length;
+  const totalChecklist=(st.checklists||[]).filter(c=>String(c.status||'').toLowerCase()==='pendente').length;
+  const totalAutorizacoes=totalChecklist;
+  const limparFiltros=()=>{setFMotorista('');setFTipo('');setFSituacao('')};
+  const rotuloSituacao=s=>({CONFERIDO:'Conferido',PENDENTE:'Pendente',DIVERGENTE:'Divergente',SEM_MOVIMENTO:'Sem movimento',FECHADO:'Fechado'}[s]||s);
+  const corSituacao=s=>({CONFERIDO:'var(--mata)',PENDENTE:'var(--colheita-escura)',DIVERGENTE:'var(--erro)',SEM_MOVIMENTO:'var(--texto-suave)',FECHADO:'var(--azul)'}[s]||'inherit');
+  const abrirDetalhe=linha=>{
+    setMotoristaDetalhe(linha);
+    setFBuscaDetalhe('');setFProdutoDetalhe('');setFDataInicialDetalhe('');setFDataFinalDetalhe('');
+    setSubPainel('detalhes');
+  };
+  const irParaSubtela=(sub,filtro='')=>{
+    if(sub==='cargas'&&filtro)setFSituacao(filtro);
+    setSubPainel(sub);
+  };
+
+  const produtosDetalhe=[...new Set((motoristaDetalhe?.cargas||[]).map(c=>String(c.produto||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  const cargasDetalhe=(motoristaDetalhe?.cargas||[]).filter(c=>{
+    const busca=normalizar(fBuscaDetalhe);
+    const data=String(c.data||'').slice(0,10);
+    const correspondeBusca=!busca||[c.nota,c.numeroNota,c.origem,c.destino,c.placa,c.produto].some(v=>normalizar(v).includes(busca));
+    return correspondeBusca&&(!fProdutoDetalhe||String(c.produto||'')===fProdutoDetalhe)&&(!fDataInicialDetalhe||data>=fDataInicialDetalhe)&&(!fDataFinalDetalhe||data<=fDataFinalDetalhe);
+  });
+  const totaisDetalhe={
+    cargas:cargasDetalhe.length,
+    peso:cargasDetalhe.reduce((s,c)=>s+Number(c.peso||c.pesoTon||0),0),
+    frete:cargasDetalhe.reduce((s,c)=>s+Number(c.freteTotal||0),0),
+    premiacao:cargasDetalhe.reduce((s,c)=>s+Number(c.valor||c.premiacao||0),0)
+  };
+
+  const Subtabs=()=> <div className="subtabs" style={{marginBottom:12}}>
+    <button className={'subtab'+(subPainel==='visao'?' on':'')} onClick={()=>setSubPainel('visao')}>Visão geral</button>
+    <button className={'subtab'+(['cargas','detalhes'].includes(subPainel)?' on':'')} onClick={()=>setSubPainel('cargas')}>Cargas</button>
+    <button className={'subtab'+(subPainel==='pendencias'?' on':'')} onClick={()=>setSubPainel('pendencias')}>Pendências</button>
+    <button className={'subtab'+(subPainel==='autorizacoes'?' on':'')} onClick={()=>setSubPainel('autorizacoes')}>Autorizações</button>
+    <button className={'subtab'+(subPainel==='contestacoes'?' on':'')} onClick={()=>setSubPainel('contestacoes')}>Contestações</button>
+  </div>;
+
+  const Cabecalho=()=> <div className="row" style={{flexWrap:'wrap',gap:10,alignItems:'flex-end'}}>
+    <div className="grow"><h2 style={{marginBottom:2}}>Painel operacional</h2><div className="muted">Indicadores para direcionar a equipe às telas responsáveis</div></div>
+    <button className="btn btn-s btn-sm" disabled={carregandoPainel} onClick={()=>setRevisao(v=>v+1)}>{carregandoPainel?'Carregando...':'Recarregar dados'}</button>
+    {pode(user,'apuracao.mensal.atualizar')&&<button
+      className="btn btn-p btn-sm"
+      disabled={carregandoPainel||mesFechado}
+      title={mesFechado?'O quadrimestre está fechado. Reabra-o no Fechamento RH para atualizar este mês.':''}
+      onClick={recalcularMes}>
+      {carregandoPainel?'Atualizando...':mesFechado?'Quadrimestre fechado':'Atualizar apuração mensal'}
+    </button>}
+  </div>;
+
+  const FiltrosCargas=()=> <div className="card" style={{marginTop:12}}><div className="form-grid" style={{alignItems:'end'}}>
+    <div><label>Competência</label><select value={mes} onChange={e=>setMes(e.target.value)}>{MESES_2026.map(m=><option key={m} value={m}>{mesLabel(m)}</option>)}</select></div>
+    <div><label>Motorista</label><select value={fMotorista} onChange={e=>setFMotorista(e.target.value)}><option value="">Todos</option>{linhas.map(l=><option key={l.uid} value={l.uid}>{l.u.nome}</option>)}</select></div>
+    <div><label>Tipo de veículo</label><select value={fTipo} onChange={e=>setFTipo(e.target.value)}><option value="">Todos</option>{tipos.map(t=><option key={t} value={t}>{t}</option>)}</select></div>
+    <div><label>Situação</label><select value={fSituacao} onChange={e=>setFSituacao(e.target.value)}><option value="">Todas</option>{['CONFERIDO','PENDENTE','DIVERGENTE','SEM_MOVIMENTO','FECHADO'].map(s=><option key={s} value={s}>{rotuloSituacao(s)}</option>)}</select></div>
+    <div><button className="btn btn-s" style={{width:'100%'}} onClick={limparFiltros}>Limpar filtros</button></div>
+  </div></div>;
+
+  if(subPainel==='detalhes'&&motoristaDetalhe){
+    return <React.Fragment>
+      <Cabecalho/><Subtabs/>
+      <div className="row" style={{marginBottom:12,flexWrap:'wrap'}}>
+        <button className="btn btn-s btn-sm" onClick={()=>setSubPainel('cargas')}>← Voltar para cargas</button>
+        <div className="grow"><h3 style={{margin:0}}>{motoristaDetalhe.u.nome}</h3><div className="muted">{mesLabel(mes)} · {motoristaDetalhe.tipo||'Tipo não identificado'}</div></div>
       </div>
       <div className="cards4">
-        <div className="card kpi"><div className="l">Faturamento frota</div><div className="v num">{brl(totFat)}</div></div>
-        <div className="card kpi"><div className="l">Cargas no mês</div><div className="v num">{linhas.reduce((s,l)=>s+l.nCargas,0)}</div></div>
-        <div className="card kpi"><div className="l">Contestações pendentes</div><div className="v num" style={{color:pendCt?'var(--erro)':'var(--mata)'}}>{pendCt}</div></div>
-        <div className="card kpi"><div className="l">Check lists p/ aprovar</div><div className="v num" style={{color:pendCk?'var(--colheita-escura)':'var(--mata)'}}>{pendCk}</div></div>
+        <div className="card kpi"><div className="l">Cargas</div><div className="v num">{totaisDetalhe.cargas}</div></div>
+        <div className="card kpi"><div className="l">Peso transportado</div><div className="v num">{brn(totaisDetalhe.peso,1)} t</div></div>
+        <div className="card kpi"><div className="l">Frete total</div><div className="v num">{brl(totaisDetalhe.frete)}</div></div>
+        <div className="card kpi"><div className="l">Premiação das cargas</div><div className="v num">{brl(totaisDetalhe.premiacao)}</div></div>
       </div>
-      {carregandoPainel&&<div className="aviso-box">{progressoPainel||'Carregando o painel com dados do SharePoint...'}</div>}
-      {erroPainel&&<div className="aviso-box" style={{color:'var(--erro)'}}>{erroPainel}</div>}
-      <div className="card" style={{overflowX:'auto'}}>
-        <table>
-          <thead><tr><th>Motorista</th><th>Tipo</th><th className="td-num">Cargas</th><th className="td-num">Peso (t)</th><th className="td-num">Faturamento</th><th className="td-num">% Start</th><th className="td-num">Produtiv. est.</th><th className="td-num">Descontos</th><th className="td-num">Apurado</th></tr></thead>
-          <tbody>
-            {linhas.map(l=>
-              <tr key={l.u.id}>
-                <td><b>{primeiroNome(l.u.nome)}</b></td>
-                <td className="muted">{l.tipo||'—'}</td>
-                <td className="td-num num">{l.nCargas}</td>
-                <td className="td-num num">{brn(l.peso,1)}</td>
-                <td className="td-num num">{brl(l.fat)}</td>
-                <td className="td-num num">{l.meta ? brn(Math.min(999,l.fat/l.meta.start*100),0)+'%' : '—'}</td>
-                <td className="td-num num">{brl(l.prod)}</td>
-                <td className="td-num num" style={{color:l.totDesc<0?'var(--erro)':'inherit'}}>{l.totDesc? brl(l.totDesc):'—'}</td>
-                <td className="td-num num"><b style={{color:l.apurado<0?'var(--erro)':'var(--mata)'}}>{brl(l.apurado)}</b></td>
-              </tr>)}
-          </tbody>
-        </table>
-      </div>
-    </React.Fragment>
-  );
-}
+      <div className="card" style={{marginTop:12}}><div className="form-grid" style={{alignItems:'end'}}>
+        <div><label>Buscar NF, rota, placa ou produto</label><input value={fBuscaDetalhe} onChange={e=>setFBuscaDetalhe(e.target.value)} placeholder="Digite para localizar"/></div>
+        <div><label>Produto</label><select value={fProdutoDetalhe} onChange={e=>setFProdutoDetalhe(e.target.value)}><option value="">Todos</option>{produtosDetalhe.map(p=><option key={p} value={p}>{p}</option>)}</select></div>
+        <div><label>Data inicial</label><input type="date" value={fDataInicialDetalhe} onChange={e=>setFDataInicialDetalhe(e.target.value)}/></div>
+        <div><label>Data final</label><input type="date" value={fDataFinalDetalhe} onChange={e=>setFDataFinalDetalhe(e.target.value)}/></div>
+      </div></div>
+      <div className="card" style={{overflowX:'auto',marginTop:12}}><table>
+        <thead><tr><th>Data</th><th>Placa</th><th>Rota entrada</th><th>Rota saída</th><th>Produto</th><th>NF</th><th className="td-num">Peso (t)</th><th className="td-num">Frete</th><th className="td-num">Premiação</th></tr></thead>
+        <tbody>{cargasDetalhe.map(c=><tr key={c.id||[c.data,c.placa,c.nota,c.origem,c.destino].join('|')}>
+          <td>{dataBR(c.data)}</td><td><b>{c.placa||'—'}</b></td><td>{c.origem||'—'}</td><td>{c.destino||'—'}</td><td>{c.produto||'—'}</td><td>{c.nota||c.numeroNota||'—'}</td><td className="td-num num">{brn(Number(c.peso||c.pesoTon||0),2)}</td><td className="td-num num">{brl(Number(c.freteTotal||0))}</td><td className="td-num num">{brl(Number(c.valor||c.premiacao||0))}</td>
+        </tr>)}{!cargasDetalhe.length&&<tr><td colSpan="9" className="muted" style={{textAlign:'center',padding:24}}>Nenhuma carga encontrada para os filtros selecionados.</td></tr>}</tbody>
+        <tfoot><tr><td colSpan="6"><b>Total filtrado</b></td><td className="td-num num"><b>{brn(totaisDetalhe.peso,2)}</b></td><td className="td-num num"><b>{brl(totaisDetalhe.frete)}</b></td><td className="td-num num"><b>{brl(totaisDetalhe.premiacao)}</b></td></tr></tfoot>
+      </table></div>
+    </React.Fragment>;
+  }
 
+  return <React.Fragment>
+    <Cabecalho/><Subtabs/>
+    {carregandoPainel&&<div className="aviso-box">{progressoPainel||'Carregando cargas, motoristas e apurações salvas...'}</div>}
+    {erroPainel&&<div className="aviso-box" style={{color:'var(--erro)'}}>{erroPainel}</div>}
+
+    {!carregandoPainel&&!erroPainel&&subPainel==='visao'&&<React.Fragment>
+      <div className="cards4">
+        <button className="card kpi" style={{textAlign:'left',cursor:'pointer'}} onClick={()=>irParaSubtela('cargas')}><div className="l">Cargas na competência</div><div className="v num">{totalCargas}</div><div className="muted">Abrir resumo por motorista</div></button>
+        <button className="card kpi" style={{textAlign:'left',cursor:'pointer'}} onClick={()=>irParaSubtela('cargas','DIVERGENTE')}><div className="l">Divergências de cargas</div><div className="v num" style={{color:totalDivergencias?'var(--erro)':'var(--mata)'}}>{totalDivergencias}</div><div className="muted">Ver cargas que exigem conferência</div></button>
+        <button className="card kpi" style={{textAlign:'left',cursor:'pointer'}} onClick={()=>irParaSubtela('pendencias')}><div className="l">Pendências gerais</div><div className="v num" style={{color:totalPendencias?'var(--colheita-escura)':'var(--mata)'}}>{totalPendencias}</div><div className="muted">Abrir central de direcionamento</div></button>
+        <button className="card kpi" style={{textAlign:'left',cursor:'pointer'}} onClick={()=>irParaSubtela('autorizacoes')}><div className="l">Autorizações</div><div className="v num" style={{color:totalAutorizacoes?'var(--colheita-escura)':'var(--mata)'}}>{totalAutorizacoes}</div><div className="muted">Ir para o módulo responsável</div></button>
+      </div>
+      <div className="cards4">
+        <button className="card kpi" style={{textAlign:'left',cursor:'pointer'}} onClick={()=>irParaSubtela('contestacoes')}><div className="l">Contestações abertas</div><div className="v num" style={{color:totalContestacoes?'var(--erro)':'var(--mata)'}}>{totalContestacoes}</div><div className="muted">Abrir contestações</div></button>
+        <div className="card kpi"><div className="l">Motoristas aplicáveis</div><div className="v num">{linhas.length}</div></div>
+        <div className="card kpi"><div className="l">Peso transportado</div><div className="v num">{brn(linhas.reduce((s,l)=>s+l.peso,0),1)} t</div></div>
+        <div className="card kpi"><div className="l">Frete total</div><div className="v num">{brl(linhas.reduce((s,l)=>s+l.frete,0))}</div></div>
+      </div>
+      <div className="aviso-box">O Painel indica onde a equipe precisa agir. Aprovações e decisões continuam sendo executadas dentro do módulo responsável.</div>
+    </React.Fragment>}
+
+    {!carregandoPainel&&!erroPainel&&subPainel==='cargas'&&<React.Fragment>
+      <FiltrosCargas/>
+      <div className="cards4" style={{marginTop:12}}>
+        <div className="card kpi"><div className="l">Motoristas</div><div className="v num">{linhasFiltradas.length}</div></div>
+        <div className="card kpi"><div className="l">Cargas</div><div className="v num">{totalCargas}</div></div>
+        <div className="card kpi"><div className="l">Peso transportado</div><div className="v num">{brn(totalPeso,1)} t</div></div>
+        <div className="card kpi"><div className="l">Frete total</div><div className="v num">{brl(totalFrete)}</div></div>
+      </div>
+      <div className="cards4">
+        <button className="card kpi" style={{textAlign:'left',cursor:'pointer',border:fSituacao==='PENDENTE'?'2px solid var(--colheita-escura)':'none'}} onClick={()=>setFSituacao(fSituacao==='PENDENTE'?'':'PENDENTE')}><div className="l">Pendências</div><div className="v num" style={{color:totalPendencias?'var(--colheita-escura)':'var(--mata)'}}>{totalPendencias}</div></button>
+        <button className="card kpi" style={{textAlign:'left',cursor:'pointer',border:fSituacao==='DIVERGENTE'?'2px solid var(--erro)':'none'}} onClick={()=>setFSituacao(fSituacao==='DIVERGENTE'?'':'DIVERGENTE')}><div className="l">Divergências</div><div className="v num" style={{color:totalDivergencias?'var(--erro)':'var(--mata)'}}>{totalDivergencias}</div></button>
+        <div className="card kpi"><div className="l">Competência</div><div className="v" style={{fontSize:18}}>{mesLabel(mes)}</div></div>
+      </div>
+      <div className="card" style={{overflowX:'auto'}}><table>
+        <thead><tr><th>Motorista</th><th>Tipo</th><th className="td-num">Cargas</th><th className="td-num">Peso (t)</th><th className="td-num">Frete</th><th className="td-num">Premiação</th><th className="td-num">Pendências</th><th>Situação</th><th></th></tr></thead>
+        <tbody>{linhasFiltradas.map(l=><tr key={l.uid||l.u.nome}>
+          <td><b>{l.u.nome}</b></td><td className="muted">{l.tipo||'—'}</td><td className="td-num num">{l.cargas.length}</td><td className="td-num num">{brn(l.peso,1)}</td><td className="td-num num">{brl(l.frete)}</td><td className="td-num num">{brl(l.premiacao)}</td><td className="td-num num">{l.pendencias||'—'}</td><td><b style={{color:corSituacao(l.situacao)}}>{rotuloSituacao(l.situacao)}</b></td><td><button className="btn btn-s btn-sm" onClick={()=>abrirDetalhe(l)}>Detalhar</button></td>
+        </tr>)}{!linhasFiltradas.length&&<tr><td colSpan="9" className="muted" style={{textAlign:'center',padding:24}}>Nenhum motorista encontrado para os filtros selecionados.</td></tr>}</tbody>
+      </table></div>
+      <div className="aviso-box">O resumo consulta os dados existentes. O detalhamento abre em uma subtela própria para evitar uma página extensa.</div>
+    </React.Fragment>}
+
+    {!carregandoPainel&&!erroPainel&&subPainel==='pendencias'&&<React.Fragment>
+      <div className="cards4">
+        <button className="card kpi" style={{textAlign:'left',cursor:'pointer'}} onClick={()=>irParaSubtela('cargas','DIVERGENTE')}><div className="l">Divergências de cargas</div><div className="v num">{totalDivergencias}</div><div className="muted">Abrir Cargas filtradas</div></button>
+        <button className="card kpi" style={{textAlign:'left',cursor:'pointer'}} onClick={()=>setSubPainel('autorizacoes')}><div className="l">Autorizações pendentes</div><div className="v num">{totalAutorizacoes}</div><div className="muted">Ver direcionamentos</div></button>
+        <button className="card kpi" style={{textAlign:'left',cursor:'pointer'}} onClick={()=>setSubPainel('contestacoes')}><div className="l">Contestações abertas</div><div className="v num">{totalContestacoes}</div><div className="muted">Ir para Contestações</div></button>
+      </div>
+      <div className="aviso-box">Esta subtela consolida indicadores. A correção ou decisão é realizada no módulo de origem.</div>
+    </React.Fragment>}
+
+    {!carregandoPainel&&!erroPainel&&subPainel==='autorizacoes'&&<React.Fragment>
+      <div className="card"><h3>Central de autorizações</h3><p className="muted">Resumo das análises aguardando ação. Cada item deve abrir o módulo responsável.</p>
+        <div className="linha-item"><span>Checklists aguardando análise</span><b>{totalChecklist}</b></div>
+        <div className="linha-item"><span>PBT aguardando análise</span><b>Disponível quando o módulo PBT for implantado</b></div>
+      </div>
+      <div className="aviso-box">Checklist continua em Check list &gt; Aprovação. O futuro PBT ficará em PBT &gt; Aprovações.</div>
+    </React.Fragment>}
+
+    {!carregandoPainel&&!erroPainel&&subPainel==='contestacoes'&&<React.Fragment>
+      <div className="card"><h3>Contestações</h3><div className="linha-item"><span>Contestações abertas</span><b>{totalContestacoes}</b></div><p className="muted">A análise completa permanece na tela própria de Contestações.</p></div>
+      <div className="aviso-box">O Painel apenas indica o volume e direciona. O histórico e a decisão não serão duplicados aqui.</div>
+    </React.Fragment>}
+  </React.Fragment>;
+}
 /* ================= ADM: IMPORTAÇÃO ================= */
 function AdmImportar({st, setSt, toast}){
   const [resumo,setResumo]=useState(null);
