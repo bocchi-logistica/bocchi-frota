@@ -219,7 +219,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 90000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '1.11.7-vigencia-final-exclusiva'
+  VERSAO: '1.11.10-checklist-motorista-detalhado'
 };
 
 /* ============================================================================
@@ -1277,6 +1277,7 @@ function TelaChecklist({st, setSt, user, toast}){
         km:String(x.quilometragem||''),
         respostas:(x.respostas||[]).map(rr=>({
           pid:String(rr.idPergunta||''),
+          pergunta:rr.pergunta||'',
           resp:rr.resposta||'NA',
           obs:rr.observacao||'',
           foto:rr.linkFoto||null
@@ -1627,20 +1628,21 @@ function TelaChecklist({st, setSt, user, toast}){
             <button className="btn btn-g btn-sm" onClick={()=>setVer(c)}>Ver</button>
           </div>)}
       </React.Fragment>}
-      {ver && <ChecklistDetalhe ck={ver} perguntas={perguntasAtivas} onClose={()=>setVer(null)}/>}
+      {ver && <ChecklistDetalhe ck={ver} perguntas={perguntasAtivas} permitirImpressao={false} onClose={()=>setVer(null)}/>}
     </React.Fragment>
   );
 }
-function ChecklistDetalhe({ck, perguntas, onClose, acoes}){
+function ChecklistDetalhe({ck, perguntas, onClose, acoes, permitirImpressao=true}){
   const [fotoAberta,setFotoAberta]=useState(null);
   const escHtml=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const escAttr=escHtml;
   const imprimir=()=>{
     const statusTexto = ck.status==='aprovado'?'Aprovado':ck.status==='reprovado'?'Reprovado':'Aguardando análise';
     const linhas = ck.respostas.map(r=>{
-      const p=perguntas.find(x=>x.id===r.pid); if(!p) return '';
+      const p=perguntas.find(x=>x.id===r.pid);
+      const textoPergunta=p?.texto||r.pergunta||'Pergunta sem descrição';
       const resposta=r.resp==='C'?'Conforme':r.resp==='NC'?'Não conforme':'N/A';
-      return `<section class="item"><div class="item-top"><strong>${escHtml(p.texto)}</strong><span class="resp ${r.resp}">${resposta}</span></div>${r.obs?`<div class="obs"><b>Observação:</b> ${escHtml(r.obs)}</div>`:''}${r.foto?`<img src="${escAttr(r.foto)}" alt="Foto da não conformidade">`:''}</section>`;
+      return `<section class="item"><div class="item-top"><strong>${escHtml(textoPergunta)}</strong><span class="resp ${r.resp}">${resposta}</span></div>${r.obs?`<div class="obs"><b>Observação:</b> ${escHtml(r.obs)}</div>`:''}${r.foto?`<img src="${escAttr(r.foto)}" alt="Foto da não conformidade">`:''}</section>`;
     }).join('');
     const w=window.open('','_blank','width=900,height=700');
     if(!w){ alert('O navegador bloqueou a janela de impressão. Permita pop-ups para este site.'); return; }
@@ -1651,17 +1653,18 @@ function ChecklistDetalhe({ck, perguntas, onClose, acoes}){
   };
   return (
     <Modal titulo={'Check list — '+dataBR(ck.data)} onClose={onClose}>
-      <div className="row" style={{justifyContent:'flex-end',marginBottom:10}}><button className="btn btn-s btn-sm" onClick={imprimir}>🖨 Imprimir</button></div>
+      {permitirImpressao && <div className="row" style={{justifyContent:'flex-end',marginBottom:10}}><button className="btn btn-s btn-sm" onClick={imprimir}>🖨 Imprimir</button></div>}
       <div className="muted" style={{marginBottom:10}}>{primeiroNome(ck.motorista)} · {ck.placa} · {ck.frota==='leve'?'Frota leve':'Frota pesada'} · <StatusTag s={ck.status}/></div>
       {ck.frota==='leve' && (ck.km || ck.combustivel) &&
         <div className="muted" style={{marginBottom:10}}>KM: <b className="num">{ck.km||'—'}</b> · Combustível: <b>{ck.combustivel||'—'}</b></div>}
       {ck.status==='reprovado' && ck.motivoReprova && <div className="erro-box" style={{marginBottom:10}}>Motivo da reprovação: {ck.motivoReprova}</div>}
       {ck.respostas.map(r=>{
-        const p = perguntas.find(x=>x.id===r.pid); if(!p) return null;
+        const p = perguntas.find(x=>x.id===r.pid);
+        const textoPergunta=p?.texto||r.pergunta||'Pergunta sem descrição';
         return (
           <div key={r.pid} style={{padding:'8px 0', borderBottom:'1px solid var(--linha)'}}>
             <div className="row">
-              <span className="grow" style={{fontSize:13.5}}>{p.texto}</span>
+              <span className="grow" style={{fontSize:13.5}}>{textoPergunta}</span>
               <span className={'tag '+(r.resp==='C'?'tag-ok':r.resp==='NC'?'tag-neg':'tag-neutro')}>{r.resp==='C'?'Conforme':r.resp==='NC'?'NC':'N/A'}</span>
             </div>
             {r.obs && <div className="muted" style={{marginTop:4}}>{r.obs}</div>}
@@ -2738,7 +2741,7 @@ function AdmChecklist({st, setSt, toast, user}){
         frota:(x.tipoChecklist==='LEVE'?'leve':'pesada'), data:(x.dataHoraLocal||'').slice(0,10),
         status:(x.status||'PENDENTE').toLowerCase()==='aprovado'?'aprovado':((x.status||'').toLowerCase()==='reprovado'?'reprovado':'pendente'),
         motivoReprova:x.motivoReprovacao||'', km:x.quilometragem, combustivel:'',
-        respostas:(x.respostas||[]).map(rr=>({pid:rr.idPergunta, resp:rr.resposta, obs:rr.observacao||'', foto:rr.linkFoto||null}))
+        respostas:(x.respostas||[]).map(rr=>({pid:rr.idPergunta, pergunta:rr.pergunta||'', resp:rr.resposta, obs:rr.observacao||'', foto:rr.linkFoto||null}))
       }));
       setSt(s=>({...s, checklists: vindos.length? vindos : s.checklists}));
       toast('Sincronizado: '+vindos.length+' checklist(s) carregado(s) do servidor.');
@@ -3579,7 +3582,7 @@ function AdmApp({st, setSt, user, onSair, toast}){
         data:String(x.dataHoraLocal||'').slice(0,10),
         status:String(x.status||'PENDENTE').toLowerCase()==='aprovado'?'aprovado':(String(x.status||'').toLowerCase()==='reprovado'?'reprovado':'pendente'),
         motivoReprova:x.motivoReprova||x.motivoReprovacao||'', km:String(x.quilometragem||''), combustivel:'',
-        respostas:(x.respostas||[]).map(rr=>({pid:String(rr.idPergunta||''),resp:rr.resposta||'NA',obs:rr.observacao||'',foto:rr.linkFoto||null}))
+        respostas:(x.respostas||[]).map(rr=>({pid:String(rr.idPergunta||''),pergunta:rr.pergunta||'',resp:rr.resposta||'NA',obs:rr.observacao||'',foto:rr.linkFoto||null}))
       }));
       setSt(s=>({...s,checklists:vindos}));
     }).catch(e=>toast('Falha ao carregar checklists do SharePoint: '+e.message));
