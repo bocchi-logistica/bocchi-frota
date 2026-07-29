@@ -232,7 +232,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 90000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '1.12.2-sinistros-modulo-usuario'
+  VERSAO: '1.12.8-arquitetura-permissoes'
 };
 
 /* ============================================================================
@@ -314,6 +314,7 @@ const ACESSO_NOVO_POR_PERMISSAO = {
   'sinistros.visualizar':{area:'SINISTROS',subtela:'SINISTROS_GESTAO'},
   'sinistros.gerenciar':{area:'SINISTROS',subtela:'SINISTROS_GESTAO',editar:true},
   'sinistros.configuracoes':{area:'SINISTROS',subtela:'SINISTROS_CONFIGURACOES'},
+  'sinistros.configuracoes.editar':{area:'SINISTROS',subtela:'SINISTROS_CONFIGURACOES',editar:true},
   'checklist.aprovacao':{area:'CHECKLIST',subtela:'CHECKLIST_APROVACAO'},
   'checklist.perguntas':{area:'CHECKLIST',subtela:'CHECKLIST_PERGUNTAS'},
   'checklist.relatorio':{area:'CHECKLIST',subtela:'CHECKLIST_RELATORIO'},
@@ -598,6 +599,8 @@ const ApiService = {
   obterMeusSinistros(){ return this._req('GET','/sinistros/me'); },
   admListarSinistros(){ return this._req('GET','/admin/sinistros'); },
   admAtualizarSinistro(id,dados){ return this._req('PATCH','/admin/sinistros/'+encodeURIComponent(id),dados); },
+  admObterConfiguracoesSinistros(){ return this._req('GET','/admin/sinistros/configuracoes'); },
+  admSalvarConfiguracoesSinistros(dados){ return this._req('PATCH','/admin/sinistros/configuracoes',dados); },
   obterPremiacao(){ return this._req('GET','/premiacao/me'); },
   obterPremiacaoMotorista(nome){
     return this._req('GET','/premiacao/me?motoristaNome='+encodeURIComponent(nome));
@@ -3499,6 +3502,12 @@ const AREAS_E_SUBTELAS = {
   ]
 };
 const ROTULOS_AREAS={PAINEL:'Painel',IMPORTACAO:'Importação',CONTESTACOES:'Contestações',RH_FECHAMENTO:'RH / Fechamento',PREMIACAO:'Premiação',CHECKLIST:'Check list',SINISTROS:'Sinistros',CADASTROS:'Cadastros'};
+const canonCodigoAcesso=(codigo)=>{
+  const alvo=norm(codigo);
+  return [...Object.keys(AREAS_E_SUBTELAS),...Object.values(AREAS_E_SUBTELAS).flat().map(([c])=>c)]
+    .find(c=>norm(c)===alvo)||String(codigo||'').trim().toUpperCase();
+};
+const canonListaAcesso=(lista)=>[...new Set((lista||[]).map(canonCodigoAcesso).filter(Boolean))];
 
 /* ================= ADM: CADASTROS (usuários + frota + perfis) ================= */
 function AdmCadastros({st, setSt, toast, user}){
@@ -3587,8 +3596,10 @@ function AdmCadastros({st, setSt, toast, user}){
   const salvarVinculo=async()=>{const u=cad.usuarios.find(x=>x.itemId===editVinculo.usuarioItemId),v=cad.veiculos.find(x=>x.itemId===editVinculo.veiculoItemId);if(!u||!v){toast('Selecione usuário e veículo.');return;}try{await ApiService.salvarVinculo({...editVinculo,usuarioId:u.usuarioId,titulo:u.usuarioId+' - '+v.placa});setEditVinculo(null);await carregar();toast('Vínculo salvo no SharePoint.');}catch(e){toast('Erro ao salvar vínculo: '+e.message);}};
   const salvarPerfil=async()=>{
     if(!String(editPerfil.titulo||'').trim()){toast('Informe o nome do perfil.');return;}
-    const subtelasValidas=(editPerfil.subtelasAcesso||[]).filter(c=>(editPerfil.areasAcesso||[]).some(a=>(AREAS_E_SUBTELAS[a]||[]).some(([codigo])=>codigo===c)));
-    try{await ApiService.salvarPerfil({...editPerfil,titulo:String(editPerfil.titulo).toUpperCase(),subtelasAcesso:subtelasValidas});setEditPerfil(null);await carregar();toast('Perfil salvo no SharePoint.');}
+    const areasCanon=canonListaAcesso(editPerfil.areasAcesso);
+    const subtelasCanon=canonListaAcesso(editPerfil.subtelasAcesso);
+    const subtelasValidas=subtelasCanon.filter(c=>areasCanon.some(a=>(AREAS_E_SUBTELAS[a]||[]).some(([codigo])=>codigo===c)));
+    try{await ApiService.salvarPerfil({...editPerfil,titulo:String(editPerfil.titulo).toUpperCase(),areasAcesso:areasCanon,subtelasAcesso:subtelasValidas});setEditPerfil(null);await carregar();toast('Perfil salvo no SharePoint.');}
     catch(e){toast('Erro ao salvar perfil: '+e.message);}
   };
   const alternarArea=(area)=>{
@@ -3858,16 +3869,38 @@ function AdmCadastros({st, setSt, toast, user}){
 
 /* ================= ADM: SINISTROS ================= */
 function AdmSinistros({toast,user}){
-  const [lista,setLista]=useState([]),[carregando,setCarregando]=useState(true),[selecionado,setSelecionado]=useState(null);
+  const podeGestao=pode(user,'sinistros.visualizar');
+  const podeConfig=pode(user,'sinistros.configuracoes');
+  const podeEditarConfig=pode(user,'sinistros.configuracoes.editar');
+  const [sub,setSub]=useState(podeGestao?'gestao':'config');
+  const [lista,setLista]=useState([]),[carregando,setCarregando]=useState(false),[selecionado,setSelecionado]=useState(null);
   const [filtro,setFiltro]=useState({texto:'',status:'ABERTOS',gravidade:''});
   const [edicao,setEdicao]=useState({statusSinistro:'',gravidade:'',observacao:''});
+  const [config,setConfig]=useState(null),[salvandoConfig,setSalvandoConfig]=useState(false);
   const carregar=async()=>{
+    if(!podeGestao)return;
     setCarregando(true);
     try{const r=await ApiService.admListarSinistros();setLista(r.sinistros||[]);}
     catch(e){toast('Erro ao carregar sinistros: '+e.message);}
     finally{setCarregando(false);}
   };
-  useEffect(()=>{carregar();},[]);
+  const carregarConfig=async()=>{
+    if(!podeConfig)return;
+    try{
+      const r=await ApiService.admObterConfiguracoesSinistros();
+      setConfig(r.configuracao||{
+        titulo:'Configuração Geral',ativo:true,emailPrincipal:'',emailCopia:'',emailCopiaOculta:'',
+        nomeContatoEmergencia:'',telefoneEmergencia:'',procedimento:'',revisaoProcedimento:'Revisão 01',
+        permiteReabrirSinistro:false,diasReabertura:0,enviarEmailAutomatico:false,
+        assuntoEmail:'URGENTE - Novo Sinistro Registrado',versaoModulo:'1.0',ultimaAtualizacao:''
+      });
+    }catch(e){toast('Erro ao carregar configurações: '+e.message);}
+  };
+  useEffect(()=>{if(podeGestao)carregar();if(podeConfig)carregarConfig();},[]);
+  useEffect(()=>{
+    if(sub==='gestao'&&!podeGestao&&podeConfig)setSub('config');
+    if(sub==='config'&&!podeConfig&&podeGestao)setSub('gestao');
+  },[podeGestao,podeConfig]);
   const abrir=s=>{setSelecionado(s);setEdicao({statusSinistro:s.statusSinistro||'Aberto',gravidade:s.gravidade||'Baixa',observacao:''});};
   const salvar=async()=>{
     if(!selecionado)return;
@@ -3876,6 +3909,16 @@ function AdmSinistros({toast,user}){
       toast('Sinistro atualizado.');
       setSelecionado(null);await carregar();
     }catch(e){toast('Erro ao atualizar sinistro: '+e.message);}
+  };
+  const salvarConfig=async()=>{
+    if(!config||!podeEditarConfig)return;
+    setSalvandoConfig(true);
+    try{
+      const r=await ApiService.admSalvarConfiguracoesSinistros(config);
+      setConfig(r.configuracao||config);
+      toast('Configurações de sinistros salvas.');
+    }catch(e){toast('Erro ao salvar configurações: '+e.message);}
+    finally{setSalvandoConfig(false);}
   };
   const filtrados=lista.filter(s=>{
     const texto=normalizar([s.numeroSinistro,s.placa,s.motoristaNome,s.municipio,s.tipoSinistro].join(' '));
@@ -3886,16 +3929,49 @@ function AdmSinistros({toast,user}){
     return okTexto&&okStatus&&okGrav;
   });
   return <React.Fragment>
-    <div className="row" style={{flexWrap:'wrap'}}><div className="grow"><h2>Sinistros</h2><div className="muted">Recebimento, tratamento, documentos e acompanhamento dos registros enviados.</div></div><button className="btn btn-s" onClick={carregar}>Atualizar</button></div>
-    <div className="card"><div className="filtros-cadastro" style={{margin:0}}>
-      <div><label>Buscar</label><input value={filtro.texto} onChange={e=>setFiltro({...filtro,texto:e.target.value})} placeholder="Protocolo, placa ou motorista"/></div>
-      <div><label>Status</label><select value={filtro.status} onChange={e=>setFiltro({...filtro,status:e.target.value})}><option value="ABERTOS">Em aberto</option><option value="TODOS">Todos</option>{['ABERTO','AGUARDANDO_ANALISE','EM_ATENDIMENTO','AGUARDANDO_DOCUMENTOS','ENCAMINHADO_SEGURADORA','AGUARDANDO_ORCAMENTO','EM_REPARO','AGUARDANDO_TERCEIRO','CONCLUIDO','CANCELADO'].map(x=><option key={x} value={x}>{x.replaceAll('_',' ')}</option>)}</select></div>
-      <div><label>Gravidade</label><select value={filtro.gravidade} onChange={e=>setFiltro({...filtro,gravidade:e.target.value})}><option value="">Todas</option>{['BAIXA','MEDIA','ALTA','CRITICA'].map(x=><option key={x}>{x}</option>)}</select></div>
-    </div></div>
-    <div className="cards4"><div className="card kpi"><div className="l">Registros filtrados</div><div className="v">{filtrados.length}</div></div><div className="card kpi"><div className="l">Com vítima</div><div className="v">{filtrados.filter(s=>s.possuiVitima).length}</div></div><div className="card kpi"><div className="l">Alta/crítica</div><div className="v">{filtrados.filter(s=>['ALTA','CRITICA'].includes(normalizarPerfil(s.gravidade))).length}</div></div></div>
-    <div className="card" style={{overflowX:'auto'}}><table><thead><tr><th>Protocolo</th><th>Ocorrido</th><th>Placa</th><th>Motorista</th><th>Tipo</th><th>Gravidade</th><th>Status</th><th></th></tr></thead><tbody>
-      {filtrados.map(s=><tr key={s.id}><td><b>{s.numeroSinistro}</b></td><td>{dataBR(String(s.dataHoraOcorrido||'').slice(0,10))}</td><td><b>{s.placa}</b></td><td>{s.motoristaNome}</td><td>{s.tipoSinistro}</td><td><span className={'tag sinistro-gravidade-'+normalizarPerfil(s.gravidade)}>{s.gravidade}</span></td><td><StatusTag s={s.statusSinistro}/></td><td><button className="btn btn-s btn-sm" onClick={()=>abrir(s)}>Tratar</button></td></tr>)}
-    </tbody></table>{!carregando&&!filtrados.length&&<div className="muted" style={{padding:18,textAlign:'center'}}>Nenhum sinistro encontrado.</div>}</div>
+    <div className="row" style={{flexWrap:'wrap'}}><div className="grow"><h2>Sinistros</h2><div className="muted">Gestão dos registros e parâmetros operacionais do módulo.</div></div>{sub==='gestao'&&podeGestao&&<button className="btn btn-s" onClick={carregar}>Atualizar</button>}</div>
+    <div className="subtabs" style={{marginTop:14}}>
+      {podeGestao&&<button className={'subtab'+(sub==='gestao'?' on':'')} onClick={()=>setSub('gestao')}>Gestão e tratamento</button>}
+      {podeConfig&&<button className={'subtab'+(sub==='config'?' on':'')} onClick={()=>setSub('config')}>Configurações</button>}
+    </div>
+
+    {sub==='gestao'&&podeGestao&&<React.Fragment>
+      <div className="card"><div className="filtros-cadastro" style={{margin:0}}>
+        <div><label>Buscar</label><input value={filtro.texto} onChange={e=>setFiltro({...filtro,texto:e.target.value})} placeholder="Protocolo, placa ou motorista"/></div>
+        <div><label>Status</label><select value={filtro.status} onChange={e=>setFiltro({...filtro,status:e.target.value})}><option value="ABERTOS">Em aberto</option><option value="TODOS">Todos</option>{['ABERTO','AGUARDANDO_ANALISE','EM_ATENDIMENTO','AGUARDANDO_DOCUMENTOS','ENCAMINHADO_SEGURADORA','AGUARDANDO_ORCAMENTO','EM_REPARO','AGUARDANDO_TERCEIRO','CONCLUIDO','CANCELADO'].map(x=><option key={x} value={x}>{x.replaceAll('_',' ')}</option>)}</select></div>
+        <div><label>Gravidade</label><select value={filtro.gravidade} onChange={e=>setFiltro({...filtro,gravidade:e.target.value})}><option value="">Todas</option>{['BAIXA','MEDIA','ALTA','CRITICA'].map(x=><option key={x}>{x}</option>)}</select></div>
+      </div></div>
+      <div className="cards4"><div className="card kpi"><div className="l">Registros filtrados</div><div className="v">{filtrados.length}</div></div><div className="card kpi"><div className="l">Com vítima</div><div className="v">{filtrados.filter(s=>s.possuiVitima).length}</div></div><div className="card kpi"><div className="l">Alta/crítica</div><div className="v">{filtrados.filter(s=>['ALTA','CRITICA'].includes(normalizarPerfil(s.gravidade))).length}</div></div></div>
+      <div className="card" style={{overflowX:'auto'}}><table><thead><tr><th>Protocolo</th><th>Ocorrido</th><th>Placa</th><th>Motorista</th><th>Tipo</th><th>Gravidade</th><th>Status</th><th></th></tr></thead><tbody>
+        {filtrados.map(s=><tr key={s.id}><td><b>{s.numeroSinistro}</b></td><td>{dataBR(String(s.dataHoraOcorrido||'').slice(0,10))}</td><td><b>{s.placa}</b></td><td>{s.motoristaNome}</td><td>{s.tipoSinistro}</td><td><span className={'tag sinistro-gravidade-'+normalizarPerfil(s.gravidade)}>{s.gravidade}</span></td><td><StatusTag s={s.statusSinistro}/></td><td><button className="btn btn-s btn-sm" onClick={()=>abrir(s)}>{pode(user,'sinistros.gerenciar')?'Tratar':'Visualizar'}</button></td></tr>)}
+      </tbody></table>{!carregando&&!filtrados.length&&<div className="muted" style={{padding:18,textAlign:'center'}}>Nenhum sinistro encontrado.</div>}</div>
+    </React.Fragment>}
+
+    {sub==='config'&&podeConfig&&<React.Fragment>
+      {!config?<div className="card"><div className="muted">Carregando configurações...</div></div>:
+      <div className="card">
+        <div className="row" style={{marginBottom:14}}><div className="grow"><h3>Configurações de sinistros</h3><div className="muted">Parâmetros lidos da lista Sinistros_Configuracoes.</div></div><span className={'tag '+(podeEditarConfig?'tag-ok':'tag-neutro')}>{podeEditarConfig?'Edição liberada':'Somente visualização'}</span></div>
+        <div className="form-grid">
+          <div><label>Título</label><input disabled={!podeEditarConfig} value={config.titulo||''} onChange={e=>setConfig({...config,titulo:e.target.value})}/></div>
+          <div><label>Status</label><select disabled={!podeEditarConfig} value={config.ativo?'s':'n'} onChange={e=>setConfig({...config,ativo:e.target.value==='s'})}><option value="s">Ativo</option><option value="n">Inativo</option></select></div>
+          <div><label>E-mail principal</label><input disabled={!podeEditarConfig} value={config.emailPrincipal||''} onChange={e=>setConfig({...config,emailPrincipal:e.target.value})}/></div>
+          <div><label>E-mails em cópia</label><input disabled={!podeEditarConfig} value={config.emailCopia||''} onChange={e=>setConfig({...config,emailCopia:e.target.value})} placeholder="Separar por ;"/></div>
+          <div><label>Cópia oculta</label><input disabled={!podeEditarConfig} value={config.emailCopiaOculta||''} onChange={e=>setConfig({...config,emailCopiaOculta:e.target.value})} placeholder="Separar por ;"/></div>
+          <div><label>Assunto do e-mail</label><input disabled={!podeEditarConfig} value={config.assuntoEmail||''} onChange={e=>setConfig({...config,assuntoEmail:e.target.value})}/></div>
+          <div><label>Contato de emergência</label><input disabled={!podeEditarConfig} value={config.nomeContatoEmergencia||''} onChange={e=>setConfig({...config,nomeContatoEmergencia:e.target.value})}/></div>
+          <div><label>Telefone de emergência</label><input disabled={!podeEditarConfig} value={config.telefoneEmergencia||''} onChange={e=>setConfig({...config,telefoneEmergencia:e.target.value})}/></div>
+          <div><label>Revisão do procedimento</label><input disabled={!podeEditarConfig} value={config.revisaoProcedimento||''} onChange={e=>setConfig({...config,revisaoProcedimento:e.target.value})}/></div>
+          <div><label>Versão do módulo</label><input disabled={!podeEditarConfig} value={config.versaoModulo||''} onChange={e=>setConfig({...config,versaoModulo:e.target.value})}/></div>
+          <div><label>Enviar e-mail automático?</label><select disabled={!podeEditarConfig} value={config.enviarEmailAutomatico?'s':'n'} onChange={e=>setConfig({...config,enviarEmailAutomatico:e.target.value==='s'})}><option value="s">Sim</option><option value="n">Não</option></select></div>
+          <div><label>Permitir reabertura?</label><select disabled={!podeEditarConfig} value={config.permiteReabrirSinistro?'s':'n'} onChange={e=>setConfig({...config,permiteReabrirSinistro:e.target.value==='s'})}><option value="s">Sim</option><option value="n">Não</option></select></div>
+          <div><label>Dias para reabertura</label><input type="number" min="0" disabled={!podeEditarConfig} value={config.diasReabertura||0} onChange={e=>setConfig({...config,diasReabertura:Number(e.target.value)||0})}/></div>
+          <div style={{gridColumn:'1/-1'}}><label>Procedimento</label><textarea rows="5" disabled={!podeEditarConfig} value={config.procedimento||''} onChange={e=>setConfig({...config,procedimento:e.target.value})}/></div>
+          <div><label>Última atualização</label><input disabled value={config.ultimaAtualizacao?new Date(config.ultimaAtualizacao).toLocaleString('pt-BR'):''}/></div>
+        </div>
+        {podeEditarConfig&&<button className="btn btn-p" disabled={salvandoConfig} style={{marginTop:14}} onClick={salvarConfig}>{salvandoConfig?'Salvando...':'Salvar configurações'}</button>}
+      </div>}
+    </React.Fragment>}
+
     {selecionado&&<Modal large titulo={selecionado.numeroSinistro+' — '+selecionado.placa} onClose={()=>setSelecionado(null)}>
       <div className="cards4">
         <div className="card"><label>Motorista</label><b>{selecionado.motoristaNome}</b><div className="muted">{selecionado.motoristaTelefone||'Sem telefone'}</div></div>
@@ -3907,10 +3983,10 @@ function AdmSinistros({toast,user}){
       <div className="card" style={{marginTop:10}}><h3>Documentos e evidências</h3>{(selecionado.documentos||[]).length?(selecionado.documentos||[]).map(d=><div className="linha-item" key={d.id||d.nome}><span>📎 {d.nome}</span><a className="btn btn-g btn-sm" href={d.webUrl} target="_blank" rel="noopener">Abrir</a></div>):<div className="muted" style={{marginTop:8}}>Nenhum arquivo enviado.</div>}</div>
       <div className="card" style={{marginTop:10}}><h3>Histórico</h3>{(selecionado.historico||[]).map(h=><div className="linha-item" key={h.id}><span><b>{h.acao}</b><span className="muted" style={{display:'block'}}>{new Date(h.dataHora).toLocaleString('pt-BR')} · {h.usuario||h.perfil}</span>{h.observacao&&<span style={{display:'block'}}>{h.observacao}</span>}</span><StatusTag s={h.status}/></div>)}</div>
       <div className="card" style={{marginTop:10}}><div className="form-grid">
-        <div><label>Status</label><select value={edicao.statusSinistro} onChange={e=>setEdicao({...edicao,statusSinistro:e.target.value})}>{['Aberto','Aguardando analise','Em atendimento','Aguardando documentos','Encaminhado seguradora','Aguardando orcamento','Em reparo','Aguardando terceiro','Concluido','Cancelado'].map(x=><option key={x}>{x}</option>)}</select></div>
-        <div><label>Gravidade</label><select value={edicao.gravidade} onChange={e=>setEdicao({...edicao,gravidade:e.target.value})}>{['Baixa','Media','Alta','Critica'].map(x=><option key={x}>{x}</option>)}</select></div>
-        <div style={{gridColumn:'1/-1'}}><label>Observação administrativa</label><textarea rows="3" value={edicao.observacao} onChange={e=>setEdicao({...edicao,observacao:e.target.value})}/></div>
-      </div><button className="btn btn-p" disabled={!pode(user,'sinistros.gerenciar')} style={{width:'100%',marginTop:12}} onClick={salvar}>Salvar andamento</button></div>
+        <div><label>Status</label><select disabled={!pode(user,'sinistros.gerenciar')} value={edicao.statusSinistro} onChange={e=>setEdicao({...edicao,statusSinistro:e.target.value})}>{['Aberto','Aguardando analise','Em atendimento','Aguardando documentos','Encaminhado seguradora','Aguardando orcamento','Em reparo','Aguardando terceiro','Concluido','Cancelado'].map(x=><option key={x}>{x}</option>)}</select></div>
+        <div><label>Gravidade</label><select disabled={!pode(user,'sinistros.gerenciar')} value={edicao.gravidade} onChange={e=>setEdicao({...edicao,gravidade:e.target.value})}>{['Baixa','Media','Alta','Critica'].map(x=><option key={x}>{x}</option>)}</select></div>
+        <div style={{gridColumn:'1/-1'}}><label>Observação administrativa</label><textarea disabled={!pode(user,'sinistros.gerenciar')} rows="3" value={edicao.observacao} onChange={e=>setEdicao({...edicao,observacao:e.target.value})}/></div>
+      </div>{pode(user,'sinistros.gerenciar')&&<button className="btn btn-p" style={{width:'100%',marginTop:12}} onClick={salvar}>Salvar andamento</button>}</div>
     </Modal>}
   </React.Fragment>;
 }
@@ -3923,7 +3999,7 @@ function AdmApp({st, setSt, user, onSair, toast}){
     pode(user,'painel.visualizar')&&['painel','Painel'],
     pode(user,'importar.criar')&&['importar','Importar'],
     pode(user,'contestacoes.visualizar')&&['contest','Contestações'],
-    pode(user,'sinistros.visualizar')&&['sinistros','Sinistros'],
+    (pode(user,'sinistros.visualizar')||pode(user,'sinistros.configuracoes'))&&['sinistros','Sinistros'],
     (pode(user,'checklist.aprovacao')||pode(user,'checklist.perguntas')||pode(user,'checklist.relatorio'))&&['check','Check list'],
     (pode(user,'premiacao.visualizar')||pode(user,'metas.visualizar')||pode(user,'descontos.visualizar'))&&['prem','Premiação'],
     (pode(user,'cadastro.usuarios')||pode(user,'cadastro.tipos_veiculo')||pode(user,'cadastro.veiculos')||pode(user,'cadastro.vinculos')||pode(user,'cadastro.perfis'))&&['cad','Cadastros']
@@ -3983,6 +4059,7 @@ function App(){
     'importar.criar',
     'contestacoes.visualizar',
     'sinistros.visualizar',
+    'sinistros.configuracoes',
     'checklist.aprovacao',
     'checklist.perguntas',
     'checklist.relatorio',
