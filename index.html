@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Bocchi Frota — Portal do Motorista e ADM Logística (v1.3 — Edson.B)</title>
+<title>Bocchi Frota — Portal do Motorista e ADM Logística (v1.4 — Edson.B)</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
@@ -150,6 +150,19 @@ th.td-num{text-align:right}
 .drop{border:2px dashed var(--linha); border-radius:var(--r); padding:34px 20px; text-align:center; color:var(--cinza); background:var(--branco)}
 .form-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px}
 
+
+/* ---------- SINISTROS ---------- */
+.sinistro-hero{background:linear-gradient(145deg,#fff5e8,#fff);border:1px solid #f0c98a}
+.sinistro-alerta{border-left:5px solid var(--erro);background:var(--erro-claro)}
+.sinistro-passos{display:grid;gap:8px;counter-reset:passo}
+.sinistro-passo{display:flex;gap:10px;align-items:flex-start;padding:10px;border-radius:10px;background:var(--papel)}
+.sinistro-passo:before{counter-increment:passo;content:counter(passo);display:flex;align-items:center;justify-content:center;width:25px;height:25px;flex:0 0 25px;border-radius:50%;background:var(--mata);color:#fff;font-weight:800}
+.sinistro-docs{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px}
+.sinistro-doc{padding:9px 11px;border:1px solid var(--linha);border-radius:10px;background:#fff;font-size:13px}
+.sinistro-arquivo{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--papel);border-radius:9px;margin-top:6px}
+.sinistro-gravidade-CRITICA{background:#7f1d1d;color:#fff}.sinistro-gravidade-ALTA{background:var(--erro-claro);color:var(--erro)}
+.sinistro-gravidade-MEDIA{background:var(--aviso);color:#765600}.sinistro-gravidade-BAIXA{background:var(--folha-clara);color:var(--mata)}
+
 /* ---------- MODAL / TOAST ---------- */
 .overlay{position:fixed; inset:0; background:rgba(20,30,24,.55); display:flex; align-items:flex-end; justify-content:center; z-index:100; padding:0}
 @media(min-width:640px){.overlay{align-items:center; padding:20px}}
@@ -219,7 +232,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 90000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '1.11.14-validar-faixa-carga'
+  VERSAO: '1.12.2-sinistros-modulo-usuario'
 };
 
 /* ============================================================================
@@ -298,6 +311,9 @@ const ACESSO_NOVO_POR_PERMISSAO = {
   'painel.visualizar':{areas:['PAINEL']},
   'importar.criar':{areas:['IMPORTACAO'],editar:true},
   'contestacoes.visualizar':{areas:['CONTESTACOES']},
+  'sinistros.visualizar':{area:'SINISTROS',subtela:'SINISTROS_GESTAO'},
+  'sinistros.gerenciar':{area:'SINISTROS',subtela:'SINISTROS_GESTAO',editar:true},
+  'sinistros.configuracoes':{area:'SINISTROS',subtela:'SINISTROS_CONFIGURACOES'},
   'checklist.aprovacao':{area:'CHECKLIST',subtela:'CHECKLIST_APROVACAO'},
   'checklist.perguntas':{area:'CHECKLIST',subtela:'CHECKLIST_PERGUNTAS'},
   'checklist.relatorio':{area:'CHECKLIST',subtela:'CHECKLIST_RELATORIO'},
@@ -575,6 +591,10 @@ const ApiService = {
   admAnalisarContestacao(id,status,justificativaAnalise){
     return this._req('PATCH','/admin/contestacoes/'+encodeURIComponent(id)+'/status',{status,justificativaAnalise});
   },
+  criarSinistro(dados){ return this._req('POST','/sinistros',dados); },
+  obterMeusSinistros(){ return this._req('GET','/sinistros/me'); },
+  admListarSinistros(){ return this._req('GET','/admin/sinistros'); },
+  admAtualizarSinistro(id,dados){ return this._req('PATCH','/admin/sinistros/'+encodeURIComponent(id),dados); },
   obterPremiacao(){ return this._req('GET','/premiacao/me'); },
   obterPremiacaoMotorista(nome){
     return this._req('GET','/premiacao/me?motoristaNome='+encodeURIComponent(nome));
@@ -975,7 +995,7 @@ function Login({st, onLogin}){
     <div className="login-wrap">
       <div className="login-card">
         <img src={LOGO} className="logo-login" alt="Bocchi Agrobios"/>
-        <div className="login-sub">Portal do motorista e ADM logística — v1.3 — Edson.B</div>
+        <div className="login-sub">Portal do motorista e ADM logística — v1.4 — Edson.B</div>
         <div style={{display:'flex',flexDirection:'column',gap:12}}>
           <div><label>Usuário</label><input value={login} onChange={e=>setLogin(e.target.value)} placeholder="ex.: adelir" autoCapitalize="none"/></div>
           <div>
@@ -1756,6 +1776,118 @@ function ChecklistDetalhe({ck, perguntas, onClose, acoes, permitirImpressao=true
   );
 }
 
+
+/* ================= MOTORISTA: SINISTRO ================= */
+function TelaSinistro({user,toast}){
+  const [veiculos,setVeiculos]=useState([]);
+  const [historico,setHistorico]=useState([]);
+  const [carregando,setCarregando]=useState(true);
+  const [enviando,setEnviando]=useState(false);
+  const [form,setForm]=useState({
+    placa:'',motoristaNome:user.nome||'',motoristaTelefone:'',dataHoraOcorrido:'',
+    localOcorrido:'',municipio:'',uf:'RS',tipoSinistro:'Colisão',descricaoOcorrido:'',
+    possuiVitima:false,possuiTerceiro:false,veiculoImobilizado:false,necessitaGuincho:false,
+    autoridadeAcionada:false,numeroBoletim:'',responsabilidadeInicial:'Ainda não definida'
+  });
+  const [arquivos,setArquivos]=useState([]);
+  const carregar=async()=>{
+    setCarregando(true);
+    try{
+      const [rv,rh]=await Promise.allSettled([ApiService.obterVeiculos(),ApiService.obterMeusSinistros()]);
+      if(rv.status==='fulfilled'){
+        const lista=rv.value.veiculos||[];
+        setVeiculos(lista);
+        setForm(f=>({...f,placa:f.placa||lista[0]?.placa||''}));
+      }
+      if(rh.status==='fulfilled')setHistorico(rh.value.sinistros||[]);
+    }finally{setCarregando(false);}
+  };
+  useEffect(()=>{carregar();},[]);
+  const lerArquivos=async lista=>{
+    const permitidos=[...lista].slice(0,12);
+    const total=permitidos.reduce((s,f)=>s+f.size,0);
+    if(total>18*1024*1024){toast('Os anexos ultrapassam 18 MB. Reduza a quantidade ou o tamanho dos arquivos.');return;}
+    const convertidos=[];
+    for(const f of permitidos){
+      if(f.size>4*1024*1024){toast('O arquivo '+f.name+' ultrapassa 4 MB.');continue;}
+      const conteudoBase64=await new Promise((res,rej)=>{
+        const r=new FileReader(); r.onload=()=>res(String(r.result||'')); r.onerror=()=>rej(new Error('Falha ao ler '+f.name)); r.readAsDataURL(f);
+      });
+      convertidos.push({nome:f.name,tipo:f.type||'application/octet-stream',conteudoBase64,tamanho:f.size});
+    }
+    setArquivos(convertidos);
+  };
+  const enviar=async()=>{
+    const obrigatorios=[
+      [form.placa,'Selecione a placa.'],[form.motoristaNome,'Informe o nome do motorista.'],
+      [form.dataHoraOcorrido,'Informe a data e hora do ocorrido.'],[form.localOcorrido,'Informe o local.'],
+      [form.descricaoOcorrido,'Descreva o ocorrido.']
+    ];
+    const falta=obrigatorios.find(([v])=>!String(v||'').trim());
+    if(falta){toast(falta[1]);return;}
+    if(form.possuiVitima&&!window.confirm('Você informou que há vítima. Confirma o envio imediato deste registro?'))return;
+    if(!window.confirm('Confirma o envio do sinistro da placa '+form.placa+'? A logística será notificada.'))return;
+    setEnviando(true);
+    try{
+      const r=await ApiService.criarSinistro({...form,arquivos});
+      toast('Sinistro enviado. Protocolo: '+r.numeroSinistro+(r.emailEnviado?' · E-mail disparado.':' · Atenção: e-mail não confirmado.'));
+      setArquivos([]);
+      setForm(f=>({...f,dataHoraOcorrido:'',localOcorrido:'',municipio:'',tipoSinistro:'Colisão',descricaoOcorrido:'',
+        possuiVitima:false,possuiTerceiro:false,veiculoImobilizado:false,necessitaGuincho:false,
+        autoridadeAcionada:false,numeroBoletim:'',responsabilidadeInicial:'Ainda não definida'}));
+      await carregar();
+    }catch(e){toast('Não foi possível enviar o sinistro: '+e.message);}
+    finally{setEnviando(false);}
+  };
+  return <React.Fragment>
+    <div className="card sinistro-hero">
+      <div className="row"><div style={{fontSize:34}}>🚨</div><div className="grow"><h2>Comunicar sinistro</h2><div className="muted">Registre imediatamente o ocorrido. O envio gera protocolo, histórico e alerta para a equipe administrativa.</div></div></div>
+    </div>
+    <div className="card sinistro-alerta"><b>Primeiro, preserve a segurança.</b><div className="muted" style={{marginTop:4}}>Pare em local seguro quando possível, sinalize o local, acione os serviços de emergência quando necessário e não assuma responsabilidade antes da análise.</div></div>
+    <div className="card">
+      <h3 style={{marginBottom:10}}>Como proceder</h3>
+      <div className="sinistro-passos">
+        <div className="sinistro-passo">Proteja as pessoas e sinalize o local.</div>
+        <div className="sinistro-passo">Acione autoridade, emergência ou guincho quando necessário.</div>
+        <div className="sinistro-passo">Fotografe o local, os veículos, placas, avarias, chassi e painel.</div>
+        <div className="sinistro-passo">Colete os dados e documentos do terceiro, quando houver.</div>
+        <div className="sinistro-passo">Preencha e envie este registro para a logística.</div>
+      </div>
+    </div>
+    <div className="card">
+      <h3 style={{marginBottom:10}}>Documentos e evidências</h3>
+      <div className="sinistro-docs">
+        {['Boletim de ocorrência','Documento do terceiro','RG e CNH do terceiro','Foto frontal e traseira com placa','Foto do chassi','Foto do painel ligado','Fotos das avarias','Fotos do local'].map(x=><div className="sinistro-doc" key={x}>✓ {x}</div>)}
+      </div>
+      <div className="muted" style={{marginTop:8}}>O registro inicial pode ser enviado mesmo que algum documento ainda esteja pendente.</div>
+    </div>
+    <div className="card">
+      <h3 style={{marginBottom:12}}>Dados do ocorrido</h3>
+      <div className="form-grid">
+        <div><label>Placa *</label><select value={form.placa} onChange={e=>setForm({...form,placa:e.target.value})}><option value="">Selecionar...</option>{veiculos.map(v=><option key={v.itemId||v.placa}>{v.placa}</option>)}</select></div>
+        <div><label>Motorista *</label><input value={form.motoristaNome} onChange={e=>setForm({...form,motoristaNome:e.target.value})}/></div>
+        <div><label>Telefone</label><input value={form.motoristaTelefone} onChange={e=>setForm({...form,motoristaTelefone:e.target.value})} placeholder="(54) 99999-9999"/></div>
+        <div><label>Data e hora *</label><input type="datetime-local" value={form.dataHoraOcorrido} onChange={e=>setForm({...form,dataHoraOcorrido:e.target.value})}/></div>
+        <div><label>Município</label><input value={form.municipio} onChange={e=>setForm({...form,municipio:e.target.value})}/></div>
+        <div><label>UF</label><select value={form.uf} onChange={e=>setForm({...form,uf:e.target.value})}>{['RS','SC','PR','SP','MG','RJ','ES','MS','MT','GO','DF','BA','SE','AL','PE','PB','RN','CE','PI','MA','TO','PA','AP','AM','RR','RO','AC'].map(x=><option key={x}>{x}</option>)}</select></div>
+        <div style={{gridColumn:'1/-1'}}><label>Local *</label><input value={form.localOcorrido} onChange={e=>setForm({...form,localOcorrido:e.target.value})} placeholder="Rodovia, km, endereço ou referência"/></div>
+        <div><label>Tipo de sinistro</label><select value={form.tipoSinistro} onChange={e=>setForm({...form,tipoSinistro:e.target.value})}>{['Colisão','Abalroamento','Saída de pista','Tombamento','Capotamento','Incêndio','Furto','Roubo','Vandalismo','Quebra de vidro','Fenômeno da natureza','Outro'].map(x=><option key={x}>{x}</option>)}</select></div>
+        <div><label>Responsabilidade inicial</label><select value={form.responsabilidadeInicial} onChange={e=>setForm({...form,responsabilidadeInicial:e.target.value})}>{['Ainda não definida','Possivelmente veículo Bocchi','Possivelmente terceiro','Responsabilidade compartilhada','Não se aplica'].map(x=><option key={x}>{x}</option>)}</select></div>
+      </div>
+      <div className="form-grid" style={{marginTop:12}}>
+        {[['possuiVitima','Possui vítima?'],['possuiTerceiro','Possui terceiro?'],['veiculoImobilizado','Veículo imobilizado?'],['necessitaGuincho','Necessita guincho?'],['autoridadeAcionada','Autoridade acionada?']].map(([k,l])=><div key={k}><label>{l}</label><select value={form[k]?'sim':'nao'} onChange={e=>setForm({...form,[k]:e.target.value==='sim'})}><option value="nao">Não</option><option value="sim">Sim</option></select></div>)}
+        <div><label>Número do B.O.</label><input value={form.numeroBoletim} onChange={e=>setForm({...form,numeroBoletim:e.target.value})}/></div>
+      </div>
+      <div style={{marginTop:12}}><label>Descrição do ocorrido *</label><textarea rows="5" value={form.descricaoOcorrido} onChange={e=>setForm({...form,descricaoOcorrido:e.target.value})} placeholder="Relate de forma objetiva o que ocorreu, sentido da via, condições e envolvidos."/></div>
+      <div style={{marginTop:12}}><label>Anexos</label><input type="file" multiple accept="image/*,.pdf,.doc,.docx,video/*" onChange={e=>lerArquivos(e.target.files||[])}/><div className="muted">Até 12 arquivos, 4 MB por arquivo e 18 MB no total.</div>
+        {arquivos.map((a,i)=><div className="sinistro-arquivo" key={a.nome+i}><span>📎</span><span className="grow">{a.nome}</span><button className="btn btn-g btn-sm" onClick={()=>setArquivos(v=>v.filter((_,j)=>j!==i))}>Remover</button></div>)}
+      </div>
+      <button className="btn btn-d" style={{width:'100%',marginTop:14}} disabled={enviando||carregando} onClick={enviar}>{enviando?'Enviando e notificando...':'Enviar sinistro'}</button>
+    </div>
+    {historico.length>0&&<div className="card"><h3 style={{marginBottom:10}}>Meus registros</h3>{historico.map(s=><div className="linha-item" key={s.id}><span><b>{s.numeroSinistro}</b><span className="muted" style={{display:'block'}}>{dataBR(String(s.dataHoraOcorrido||'').slice(0,10))} · {s.placa} · {s.tipoSinistro||'Sinistro'}</span></span><StatusTag s={s.statusSinistro}/></div>)}</div>}
+  </React.Fragment>;
+}
+
 /* ================= SHELL MOTORISTA ================= */
 function MotoristaApp({st, setSt, user, onSair, toast}){
   const dados = usarDadosMensais(st);
@@ -1806,6 +1938,7 @@ function MotoristaApp({st, setSt, user, onSair, toast}){
     user.perms.cargas && {id:'cargas', ic:'🚛', nome:'Cargas'},
     user.perms.premiacao && {id:'prem', ic:'🏆', nome:'Premiação'},
     user.perms.checklist && {id:'check', ic:'📋', nome:'Check list'},
+    user.perms.sinistros && {id:'sinistro', ic:'🚨', nome:'Sinistro'},
   ].filter(Boolean);
   const [aba,setAba]=useState(abas.length?abas[0].id:'');
   const placa = Object.values(st.frota).find(f=>f.motorista===user.nome && f.frota!=='leve');
@@ -1843,6 +1976,7 @@ function MotoristaApp({st, setSt, user, onSair, toast}){
         {aba==='prem' && carregandoPremiacao && <div className="card muted">Carregando metas, apuração e descontos do SharePoint...</div>}
         {aba==='prem' && !carregandoPremiacao && <TelaPremiacao st={st} user={user} dados={dados}/>}
         {aba==='check' && <TelaChecklist st={st} setSt={setSt} user={user} toast={toast}/>}
+        {aba==='sinistro' && <TelaSinistro user={user} toast={toast}/>}
         <div className="card" style={{padding:12, marginTop:2}}>
           <div className="row">
             <div className="grow">
@@ -3349,6 +3483,10 @@ const AREAS_E_SUBTELAS = {
     ['CHECKLIST_PERGUNTAS','Perguntas'],
     ['CHECKLIST_RELATORIO','Relatório']
   ],
+  SINISTROS: [
+    ['SINISTROS_GESTAO','Gestão e tratamento de sinistros'],
+    ['SINISTROS_CONFIGURACOES','Configurações de sinistros']
+  ],
   CADASTROS: [
     ['CADASTRO_USUARIOS','Usuários'],
     ['CADASTRO_TIPOS_VEICULO','Tipos de veículo'],
@@ -3357,7 +3495,7 @@ const AREAS_E_SUBTELAS = {
     ['CADASTRO_PERFIS','Perfis']
   ]
 };
-const ROTULOS_AREAS={PAINEL:'Painel',IMPORTACAO:'Importação',CONTESTACOES:'Contestações',RH_FECHAMENTO:'RH / Fechamento',PREMIACAO:'Premiação',CHECKLIST:'Check list',CADASTROS:'Cadastros'};
+const ROTULOS_AREAS={PAINEL:'Painel',IMPORTACAO:'Importação',CONTESTACOES:'Contestações',RH_FECHAMENTO:'RH / Fechamento',PREMIACAO:'Premiação',CHECKLIST:'Check list',SINISTROS:'Sinistros',CADASTROS:'Cadastros'};
 
 /* ================= ADM: CADASTROS (usuários + frota + perfis) ================= */
 function AdmCadastros({st, setSt, toast, user}){
@@ -3393,6 +3531,7 @@ function AdmCadastros({st, setSt, toast, user}){
       acessoCargas:modulosPermitidos&&edit.acessoCargas===true,
       acessoPremiacao:modulosPermitidos&&edit.acessoPremiacao===true,
       acessoChecklist:modulosPermitidos&&edit.acessoChecklist===true,
+      acessoSinistros:modulosPermitidos&&edit.acessoSinistros===true,
       acessoHistorico:modulosPermitidos&&edit.acessoChecklist===true
     };
     try{await ApiService.salvarUsuario(dadosUsuario);setEdit(null);await carregar();if(novaSenha)window.alert('Acesso salvo com sucesso.\n\nUsuário: '+login+'\nSenha temporária: '+novaSenha+'\n\nCopie agora: ela não poderá ser visualizada novamente.');else toast('Usuário salvo no SharePoint.');}catch(e){toast('Erro ao salvar usuário: '+e.message);}
@@ -3505,7 +3644,7 @@ function AdmCadastros({st, setSt, toast, user}){
       </div>
 
       {sub==='usuarios' && podeSub('cadastro.usuarios') && <React.Fragment>
-        <div><button className="btn btn-p" onClick={()=>{setSenhaVisivel(false);const p=cad.perfis.find(x=>x.titulo==='MOTORISTA');setEdit({nome:'',usuarioId:proximoUsuarioId(),login:'',telefone:'',perfil:p?.titulo||'',perfilAcessoId:p?.itemId||'',tipoFrotaAcesso:'FROTA PESADA',ativo:true,novaSenha:'',acessoCargas:false,acessoPremiacao:false,acessoChecklist:false,acessoHistorico:false})}}>+ Novo usuário</button></div>
+        <div><button className="btn btn-p" onClick={()=>{setSenhaVisivel(false);const p=cad.perfis.find(x=>x.titulo==='MOTORISTA');setEdit({nome:'',usuarioId:proximoUsuarioId(),login:'',telefone:'',perfil:p?.titulo||'',perfilAcessoId:p?.itemId||'',tipoFrotaAcesso:'FROTA PESADA',ativo:true,novaSenha:'',acessoCargas:false,acessoPremiacao:false,acessoChecklist:false,acessoSinistros:false,acessoHistorico:false})}}>+ Novo usuário</button></div>
         <div className="filtros-cadastro">
           <div><label>Filtrar por nome</label><input value={fUsuario.nome} onChange={e=>setFUsuario({...fUsuario,nome:e.target.value})} placeholder="Digite o nome"/></div>
           <div><label>Perfil</label><select value={fUsuario.perfil} onChange={e=>setFUsuario({...fUsuario,perfil:e.target.value})}><option value="">Todos os perfis</option>{[...new Set(cad.usuarios.map(u=>u.perfil).filter(Boolean))].sort(compararTexto).map(p=><option key={p}>{p}</option>)}</select></div>
@@ -3590,7 +3729,7 @@ function AdmCadastros({st, setSt, toast, user}){
               <div><label>Telefone</label><input value={edit.telefone||''} onChange={e=>setEdit({...edit,telefone:e.target.value})}/></div>
             </div>
             <div><label>Perfil</label>
-              <select value={edit.perfilAcessoId||''} onChange={e=>{const p=cad.perfis.find(x=>String(x.itemId)===String(e.target.value));const permite=p?.permiteModulosApp===true;setEdit({...edit,perfilAcessoId:e.target.value,perfil:p?.titulo||edit.perfil,...(!permite?{acessoCargas:false,acessoPremiacao:false,acessoChecklist:false,acessoHistorico:false}:{})})}}>
+              <select value={edit.perfilAcessoId||''} onChange={e=>{const p=cad.perfis.find(x=>String(x.itemId)===String(e.target.value));const permite=p?.permiteModulosApp===true;setEdit({...edit,perfilAcessoId:e.target.value,perfil:p?.titulo||edit.perfil,...(!permite?{acessoCargas:false,acessoPremiacao:false,acessoChecklist:false,acessoSinistros:false,acessoHistorico:false}:{})})}}>
                 <option value="">Selecionar perfil...</option>
                 {cad.perfis.filter(p=>p.ativo||p.itemId===edit.perfilAcessoId).map(p=><option key={p.itemId} value={p.itemId}>{p.titulo}</option>)}
               </select>
@@ -3605,7 +3744,8 @@ function AdmCadastros({st, setSt, toast, user}){
                   {[
                     ['acessoCargas','Cargas'],
                     ['acessoPremiacao','Premiação'],
-                    ['acessoChecklist','Check list']
+                    ['acessoChecklist','Check list'],
+                    ['acessoSinistros','Sinistros']
                   ].map(([campo,rotulo])=>
                     <button type="button" key={campo} className={'perfil-subtela'+(edit[campo]?' on':'')} onClick={()=>setEdit({...edit,[campo]:!edit[campo]})}>
                       <span className="perfil-subtela-check">{edit[campo]?'✓':''}</span>
@@ -3712,6 +3852,66 @@ function AdmCadastros({st, setSt, toast, user}){
   );
 }
 
+
+/* ================= ADM: SINISTROS ================= */
+function AdmSinistros({toast,user}){
+  const [lista,setLista]=useState([]),[carregando,setCarregando]=useState(true),[selecionado,setSelecionado]=useState(null);
+  const [filtro,setFiltro]=useState({texto:'',status:'ABERTOS',gravidade:''});
+  const [edicao,setEdicao]=useState({statusSinistro:'',gravidade:'',observacao:''});
+  const carregar=async()=>{
+    setCarregando(true);
+    try{const r=await ApiService.admListarSinistros();setLista(r.sinistros||[]);}
+    catch(e){toast('Erro ao carregar sinistros: '+e.message);}
+    finally{setCarregando(false);}
+  };
+  useEffect(()=>{carregar();},[]);
+  const abrir=s=>{setSelecionado(s);setEdicao({statusSinistro:s.statusSinistro||'Aberto',gravidade:s.gravidade||'Baixa',observacao:''});};
+  const salvar=async()=>{
+    if(!selecionado)return;
+    try{
+      await ApiService.admAtualizarSinistro(selecionado.id,edicao);
+      toast('Sinistro atualizado.');
+      setSelecionado(null);await carregar();
+    }catch(e){toast('Erro ao atualizar sinistro: '+e.message);}
+  };
+  const filtrados=lista.filter(s=>{
+    const texto=normalizar([s.numeroSinistro,s.placa,s.motoristaNome,s.municipio,s.tipoSinistro].join(' '));
+    const okTexto=!filtro.texto||texto.includes(normalizar(filtro.texto));
+    const encerrado=['CONCLUIDO','CANCELADO'].includes(normalizarPerfil(s.statusSinistro));
+    const okStatus=filtro.status==='TODOS'||(filtro.status==='ABERTOS'&&!encerrado)||normalizarPerfil(s.statusSinistro)===filtro.status;
+    const okGrav=!filtro.gravidade||normalizarPerfil(s.gravidade)===filtro.gravidade;
+    return okTexto&&okStatus&&okGrav;
+  });
+  return <React.Fragment>
+    <div className="row" style={{flexWrap:'wrap'}}><div className="grow"><h2>Sinistros</h2><div className="muted">Recebimento, tratamento, documentos e acompanhamento dos registros enviados.</div></div><button className="btn btn-s" onClick={carregar}>Atualizar</button></div>
+    <div className="card"><div className="filtros-cadastro" style={{margin:0}}>
+      <div><label>Buscar</label><input value={filtro.texto} onChange={e=>setFiltro({...filtro,texto:e.target.value})} placeholder="Protocolo, placa ou motorista"/></div>
+      <div><label>Status</label><select value={filtro.status} onChange={e=>setFiltro({...filtro,status:e.target.value})}><option value="ABERTOS">Em aberto</option><option value="TODOS">Todos</option>{['ABERTO','AGUARDANDO_ANALISE','EM_ATENDIMENTO','AGUARDANDO_DOCUMENTOS','ENCAMINHADO_SEGURADORA','AGUARDANDO_ORCAMENTO','EM_REPARO','AGUARDANDO_TERCEIRO','CONCLUIDO','CANCELADO'].map(x=><option key={x} value={x}>{x.replaceAll('_',' ')}</option>)}</select></div>
+      <div><label>Gravidade</label><select value={filtro.gravidade} onChange={e=>setFiltro({...filtro,gravidade:e.target.value})}><option value="">Todas</option>{['BAIXA','MEDIA','ALTA','CRITICA'].map(x=><option key={x}>{x}</option>)}</select></div>
+    </div></div>
+    <div className="cards4"><div className="card kpi"><div className="l">Registros filtrados</div><div className="v">{filtrados.length}</div></div><div className="card kpi"><div className="l">Com vítima</div><div className="v">{filtrados.filter(s=>s.possuiVitima).length}</div></div><div className="card kpi"><div className="l">Alta/crítica</div><div className="v">{filtrados.filter(s=>['ALTA','CRITICA'].includes(normalizarPerfil(s.gravidade))).length}</div></div></div>
+    <div className="card" style={{overflowX:'auto'}}><table><thead><tr><th>Protocolo</th><th>Ocorrido</th><th>Placa</th><th>Motorista</th><th>Tipo</th><th>Gravidade</th><th>Status</th><th></th></tr></thead><tbody>
+      {filtrados.map(s=><tr key={s.id}><td><b>{s.numeroSinistro}</b></td><td>{dataBR(String(s.dataHoraOcorrido||'').slice(0,10))}</td><td><b>{s.placa}</b></td><td>{s.motoristaNome}</td><td>{s.tipoSinistro}</td><td><span className={'tag sinistro-gravidade-'+normalizarPerfil(s.gravidade)}>{s.gravidade}</span></td><td><StatusTag s={s.statusSinistro}/></td><td><button className="btn btn-s btn-sm" onClick={()=>abrir(s)}>Tratar</button></td></tr>)}
+    </tbody></table>{!carregando&&!filtrados.length&&<div className="muted" style={{padding:18,textAlign:'center'}}>Nenhum sinistro encontrado.</div>}</div>
+    {selecionado&&<Modal large titulo={selecionado.numeroSinistro+' — '+selecionado.placa} onClose={()=>setSelecionado(null)}>
+      <div className="cards4">
+        <div className="card"><label>Motorista</label><b>{selecionado.motoristaNome}</b><div className="muted">{selecionado.motoristaTelefone||'Sem telefone'}</div></div>
+        <div className="card"><label>Data/hora</label><b>{new Date(selecionado.dataHoraOcorrido).toLocaleString('pt-BR')}</b></div>
+        <div className="card"><label>Local</label><b>{selecionado.localOcorrido}</b><div className="muted">{selecionado.municipio} / {selecionado.uf}</div></div>
+        <div className="card"><label>Condições</label><div>{selecionado.possuiVitima?'⚠ Possui vítima':'Sem vítima informada'}</div><div>{selecionado.veiculoImobilizado?'Veículo imobilizado':'Veículo não imobilizado'}</div></div>
+      </div>
+      <div className="card" style={{marginTop:10}}><label>Descrição</label><div style={{whiteSpace:'pre-wrap'}}>{selecionado.descricaoOcorrido}</div></div>
+      <div className="card" style={{marginTop:10}}><h3>Documentos e evidências</h3>{(selecionado.documentos||[]).length?(selecionado.documentos||[]).map(d=><div className="linha-item" key={d.id||d.nome}><span>📎 {d.nome}</span><a className="btn btn-g btn-sm" href={d.webUrl} target="_blank" rel="noopener">Abrir</a></div>):<div className="muted" style={{marginTop:8}}>Nenhum arquivo enviado.</div>}</div>
+      <div className="card" style={{marginTop:10}}><h3>Histórico</h3>{(selecionado.historico||[]).map(h=><div className="linha-item" key={h.id}><span><b>{h.acao}</b><span className="muted" style={{display:'block'}}>{new Date(h.dataHora).toLocaleString('pt-BR')} · {h.usuario||h.perfil}</span>{h.observacao&&<span style={{display:'block'}}>{h.observacao}</span>}</span><StatusTag s={h.status}/></div>)}</div>
+      <div className="card" style={{marginTop:10}}><div className="form-grid">
+        <div><label>Status</label><select value={edicao.statusSinistro} onChange={e=>setEdicao({...edicao,statusSinistro:e.target.value})}>{['Aberto','Aguardando analise','Em atendimento','Aguardando documentos','Encaminhado seguradora','Aguardando orcamento','Em reparo','Aguardando terceiro','Concluido','Cancelado'].map(x=><option key={x}>{x}</option>)}</select></div>
+        <div><label>Gravidade</label><select value={edicao.gravidade} onChange={e=>setEdicao({...edicao,gravidade:e.target.value})}>{['Baixa','Media','Alta','Critica'].map(x=><option key={x}>{x}</option>)}</select></div>
+        <div style={{gridColumn:'1/-1'}}><label>Observação administrativa</label><textarea rows="3" value={edicao.observacao} onChange={e=>setEdicao({...edicao,observacao:e.target.value})}/></div>
+      </div><button className="btn btn-p" disabled={!pode(user,'sinistros.gerenciar')} style={{width:'100%',marginTop:12}} onClick={salvar}>Salvar andamento</button></div>
+    </Modal>}
+  </React.Fragment>;
+}
+
 /* ================= SHELL ADM ================= */
 function AdmApp({st, setSt, user, onSair, toast}){
   const dados = usarDadosMensais(st);
@@ -3720,6 +3920,7 @@ function AdmApp({st, setSt, user, onSair, toast}){
     pode(user,'painel.visualizar')&&['painel','Painel'],
     pode(user,'importar.criar')&&['importar','Importar'],
     pode(user,'contestacoes.visualizar')&&['contest','Contestações'],
+    pode(user,'sinistros.visualizar')&&['sinistros','Sinistros'],
     (pode(user,'checklist.aprovacao')||pode(user,'checklist.perguntas')||pode(user,'checklist.relatorio'))&&['check','Check list'],
     (pode(user,'premiacao.visualizar')||pode(user,'metas.visualizar')||pode(user,'descontos.visualizar'))&&['prem','Premiação'],
     (pode(user,'cadastro.usuarios')||pode(user,'cadastro.tipos_veiculo')||pode(user,'cadastro.veiculos')||pode(user,'cadastro.vinculos')||pode(user,'cadastro.perfis'))&&['cad','Cadastros']
@@ -3755,6 +3956,7 @@ function AdmApp({st, setSt, user, onSair, toast}){
         {aba==='painel' && <AdmPainel st={st} dados={dados} user={user}/>}
         {aba==='importar' && <AdmImportar st={st} setSt={setSt} toast={toast}/>}
         {aba==='contest' && <AdmContestacoes st={st} setSt={setSt} toast={toast}/>}
+        {aba==='sinistros' && <AdmSinistros toast={toast} user={user}/>}
         {aba==='check' && <AdmChecklist st={st} setSt={setSt} toast={toast} user={user}/>}
         {aba==='prem' && <AdmPremiacao st={st} setSt={setSt} toast={toast} user={user}/>}
         {aba==='cad' && <AdmCadastros st={st} setSt={setSt} toast={toast} user={user}/>}
@@ -3777,6 +3979,7 @@ function App(){
     'painel.visualizar',
     'importar.criar',
     'contestacoes.visualizar',
+    'sinistros.visualizar',
     'checklist.aprovacao',
     'checklist.perguntas',
     'checklist.relatorio',
