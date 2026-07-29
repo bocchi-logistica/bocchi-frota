@@ -335,7 +335,9 @@ const ACESSO_NOVO_POR_PERMISSAO = {
 };
 function podePeloPerfilNovo(user,permissao){
   if(!user?.acessosPerfilDefinidos)return null;
-  if(temPerfil(user,'ADMINISTRADOR')||temPerfil(user,'ADM'))return true;
+  /* Com perfil vinculado, até Administrador respeita as áreas e subtelas
+     efetivamente cadastradas. Acesso total permanece apenas no modo legado. */
+  if((temPerfil(user,'ADMINISTRADOR')||temPerfil(user,'ADM'))&&!user?.acessosPerfilDefinidos)return true;
   const regra=ACESSO_NOVO_POR_PERMISSAO[permissao];
   if(!regra)return false;
   const areas=new Set((user.areasAcesso||[]).map(normalizarPerfil));
@@ -543,7 +545,8 @@ const ApiService = {
   perms: r.motorista.perms || {
     cargas: false,
     premiacao: false,
-    checklist: false
+    checklist: false,
+    sinistros: false
   }
 }
     };
