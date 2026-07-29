@@ -561,6 +561,20 @@ const ApiService = {
     const q = competencia ? '?competencia='+encodeURIComponent(competencia) : '';
     return this._req('GET','/cargas/me'+q);
   },
+  obterMinhasContestacoes(){ return this._req('GET','/contestacoes/me'); },
+  obterOpcoesContestacao(cargaId){
+    return this._req('GET','/contestacoes/opcoes?cargaId='+encodeURIComponent(cargaId));
+  },
+  criarContestacao(cargaId,tipoContestacao,motivoMotorista){
+    return this._req('POST','/contestacoes',{cargaId,tipoContestacao,motivoMotorista});
+  },
+  admListarContestacoes(status=''){
+    const q=status&&status!=='todas'?'?status='+encodeURIComponent(status):'';
+    return this._req('GET','/admin/contestacoes'+q);
+  },
+  admAnalisarContestacao(id,status,justificativaAnalise){
+    return this._req('PATCH','/admin/contestacoes/'+encodeURIComponent(id)+'/status',{status,justificativaAnalise});
+  },
   obterPremiacao(){ return this._req('GET','/premiacao/me'); },
   obterPremiacaoMotorista(nome){
     return this._req('GET','/premiacao/me?motoristaNome='+encodeURIComponent(nome));
@@ -983,14 +997,41 @@ function TelaCargas({st, setSt, user, dados, toast}){
   const [mes,setMes]=useState(MES_ATUAL);
   const [contestar,setContestar]=useState(null);
   const [motivo,setMotivo]=useState('');
+  const [tipoContestacao,setTipoContestacao]=useState('ERRO_CARGA');
+  const [opcoesContestacao,setOpcoesContestacao]=useState(['ERRO_CARGA']);
+  const [carregandoOpcoes,setCarregandoOpcoes]=useState(false);
+  const [enviandoContestacao,setEnviandoContestacao]=useState(false);
   const ap = apuracaoMes(st, dados, user.nome, mes);
   const cargasMes = st.cargas.filter(c=>c.motorista===user.nome && mesDaData(c.data)===mes)
     .sort((a,b)=>b.data.localeCompare(a.data));
   const contestDaCarga = id => st.contestacoes.find(c=>c.cargaId===id && c.motorista===user.nome);
-  const enviar=()=>{
+  const abrirContestacao=async carga=>{
+    setContestar(carga); setMotivo(''); setTipoContestacao('ERRO_CARGA');
+    if(CONFIG.MODO_DEMONSTRACAO){setOpcoesContestacao(['ERRO_CARGA']);return;}
+    setCarregandoOpcoes(true);
+    try{
+      const r=await ApiService.obterOpcoesContestacao(carga.id);
+      const opcoes=Array.isArray(r.opcoes)?r.opcoes:['ERRO_CARGA'];
+      setOpcoesContestacao(opcoes);
+      if(!opcoes.includes('ERRO_CARGA')&&opcoes.length)setTipoContestacao(opcoes[0]);
+    }catch(e){
+      setContestar(null);
+      toast('Não foi possível validar esta carga: '+e.message);
+    }finally{setCarregandoOpcoes(false);}
+  };
+  const enviar=async()=>{
     if(!motivo.trim()){ toast('Descreva o que está errado na carga.'); return; }
-    setSt(s=>({...s, contestacoes:[...s.contestacoes, {id:'ct'+Date.now(), motorista:user.nome, cargaId:contestar.id, motivo:motivo.trim(), status:'pendente', resposta:'', data:HOJE}]}));
-    setContestar(null); setMotivo(''); toast('Contestação enviada para a logística.');
+    if(CONFIG.MODO_DEMONSTRACAO){
+      setSt(s=>({...s, contestacoes:[...s.contestacoes, {id:'ct'+Date.now(), motorista:user.nome, cargaId:contestar.id, tipoContestacao, motivo:motivo.trim(), status:'pendente', resposta:'', data:HOJE}]}));
+      setContestar(null); setMotivo(''); toast('Contestação enviada para a logística.'); return;
+    }
+    setEnviandoContestacao(true);
+    try{
+      const r=await ApiService.criarContestacao(contestar.id,tipoContestacao,motivo.trim());
+      setSt(s=>({...s,contestacoes:[...(s.contestacoes||[]),r.contestacao]}));
+      setContestar(null); setMotivo(''); toast('Contestação enviada para a logística.');
+    }catch(e){toast('Não foi possível enviar a contestação: '+e.message);}
+    finally{setEnviandoContestacao(false);}
   };
   const mesesDisp = MESES_2026.slice(0,7);
   return (
@@ -1018,7 +1059,7 @@ function TelaCargas({st, setSt, user, dados, toast}){
               <div style={{textAlign:'right'}}>
                 <div className="valor num">{brl(c.valor)}</div>
                 {ct ? <StatusTag s={ct.status}/> :
-                  <button className="btn btn-g btn-sm" style={{marginTop:4}} onClick={()=>setContestar(c)}>Contestar</button>}
+                  <button className="btn btn-g btn-sm" style={{marginTop:4}} onClick={()=>abrirContestacao(c)}>Contestar</button>}
               </div>
             </div>
             {ct && ct.resposta && <div className="muted" style={{marginTop:6}}>Resposta da logística: {ct.resposta}</div>}
@@ -1031,9 +1072,15 @@ function TelaCargas({st, setSt, user, dados, toast}){
             <b>{contestar.origem} → {contestar.destino}</b>
             <div className="muted">{dataBR(contestar.data)} · NF {contestar.nota} · {brn(contestar.peso)} t · {brl(contestar.valor)}</div>
           </div>
+          <label>Tipo de contestação</label>
+          {carregandoOpcoes?<div className="muted">Validando as regras desta carga...</div>:
+          <select value={tipoContestacao} onChange={e=>setTipoContestacao(e.target.value)}>
+            {opcoesContestacao.includes('ERRO_CARGA')&&<option value="ERRO_CARGA">Erro de carga</option>}
+            {opcoesContestacao.includes('DIVERGENCIA_PBT')&&<option value="DIVERGENCIA_PBT">Divergência de PBT</option>}
+          </select>}
           <label>O que está errado?</label>
           <textarea rows="4" value={motivo} onChange={e=>setMotivo(e.target.value)} placeholder="Ex.: o peso está diferente do ticket da balança..."/>
-          <button className="btn btn-p" style={{width:'100%', marginTop:12}} onClick={enviar}>Enviar contestação</button>
+          <button className="btn btn-p" disabled={carregandoOpcoes||enviandoContestacao} style={{width:'100%', marginTop:12}} onClick={enviar}>{enviandoContestacao?'Enviando...':'Enviar contestação'}</button>
         </Modal>}
     </React.Fragment>
   );
@@ -1693,14 +1740,15 @@ function MotoristaApp({st, setSt, user, onSair, toast}){
   useEffect(()=>{
     if(CONFIG.MODO_DEMONSTRACAO) return;
     let ativo=true;
-    Promise.all([ApiService.obterCargas(),ApiService.obterPremiacao()]).then(([r,p])=>{
+    Promise.all([ApiService.obterCargas(),ApiService.obterPremiacao(),ApiService.obterMinhasContestacoes()]).then(([r,p,ct])=>{
       if(!ativo) return;
       setSt(s=>({
         ...s,
         cargas:Array.isArray(r.cargas)?r.cargas:[],
         metas:Array.isArray(p.metas)?p.metas:s.metas,
         descontos:Array.isArray(p.descontos)?p.descontos:s.descontos,
-        apuracoes:Array.isArray(p.apuracoes)?p.apuracoes:[]
+        apuracoes:Array.isArray(p.apuracoes)?p.apuracoes:[],
+        contestacoes:Array.isArray(ct.contestacoes)?ct.contestacoes:[]
       }));
     }).catch(e=>toast('Não foi possível carregar os dados do motorista: '+e.message)).finally(()=>{
       if(ativo){setCarregandoCargas(false);setCarregandoPremiacao(false);}
@@ -2675,11 +2723,33 @@ function AdmContestacoes({st, setSt, toast}){
   const [respondendo,setRespondendo]=useState(null);
   const [resposta,setResposta]=useState('');
   const [decisao,setDecisao]=useState('procede');
+  const [carregando,setCarregando]=useState(!CONFIG.MODO_DEMONSTRACAO);
+  const [salvando,setSalvando]=useState(false);
   const lista = st.contestacoes.filter(c=>filtro==='todas'||c.status===filtro).sort((a,b)=>b.data.localeCompare(a.data));
   const cargaDe = id => st.cargas.find(c=>c.id===id);
-  const responder=()=>{
-    setSt(s=>({...s, contestacoes: s.contestacoes.map(c=>c.id===respondendo.id?{...c, status:decisao, resposta:resposta.trim()}:c)}));
-    setRespondendo(null); setResposta(''); toast('Contestação respondida.');
+  const carregar=async()=>{
+    if(CONFIG.MODO_DEMONSTRACAO)return;
+    setCarregando(true);
+    try{
+      const r=await ApiService.admListarContestacoes();
+      setSt(s=>({...s,contestacoes:Array.isArray(r.contestacoes)?r.contestacoes:[]}));
+    }catch(e){toast('Falha ao carregar contestações: '+e.message);}
+    finally{setCarregando(false);}
+  };
+  useEffect(()=>{carregar()},[]);
+  const responder=async()=>{
+    if(!resposta.trim()){toast('Informe a justificativa da decisão.');return;}
+    if(CONFIG.MODO_DEMONSTRACAO){
+      setSt(s=>({...s, contestacoes: s.contestacoes.map(c=>c.id===respondendo.id?{...c, status:decisao, resposta:resposta.trim()}:c)}));
+      setRespondendo(null); setResposta(''); toast('Contestação respondida.'); return;
+    }
+    setSalvando(true);
+    try{
+      const r=await ApiService.admAnalisarContestacao(respondendo.id,decisao,resposta.trim());
+      setSt(s=>({...s,contestacoes:s.contestacoes.map(c=>c.id===respondendo.id?r.contestacao:c)}));
+      setRespondendo(null);setResposta('');toast('Contestação respondida.');
+    }catch(e){toast('Não foi possível concluir a análise: '+e.message);}
+    finally{setSalvando(false);}
   };
   return (
     <React.Fragment>
@@ -2690,6 +2760,7 @@ function AdmContestacoes({st, setSt, toast}){
             <button key={v} className={'subtab'+(filtro===v?' on':'')} onClick={()=>setFiltro(v)}>{l}</button>)}
         </div>
       </div>
+      {carregando && <div className="card muted">Carregando contestações do SharePoint...</div>}
       {lista.length===0 && <div className="card muted">Nenhuma contestação {filtro==='todas'?'registrada':'nesta situação'}.</div>}
       {lista.map(ct=>{
         const c = cargaDe(ct.cargaId);
@@ -2698,7 +2769,9 @@ function AdmContestacoes({st, setSt, toast}){
             <div className="row">
               <div className="grow">
                 <b>{primeiroNome(ct.motorista)}</b> <span className="muted">· {dataBR(ct.data)}</span>
+                <div><span className="tag tag-neutro">{ct.tipoContestacao==='DIVERGENCIA_PBT'?'Divergência de PBT':'Erro de carga'}</span></div>
                 {c && <div className="muted">{dataBR(c.data)} · {c.origem} → {c.destino} · NF {c.nota} · {brn(c.peso)} t · {brl(c.valor)}</div>}
+                {!c && <div className="muted">{dataBR(ct.dataCarga)} · {ct.tipoVeiculo||'Tipo não informado'} · Peso bruto {brn(Number(ct.pesoCarga||0),0)} kg · Limite considerado {brn(Number(ct.limitePBT||0)+Number(ct.toleranciaPBT||0),0)} kg</div>}
               </div>
               <StatusTag s={ct.status}/>
             </div>
@@ -2719,7 +2792,7 @@ function AdmContestacoes({st, setSt, toast}){
           <label>Resposta ao motorista</label>
           <textarea rows="3" value={resposta} onChange={e=>setResposta(e.target.value)} placeholder={decisao==='procede'?'Ex.: confirmado com o ticket, peso será corrigido na próxima importação.':'Ex.: conferimos com a balança e o valor está correto.'}/>
           <div className="aviso-box" style={{margin:'10px 0'}}>A correção do dado em si é feita no sistema de origem — na próxima importação a carga entra atualizada.</div>
-          <button className="btn btn-p" style={{width:'100%'}} onClick={responder}>Enviar resposta</button>
+          <button className="btn btn-p" disabled={salvando} style={{width:'100%'}} onClick={responder}>{salvando?'Salvando...':'Enviar resposta'}</button>
         </Modal>}
     </React.Fragment>
   );
