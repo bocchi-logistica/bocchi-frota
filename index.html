@@ -1076,7 +1076,7 @@ function TelaCargas({st, setSt, user, dados, toast}){
           {carregandoOpcoes?<div className="muted">Validando as regras desta carga...</div>:
           <select value={tipoContestacao} onChange={e=>setTipoContestacao(e.target.value)}>
             {opcoesContestacao.includes('ERRO_CARGA')&&<option value="ERRO_CARGA">Erro de carga</option>}
-            {opcoesContestacao.includes('DIVERGENCIA_PBT')&&<option value="DIVERGENCIA_PBT">Divergência de PBT</option>}
+            {opcoesContestacao.includes('DIVERGENCIA_PBT')&&<option value="DIVERGENCIA_PBT">Divergência de PBT (peso/capacidade)</option>}
           </select>}
           <label>O que está errado?</label>
           <textarea rows="4" value={motivo} onChange={e=>setMotivo(e.target.value)} placeholder="Ex.: o peso está diferente do ticket da balança..."/>
@@ -1740,17 +1740,40 @@ function MotoristaApp({st, setSt, user, onSair, toast}){
   useEffect(()=>{
     if(CONFIG.MODO_DEMONSTRACAO) return;
     let ativo=true;
-    Promise.all([ApiService.obterCargas(),ApiService.obterPremiacao(),ApiService.obterMinhasContestacoes()]).then(([r,p,ct])=>{
+    Promise.allSettled([
+      ApiService.obterCargas(),
+      ApiService.obterPremiacao(),
+      ApiService.obterMinhasContestacoes()
+    ]).then(([cargasResult,premiacaoResult,contestacoesResult])=>{
       if(!ativo) return;
-      setSt(s=>({
-        ...s,
-        cargas:Array.isArray(r.cargas)?r.cargas:[],
-        metas:Array.isArray(p.metas)?p.metas:s.metas,
-        descontos:Array.isArray(p.descontos)?p.descontos:s.descontos,
-        apuracoes:Array.isArray(p.apuracoes)?p.apuracoes:[],
-        contestacoes:Array.isArray(ct.contestacoes)?ct.contestacoes:[]
-      }));
-    }).catch(e=>toast('Não foi possível carregar os dados do motorista: '+e.message)).finally(()=>{
+      setSt(s=>{
+        const proximo={...s};
+        if(cargasResult.status==='fulfilled'){
+          const r=cargasResult.value;
+          proximo.cargas=Array.isArray(r.cargas)?r.cargas:[];
+        }
+        if(premiacaoResult.status==='fulfilled'){
+          const p=premiacaoResult.value;
+          proximo.metas=Array.isArray(p.metas)?p.metas:s.metas;
+          proximo.descontos=Array.isArray(p.descontos)?p.descontos:s.descontos;
+          proximo.apuracoes=Array.isArray(p.apuracoes)?p.apuracoes:[];
+        }
+        if(contestacoesResult.status==='fulfilled'){
+          const ct=contestacoesResult.value;
+          proximo.contestacoes=Array.isArray(ct.contestacoes)?ct.contestacoes:[];
+        }
+        return proximo;
+      });
+      const falhasEssenciais=[];
+      if(cargasResult.status==='rejected') falhasEssenciais.push('cargas');
+      if(premiacaoResult.status==='rejected') falhasEssenciais.push('premiação');
+      if(falhasEssenciais.length){
+        toast('Não foi possível carregar: '+falhasEssenciais.join(' e ')+'. Tente novamente.');
+      }
+      if(contestacoesResult.status==='rejected'){
+        console.warn('Contestações temporariamente indisponíveis:',contestacoesResult.reason);
+      }
+    }).finally(()=>{
       if(ativo){setCarregandoCargas(false);setCarregandoPremiacao(false);}
     });
     return()=>{ativo=false};
