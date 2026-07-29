@@ -219,7 +219,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 90000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '1.11.13-contestacoes-alerta-historico'
+  VERSAO: '1.11.14-validar-faixa-carga'
 };
 
 /* ============================================================================
@@ -3702,8 +3702,8 @@ function AdmCadastros({st, setSt, toast, user}){
           <div><label>PBT (kg)</label><input type="number" min="0" value={editTipo.pbtKg} onChange={e=>setEditTipo({...editTipo,pbtKg:Number(e.target.value)})}/></div>
           <div><label>Capacidade de carga (kg)</label><input type="number" min="0" value={editTipo.capacidadeCargaKg} onChange={e=>setEditTipo({...editTipo,capacidadeCargaKg:Number(e.target.value)})}/></div>
           <div><label>Tolerância superior (kg)</label><input type="number" min="0" value={editTipo.toleranciaSuperiorKg} onChange={e=>setEditTipo({...editTipo,toleranciaSuperiorKg:Number(e.target.value)})}/></div>
-          <div><label>Limite inferior (kg)</label><input type="number" min="0" value={editTipo.limiteInferiorKg} onChange={e=>setEditTipo({...editTipo,limiteInferiorKg:Number(e.target.value)})}/></div>
-          <div><label>Exige aprovação abaixo?</label><select value={editTipo.exigeAprovacaoAbaixo?'s':'n'} onChange={e=>setEditTipo({...editTipo,exigeAprovacaoAbaixo:e.target.value==='s'})}><option value="n">Não</option><option value="s">Sim</option></select></div>
+          <div><label>Tolerância inferior (kg)</label><input type="number" min="0" value={editTipo.limiteInferiorKg} onChange={e=>setEditTipo({...editTipo,limiteInferiorKg:Number(e.target.value)})}/></div>
+          <div><label>Validar faixa de carga?</label><select value={editTipo.exigeAprovacaoAbaixo?'s':'n'} onChange={e=>setEditTipo({...editTipo,exigeAprovacaoAbaixo:e.target.value==='s'})}><option value="n">Não</option><option value="s">Sim</option></select></div>
           <div style={{gridColumn:'1/-1'}}><label>Observação</label><textarea value={editTipo.observacao||''} onChange={e=>setEditTipo({...editTipo,observacao:e.target.value})}/></div>
         </div>
         <button className="btn btn-p" style={{width:'100%',marginTop:14}} onClick={salvarTipo}>Salvar tipo de veículo</button>
