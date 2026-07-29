@@ -219,7 +219,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 90000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '1.11.11-contestacoes-auditoria'
+  VERSAO: '1.11.13-contestacoes-alerta-historico'
 };
 
 /* ============================================================================
@@ -916,9 +916,13 @@ function Modal({titulo, onClose, children, large=false}){
   );
 }
 function StatusTag({s}){
+  const statusBruto=String(s||'').trim().toLowerCase();
+  const status=statusBruto.startsWith('procede')?'procede':
+    statusBruto.startsWith('nao_procede')||statusBruto.startsWith('não procede')?'nao_procede':
+    statusBruto;
   const m = {pendente:['tag-pend','Pendente'], aprovado:['tag-ok','Aprovado'], reprovado:['tag-neg','Reprovado'],
     procede:['tag-ok','Procede'], nao_procede:['tag-neutro','Não procede'], corrigida:['tag-ok','Corrigida']};
-  const [cls,txt] = m[s] || ['tag-neutro', s];
+  const [cls,txt] = m[status] || ['tag-neutro', String(s||'')];
   return <span className={'tag '+cls}>{txt}</span>;
 }
 
@@ -996,6 +1000,7 @@ function Login({st, onLogin}){
 function TelaCargas({st, setSt, user, dados, toast}){
   const [mes,setMes]=useState(MES_ATUAL);
   const [contestar,setContestar]=useState(null);
+  const [detalheContestacao,setDetalheContestacao]=useState('');
   const [motivo,setMotivo]=useState('');
   const [tipoContestacao,setTipoContestacao]=useState('ERRO_CARGA');
   const [opcoesContestacao,setOpcoesContestacao]=useState(['ERRO_CARGA']);
@@ -1013,7 +1018,8 @@ function TelaCargas({st, setSt, user, dados, toast}){
       const r=await ApiService.obterOpcoesContestacao(carga.id);
       const opcoes=Array.isArray(r.opcoes)?r.opcoes:['ERRO_CARGA'];
       setOpcoesContestacao(opcoes);
-      if(!opcoes.includes('ERRO_CARGA')&&opcoes.length)setTipoContestacao(opcoes[0]);
+      if(carga.pbtForaFaixa&&opcoes.includes('DIVERGENCIA_PBT'))setTipoContestacao('DIVERGENCIA_PBT');
+      else if(!opcoes.includes('ERRO_CARGA')&&opcoes.length)setTipoContestacao(opcoes[0]);
     }catch(e){
       setContestar(null);
       toast('Não foi possível validar esta carga: '+e.message);
@@ -1049,20 +1055,38 @@ function TelaCargas({st, setSt, user, dados, toast}){
         <div className="aviso-box">O detalhe carga a carga de {mesLabel(mes)} ainda não foi importado para o app — os totais acima vêm do fechamento do mês. A partir de Mai/2026 a lista completa está disponível.</div>}
       {cargasMes.map(c=>{
         const ct = contestDaCarga(c.id);
+        const detalhesAbertos=ct&&detalheContestacao===String(ct.id);
+        const limiteFaixaKg=c.pbtMotivo==='ABAIXO_DA_FAIXA'?c.limiteInferiorKg:c.limiteSuperiorKg;
         return (
           <div className="card carga" key={c.id}>
             <div className="row">
               <div className="grow">
                 <div className="rota">{c.origem} <span className="seta">→</span> {c.destino}</div>
                 <div className="meta-l">{dataBR(c.data)} · {c.produto} · NF {c.nota} · <span className="num">{brn(c.peso)} t</span> · <span className="num">R$ {brn(c.rt)}/t</span></div>
+                {c.pbtForaFaixa&&<div className="tag tag-neg" style={{marginTop:7}}>
+                  PBT fora da faixa — limite {brn(Number(limiteFaixaKg||0)/1000,2)} t
+                </div>}
               </div>
               <div style={{textAlign:'right'}}>
                 <div className="valor num">{brl(c.valor)}</div>
                 {ct ? <StatusTag s={ct.status}/> :
-                  <button className="btn btn-g btn-sm" style={{marginTop:4}} onClick={()=>abrirContestacao(c)}>Contestar</button>}
+                  <button className={'btn '+(c.pbtForaFaixa?'btn-p':'btn-g')+' btn-sm'} style={{marginTop:4}} onClick={()=>abrirContestacao(c)}>
+                    {c.pbtForaFaixa?'Contestar PBT':'Contestar'}
+                  </button>}
               </div>
             </div>
-            {ct && ct.resposta && <div className="muted" style={{marginTop:6}}>Resposta da logística: {ct.resposta}</div>}
+            {ct&&<div style={{marginTop:8}}>
+              <button className="btn btn-g btn-sm" onClick={()=>setDetalheContestacao(detalhesAbertos?'':String(ct.id))}>
+                {detalhesAbertos?'Ocultar detalhes':'Ver detalhes'}
+              </button>
+              {detalhesAbertos&&<div className="card" style={{marginTop:8,marginBottom:0,boxShadow:'none',background:'var(--papel)'}}>
+                <div><b>Tipo:</b> {ct.tipoContestacao==='DIVERGENCIA_PBT'?'Divergência de PBT':'Erro de carga'}</div>
+                <div style={{marginTop:6}}><b>Justificativa enviada:</b> {ct.motivo||'Não informada'}</div>
+                <div style={{marginTop:6}}><b>Data da solicitação:</b> {ct.data?dataBR(ct.data):'Não informada'}</div>
+                <div style={{marginTop:6}}><b>Resposta da logística:</b> {ct.resposta||'Aguardando análise'}</div>
+                {ct.dataAnalise&&<div style={{marginTop:6}}><b>Data da análise:</b> {dataBR(ct.dataAnalise)}</div>}
+              </div>}
+            </div>}
           </div>
         );
       })}
