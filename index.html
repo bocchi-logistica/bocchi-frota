@@ -219,7 +219,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 90000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '1.11.10-checklist-motorista-detalhado'
+  VERSAO: '1.11.11-contestacoes-auditoria'
 };
 
 /* ============================================================================
@@ -917,7 +917,7 @@ function Modal({titulo, onClose, children, large=false}){
 }
 function StatusTag({s}){
   const m = {pendente:['tag-pend','Pendente'], aprovado:['tag-ok','Aprovado'], reprovado:['tag-neg','Reprovado'],
-    procede:['tag-ok','Procede — corrigir'], nao_procede:['tag-neutro','Não procede'], corrigida:['tag-ok','Corrigida']};
+    procede:['tag-ok','Procede'], nao_procede:['tag-neutro','Não procede'], corrigida:['tag-ok','Corrigida']};
   const [cls,txt] = m[s] || ['tag-neutro', s];
   return <span className={'tag '+cls}>{txt}</span>;
 }
@@ -2743,12 +2743,19 @@ function AdmImportar({st, setSt, toast}){
 /* ================= ADM: CONTESTAÇÕES ================= */
 function AdmContestacoes({st, setSt, toast}){
   const [filtro,setFiltro]=useState('pendente');
+  const [tipoFiltro,setTipoFiltro]=useState('todos');
+  const [motoristaFiltro,setMotoristaFiltro]=useState('');
   const [respondendo,setRespondendo]=useState(null);
   const [resposta,setResposta]=useState('');
   const [decisao,setDecisao]=useState('procede');
   const [carregando,setCarregando]=useState(!CONFIG.MODO_DEMONSTRACAO);
   const [salvando,setSalvando]=useState(false);
-  const lista = st.contestacoes.filter(c=>filtro==='todas'||c.status===filtro).sort((a,b)=>b.data.localeCompare(a.data));
+  const motoristasContestacoes=[...new Set((st.contestacoes||[]).map(c=>c.motorista).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  const lista = (st.contestacoes||[])
+    .filter(c=>filtro==='todas'||c.status===filtro)
+    .filter(c=>tipoFiltro==='todos'||c.tipoContestacao===tipoFiltro)
+    .filter(c=>!motoristaFiltro||c.motorista===motoristaFiltro)
+    .sort((a,b)=>String(b.data||'').localeCompare(String(a.data||'')));
   const cargaDe = id => st.cargas.find(c=>c.id===id);
   const carregar=async()=>{
     if(CONFIG.MODO_DEMONSTRACAO)return;
@@ -2783,23 +2790,48 @@ function AdmContestacoes({st, setSt, toast}){
             <button key={v} className={'subtab'+(filtro===v?' on':'')} onClick={()=>setFiltro(v)}>{l}</button>)}
         </div>
       </div>
+      <div className="card" style={{padding:12}}>
+        <div className="row" style={{gap:10,flexWrap:'wrap',alignItems:'end'}}>
+          <label style={{minWidth:210,flex:1}}>Tipo de contestação
+            <select value={tipoFiltro} onChange={e=>setTipoFiltro(e.target.value)}>
+              <option value="todos">Todos os tipos</option>
+              <option value="DIVERGENCIA_PBT">Divergência de PBT</option>
+              <option value="ERRO_CARGA">Erro de carga</option>
+            </select>
+          </label>
+          <label style={{minWidth:210,flex:1}}>Motorista
+            <select value={motoristaFiltro} onChange={e=>setMotoristaFiltro(e.target.value)}>
+              <option value="">Todos os motoristas</option>
+              {motoristasContestacoes.map(nome=><option key={nome} value={nome}>{nome}</option>)}
+            </select>
+          </label>
+          {(tipoFiltro!=='todos'||motoristaFiltro) &&
+            <button className="btn btn-g btn-sm" onClick={()=>{setTipoFiltro('todos');setMotoristaFiltro('');}}>Limpar filtros</button>}
+        </div>
+      </div>
       {carregando && <div className="card muted">Carregando contestações do SharePoint...</div>}
-      {lista.length===0 && <div className="card muted">Nenhuma contestação {filtro==='todas'?'registrada':'nesta situação'}.</div>}
+      {lista.length===0 && <div className="card muted">Nenhuma contestação encontrada com os filtros selecionados.</div>}
       {lista.map(ct=>{
         const c = cargaDe(ct.cargaId);
         return (
           <div className="card" key={ct.id}>
             <div className="row">
               <div className="grow">
-                <b>{primeiroNome(ct.motorista)}</b> <span className="muted">· {dataBR(ct.data)}</span>
+                <b>{ct.motorista||'Motorista não informado'}</b>
                 <div><span className="tag tag-neutro">{ct.tipoContestacao==='DIVERGENCIA_PBT'?'Divergência de PBT':'Erro de carga'}</span></div>
                 {c && <div className="muted">{dataBR(c.data)} · {c.origem} → {c.destino} · NF {c.nota} · {brn(c.peso)} t · {brl(c.valor)}</div>}
                 {!c && <div className="muted">{dataBR(ct.dataCarga)} · {ct.tipoVeiculo||'Tipo não informado'} · Peso bruto {brn(Number(ct.pesoCarga||0),0)} kg · Limite considerado {brn(Number(ct.limitePBT||0)+Number(ct.toleranciaPBT||0),0)} kg</div>}
               </div>
               <StatusTag s={ct.status}/>
             </div>
+            <div className="row muted" style={{marginTop:8,gap:18,flexWrap:'wrap',fontSize:13}}>
+              <span><b>Data do pedido:</b> {dataBR(ct.data)}</span>
+              <span><b>Data da carga:</b> {dataBR(ct.dataCarga||(c&&c.data))}</span>
+              {ct.status!=='pendente' && <span><b>Analisado por:</b> {ct.analisadoPor||'Não informado'}</span>}
+              {ct.status!=='pendente' && <span><b>Data da análise:</b> {dataBR(ct.dataAnalise)||'Não informada'}</span>}
+            </div>
             <div style={{marginTop:8, background:'var(--papel)', borderRadius:10, padding:'9px 12px', fontSize:14}}>“{ct.motivo}”</div>
-            {ct.resposta && <div className="muted" style={{marginTop:6}}>Resposta: {ct.resposta}</div>}
+            {ct.resposta && <div className="muted" style={{marginTop:6}}><b>Justificativa da análise:</b> {ct.resposta}</div>}
             {ct.status==='pendente' &&
               <button className="btn btn-s btn-sm" style={{marginTop:10}} onClick={()=>{setRespondendo(ct); setDecisao('procede'); setResposta('');}}>Responder</button>}
           </div>
@@ -2809,7 +2841,7 @@ function AdmContestacoes({st, setSt, toast}){
         <Modal titulo="Responder contestação" onClose={()=>setRespondendo(null)}>
           <label>Decisão</label>
           <div className="subtabs" style={{marginBottom:12}}>
-            <button className={'subtab'+(decisao==='procede'?' on':'')} onClick={()=>setDecisao('procede')}>Procede — corrigir carga</button>
+            <button className={'subtab'+(decisao==='procede'?' on':'')} onClick={()=>setDecisao('procede')}>Procede</button>
             <button className={'subtab'+(decisao==='nao_procede'?' on':'')} onClick={()=>setDecisao('nao_procede')}>Não procede</button>
           </div>
           <label>Resposta ao motorista</label>
