@@ -232,7 +232,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 90000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '1.12.10-arquitetura-permissoes'
+  VERSAO: '2.0.0-arquitetura-permissoes'
 };
 
 /* ============================================================================
@@ -3752,7 +3752,7 @@ function AdmCadastros({st, setSt, toast, user}){
         <Modal titulo={edit.nome?'Editar usuário':'Novo usuário'} onClose={()=>setEdit(null)}>
           <div style={{display:'flex', flexDirection:'column', gap:12}}>
             <div><label>Nome completo</label><input value={edit.nome} onChange={e=>setEdit({...edit, nome:e.target.value})}/></div>
-            <div className="form-grid"><div><label>UsuarioID</label><input value={edit.usuarioId} onChange={e=>setEdit({...edit,usuarioId:e.target.value.toUpperCase()})}/></div>
+            <div className="form-grid"><div><label>UsuarioID</label><input value={edit.usuarioId} readOnly={Boolean(edit.itemId)} onChange={e=>!edit.itemId&&setEdit({...edit,usuarioId:e.target.value.toUpperCase()})} title={edit.itemId?'Identificador permanente: não pode ser alterado após a criação.':''}/></div>
               <div><label>Usuário</label><input value={edit.login} onChange={e=>setEdit({...edit, login:e.target.value.toLowerCase()})}/></div>
               <div><label>Telefone</label><input value={edit.telefone||''} onChange={e=>setEdit({...edit,telefone:e.target.value})}/></div>
             </div>
