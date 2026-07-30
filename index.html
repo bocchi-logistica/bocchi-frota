@@ -232,7 +232,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 90000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '2.0.0-arquitetura-permissoes'
+  VERSAO: '2.2.0-base-limpa'
 };
 
 /* ============================================================================
@@ -240,22 +240,6 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
    A API pode devolver `perfis` e `permissoes`. Enquanto a API não devolver
    essas listas, os perfis atuais recebem as permissões-padrão abaixo.
    ========================================================================== */
-const PERMISSOES_POR_PERFIL = {
-  ADMINISTRADOR:['*'],
-  ADM:['*'],
-  MOTORISTA:[
-    'cargas.visualizar','premiacao.visualizar','checklist.visualizar',
-    'checklist.criar','contestacao.criar','historico.visualizar'
-  ],
-  VISUALIZADOR:[
-    'painel_rh.visualizar','premiacao.visualizar','metas.visualizar',
-    'descontos.visualizar','faturamento.visualizar'
-  ],
-  RH_AUDITORIA:[
-    'painel_rh.visualizar','premiacao.visualizar','metas.visualizar',
-    'descontos.visualizar','faturamento.visualizar'
-  ]
-};
 const normalizarPerfil=p=>String(p||'').trim().toUpperCase()
   .normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[\s/]+/g,'_');
 const normalizar=valor=>String(valor||'').trim().toLocaleLowerCase('pt-BR')
@@ -295,16 +279,7 @@ function perfisDoUsuario(user){
   return [...new Set(lista.filter(Boolean).map(normalizarPerfil))];
 }
 function permissoesDoUsuario(user){
-  const explicitas=Array.isArray(user?.permissoes)?user.permissoes.filter(Boolean):[];
-  const herdadas=user?.permissoesDefinidas?[]:perfisDoUsuario(user).flatMap(p=>PERMISSOES_POR_PERFIL[p]||[]);
-  const antigas=user?.perms||user?.acessos||{};
-  const compat=[
-    antigas.cargas&&'cargas.visualizar',
-    antigas.premiacao&&'premiacao.visualizar',
-    antigas.checklist&&'checklist.visualizar',
-    antigas.administracao&&!user?.permissoesDefinidas&&'*'
-  ].filter(Boolean);
-  return new Set([...explicitas,...herdadas,...compat]);
+  return new Set(Array.isArray(user?.permissoes)?user.permissoes.filter(Boolean):[]);
 }
 const ACESSO_NOVO_POR_PERMISSAO = {
   'painel_rh.visualizar':{areas:['RH_FECHAMENTO','FECHAMENTO_RH']},
@@ -335,10 +310,7 @@ const ACESSO_NOVO_POR_PERMISSAO = {
   'quadrimestre.reabrir':{area:'RH_FECHAMENTO',subtela:'REABRIQUADRIMESTRE_RH_FECHAMENTO',editar:true}
 };
 function podePeloPerfilNovo(user,permissao){
-  if(!user?.acessosPerfilDefinidos)return null;
-  /* Com perfil vinculado, até Administrador respeita as áreas e subtelas
-     efetivamente cadastradas. Acesso total permanece apenas no modo legado. */
-  if((temPerfil(user,'ADMINISTRADOR')||temPerfil(user,'ADM'))&&!user?.acessosPerfilDefinidos)return true;
+  if(!user?.acessosPerfilDefinidos)return false;
   const regra=ACESSO_NOVO_POR_PERMISSAO[permissao];
   if(!regra)return false;
   const areas=new Set((user.areasAcesso||[]).map(normalizarPerfil));
@@ -353,10 +325,8 @@ function podePeloPerfilNovo(user,permissao){
   return true;
 }
 function pode(user,permissao){
-  const acessoNovo=podePeloPerfilNovo(user,permissao);
-  if(acessoNovo!==null)return acessoNovo;
-  const ps=permissoesDoUsuario(user);
-  return ps.has('*')||ps.has(permissao);
+  if(podePeloPerfilNovo(user,permissao)) return true;
+  return permissoesDoUsuario(user).has(permissao);
 }
 function temPerfil(user,perfil){return perfisDoUsuario(user).includes(normalizarPerfil(perfil));}
 
@@ -2331,7 +2301,7 @@ function PainelRH({st,dados,user}){
     <div className="row" style={{flexWrap:'wrap'}}>
       <div className="grow">
         <h2>Fechamento de premiação — RH</h2>
-        <div className="muted">Exibe os últimos valores salvos e identifica cargas alteradas após o cálculo. O recálculo ocorre somente quando solicitado. <b>Versão 1.11.8.</b></div>
+        <div className="muted">Exibe os últimos valores salvos e identifica cargas alteradas após o cálculo. O recálculo ocorre somente quando solicitado. <b>Versão 2.1.0.</b></div>
       </div>
       <button
         className={'btn btn-sm '+(!periodoBloqueado&&pode(user,'quadrimestre.atualizar')?'btn-p':'btn-g')}
@@ -3517,6 +3487,7 @@ function AdmCadastros({st, setSt, toast, user}){
   const [editPlaca,setEditPlaca]=useState(null);
   const [editVinculo,setEditVinculo]=useState(null);
   const [editPerfil,setEditPerfil]=useState(null);
+  const [salvandoPerfil,setSalvandoPerfil]=useState(false);
   const [senhaVisivel,setSenhaVisivel]=useState(false);
   const [cad,setCad]=useState({usuarios:[],tiposVeiculo:[],veiculos:[],vinculos:[],perfis:[]});
   const [carregandoCad,setCarregandoCad]=useState(true);
@@ -3605,13 +3576,26 @@ function AdmCadastros({st, setSt, toast, user}){
     }catch(e){toast('Erro ao '+acao+' placa: '+e.message);}
   };
   const salvarVinculo=async()=>{const u=cad.usuarios.find(x=>x.itemId===editVinculo.usuarioItemId),v=cad.veiculos.find(x=>x.itemId===editVinculo.veiculoItemId);if(!u||!v){toast('Selecione usuário e veículo.');return;}try{await ApiService.salvarVinculo({...editVinculo,usuarioId:u.usuarioId,titulo:u.usuarioId+' - '+v.placa});setEditVinculo(null);await carregar();toast('Vínculo salvo no SharePoint.');}catch(e){toast('Erro ao salvar vínculo: '+e.message);}};
-  const salvarPerfil=async()=>{
-    if(!String(editPerfil.titulo||'').trim()){toast('Informe o nome do perfil.');return;}
-    const areasCanon=canonListaAcesso(editPerfil.areasAcesso);
-    const subtelasCanon=canonListaAcesso(editPerfil.subtelasAcesso);
-    const subtelasValidas=subtelasCanon.filter(c=>areasCanon.some(a=>(AREAS_E_SUBTELAS[a]||[]).some(([codigo])=>codigo===c)));
-    try{await ApiService.salvarPerfil({...editPerfil,titulo:String(editPerfil.titulo).toUpperCase(),areasAcesso:areasCanon,subtelasAcesso:subtelasValidas});setEditPerfil(null);await carregar();toast('Perfil salvo no SharePoint.');}
-    catch(e){toast('Erro ao salvar perfil: '+e.message);}
+  const salvarPerfil=async(event)=>{
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    if(salvandoPerfil||!editPerfil)return;
+    setSalvandoPerfil(true);
+    try{
+      if(!String(editPerfil.titulo||'').trim())throw new Error('Informe o nome do perfil.');
+      const areasCanon=canonListaAcesso(editPerfil.areasAcesso);
+      const subtelasCanon=canonListaAcesso(editPerfil.subtelasAcesso);
+      const subtelasValidas=subtelasCanon.filter(c=>areasCanon.some(a=>(AREAS_E_SUBTELAS[a]||[]).some(([codigo])=>codigo===c)));
+      const resposta=await ApiService.salvarPerfil({...editPerfil,titulo:String(editPerfil.titulo).toUpperCase(),areasAcesso:areasCanon,subtelasAcesso:subtelasValidas});
+      if(!resposta?.ok&&!resposta?.sucesso)throw new Error(resposta?.erro||'O SharePoint não confirmou o salvamento do perfil.');
+      await carregar();
+      setEditPerfil(null);
+      toast('Perfil salvo no SharePoint.');
+    }catch(e){
+      toast('Erro ao salvar perfil: '+(e?.message||String(e)));
+    }finally{
+      setSalvandoPerfil(false);
+    }
   };
   const alternarArea=(area)=>{
     const marcada=(editPerfil.areasAcesso||[]).includes(area);
@@ -3859,7 +3843,7 @@ function AdmCadastros({st, setSt, toast, user}){
               })}
             </div>
           </div>
-          <button type="button" className="btn btn-p" onClick={salvarPerfil}>Salvar perfil</button>
+          <button type="button" className="btn btn-p" disabled={salvandoPerfil} onClick={salvarPerfil}>{salvandoPerfil?'Salvando...':'Salvar perfil'}</button>
         </div>
       </Modal>}
       {editTipo && <Modal titulo={editTipo.itemId?'Editar tipo de veículo':'Novo tipo de veículo'} onClose={()=>setEditTipo(null)}>
