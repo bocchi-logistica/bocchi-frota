@@ -240,7 +240,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 90000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '2.3.6'
+  VERSAO: '2.3.7'
 };
 
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
@@ -586,10 +586,11 @@ const ApiService = {
   obterPremiacaoMotorista(nome){
     return this._req('GET','/premiacao/me?motoristaNome='+encodeURIComponent(nome));
   },
-  obterApuracoesSalvas(competencia='',motoristaId=''){
+  obterApuracoesSalvas(competencia='',motoristaId='',opcoes={}){
     const q=new URLSearchParams();
     if(competencia)q.set('competencia',competencia);
     if(motoristaId)q.set('motoristaId',motoristaId);
+    if(opcoes?.somenteSalvas===true)q.set('somenteSalvas','1');
     return this._req('GET','/admin/apuracoes'+(q.toString()?'?'+q.toString():''));
   },
   salvarApuracoes(motoristaId,apuracoes,origem='PAINEL_MENSAL'){
@@ -1993,7 +1994,7 @@ const FilaApuracaoRH=(()=>{
   const ouvintes=new Set();
   const publicar=()=>ouvintes.forEach(fn=>fn({...estado}));
   const confirmarGravacao=async(motoristaId,competencias)=>{
-    const r=await ApiService.obterApuracoesSalvas('',motoristaId);
+    const r=await ApiService.obterApuracoesSalvas('',motoristaId,{somenteSalvas:true});
     const existentes=new Set((r.apuracoes||[]).map(a=>String(a.competencia||'')));
     return competencias.every(c=>existentes.has(c));
   };
@@ -2112,7 +2113,7 @@ function PainelRH({st,dados,user}){
   useEffect(()=>{
     if(!filaRH.rodando&&filaRH.finalizadaEm){
       setCarregandoRH(true);
-      ApiService.obterApuracoesSalvas().then(atualizadas=>{
+      ApiService.obterApuracoesSalvas('','',{somenteSalvas:true}).then(atualizadas=>{
         const porMotorista={};
         (atualizadas.apuracoes||[]).forEach(item=>{
           const chave=String(item.motoristaId||'');
@@ -2226,7 +2227,7 @@ function PainelRH({st,dados,user}){
         ApiService.alterarStatusQuadrimestre(ano,quadrimestre,acao)
       );
       const totalAlterado=Number(resposta.total||0);
-      const atualizadas=await ApiService.obterApuracoesSalvas();
+      const atualizadas=await ApiService.obterApuracoesSalvas('','',{somenteSalvas:true});
       const porMotorista={};
       (atualizadas.apuracoes||[]).forEach(item=>{
         const chave=String(item.motoristaId||'');
@@ -2243,7 +2244,7 @@ function PainelRH({st,dados,user}){
     }catch(e){
       setErroRH('Falha ao alterar o fechamento: '+e.message);
       try{
-        const atuais=await ApiService.obterApuracoesSalvas();
+        const atuais=await ApiService.obterApuracoesSalvas('','',{somenteSalvas:true});
         const porMotorista={};
         (atuais.apuracoes||[]).forEach(item=>{
           const chave=String(item.motoristaId||'');
@@ -3598,10 +3599,14 @@ const AREAS_E_SUBTELAS = {
   ]
 };
 const ROTULOS_AREAS={PAINEL:'Painel',IMPORTACAO:'Importação',CONTESTACOES:'Contestações',RH_FECHAMENTO:'RH / Fechamento',PREMIACAO:'Premiação',CHECKLIST:'Check list',SINISTROS:'Sinistros',CADASTROS:'Cadastros'};
+const normalizarCodigoAcesso=codigo=>String(codigo||'')
+  .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+  .trim().toUpperCase().replace(/[^A-Z0-9]+/g,'_')
+  .replace(/^_+|_+$/g,'');
 const canonCodigoAcesso=(codigo)=>{
-  const alvo=normalizarPerfil(codigo);
+  const alvo=normalizarCodigoAcesso(codigo);
   return [...Object.keys(AREAS_E_SUBTELAS),...Object.values(AREAS_E_SUBTELAS).flat().map(([c])=>c)]
-    .find(c=>normalizarPerfil(c)===alvo)||String(codigo||'').trim().toUpperCase();
+    .find(c=>normalizarCodigoAcesso(c)===alvo)||String(codigo||'').trim().toUpperCase();
 };
 const canonListaAcesso=(lista)=>[...new Set((lista||[]).map(canonCodigoAcesso).filter(Boolean))];
 
@@ -3614,6 +3619,7 @@ function AdmCadastros({st, setSt, toast, user}){
   const [editVinculo,setEditVinculo]=useState(null);
   const [editPerfil,setEditPerfil]=useState(null);
   const [salvandoPerfil,setSalvandoPerfil]=useState(false);
+  const [salvandoUsuario,setSalvandoUsuario]=useState(false);
   const [senhaVisivel,setSenhaVisivel]=useState(false);
   const [cad,setCad]=useState({usuarios:[],tiposVeiculo:[],veiculos:[],vinculos:[],perfis:[]});
   const [carregandoCad,setCarregandoCad]=useState(true);
@@ -3636,6 +3642,7 @@ function AdmCadastros({st, setSt, toast, user}){
   };
   useEffect(()=>{carregar();},[]);
   const salvarUser=async()=>{
+    if(salvandoUsuario||!edit)return;
     const login=String(edit.login||'').trim().toLowerCase(), usuarioId=String(edit.usuarioId||'').trim().toUpperCase();
     if(!String(edit.nome||'').trim()||!login||!usuarioId){ toast('Nome, UsuarioID e usuário são obrigatórios.'); return; }
     if(!edit.perfilAcessoId){toast('Selecione um perfil de acesso cadastrado.');return;}
@@ -3654,7 +3661,19 @@ function AdmCadastros({st, setSt, toast, user}){
       acessoSinistros:modulosPermitidos&&edit.acessoSinistros===true,
       acessoHistorico:modulosPermitidos&&edit.acessoChecklist===true
     };
-    try{await ApiService.salvarUsuario(dadosUsuario);setEdit(null);await carregar();if(novaSenha)window.alert('Acesso salvo com sucesso.\n\nUsuário: '+login+'\nSenha temporária: '+novaSenha+'\n\nCopie agora: ela não poderá ser visualizada novamente.');else toast('Usuário salvo no SharePoint.');}catch(e){toast('Erro ao salvar usuário: '+e.message);}
+    setSalvandoUsuario(true);
+    try{
+      const resposta=await ApiService.salvarUsuario(dadosUsuario);
+      if(!resposta?.ok&&!resposta?.sucesso)throw new Error(resposta?.erro||'O SharePoint não confirmou o salvamento do usuário.');
+      setEdit(null);
+      await carregar();
+      if(novaSenha)window.alert('Acesso salvo com sucesso.\n\nUsuário: '+login+'\nSenha temporária: '+novaSenha+'\n\nCopie agora: ela não poderá ser visualizada novamente.');
+      else toast('Usuário salvo no SharePoint.');
+    }catch(e){
+      toast('Erro ao salvar usuário: '+(e?.message||String(e)));
+    }finally{
+      setSalvandoUsuario(false);
+    }
   };
   const gerarSenha=()=>{
     if(edit.perfil==='MOTORISTA'){
@@ -3799,7 +3818,7 @@ function AdmCadastros({st, setSt, toast, user}){
                 <td><span className="tag tag-ok">{u.perfil}</span></td>
                 <td>{u.senhaCadastrada?'Cadastrada':'Pendente'}</td>
                 <td><span className={'tag '+(u.ativo?'tag-ok':'tag-neutro')}>{u.ativo?'Ativo':'Inativo'}</span></td>
-                <td><div className="row" style={{gap:6,flexWrap:'nowrap'}}><button className="btn btn-s btn-sm" onClick={()=>{setSenhaVisivel(false);setEdit({...u,usuarioId:String(u.usuarioId||'').trim()||proximoUsuarioId(),novaSenha:''})}}>Editar</button><button className={'btn btn-sm '+(u.ativo?'btn-s':'btn-p')} onClick={()=>alterarStatusUsuario(u)}>{u.ativo?'Inativar':'Reativar'}</button></div></td>
+                <td><div className="row" style={{gap:6,flexWrap:'nowrap'}}><button className="btn btn-s btn-sm" onClick={()=>{setSenhaVisivel(false);setEdit({...u,novaSenha:''})}}>Editar</button><button className={'btn btn-sm '+(u.ativo?'btn-s':'btn-p')} onClick={()=>alterarStatusUsuario(u)}>{u.ativo?'Inativar':'Reativar'}</button></div></td>
               </tr>)}</tbody>
           </table>
         </div>
@@ -3862,7 +3881,7 @@ function AdmCadastros({st, setSt, toast, user}){
         <Modal titulo={edit.nome?'Editar usuário':'Novo usuário'} onClose={()=>setEdit(null)}>
           <div style={{display:'flex', flexDirection:'column', gap:12}}>
             <div><label>Nome completo</label><input value={edit.nome} onChange={e=>setEdit({...edit, nome:e.target.value})}/></div>
-            <div className="form-grid"><div><label>UsuarioID</label><input value={edit.usuarioId} readOnly={Boolean(edit.itemId)} onChange={e=>!edit.itemId&&setEdit({...edit,usuarioId:e.target.value.toUpperCase()})} title={edit.itemId?'Identificador permanente: não pode ser alterado após a criação.':''}/></div>
+            <div className="form-grid"><div><label>UsuarioID</label><input value={edit.usuarioId||''} readOnly={Boolean(edit.itemId&&String(edit.usuarioId||'').trim())} onChange={e=>!(edit.itemId&&String(edit.usuarioId||'').trim())&&setEdit({...edit,usuarioId:e.target.value.toUpperCase()})} title={edit.itemId&&String(edit.usuarioId||'').trim()?'Identificador permanente: não pode ser alterado após a criação.':'Informe o UsuarioID para concluir este cadastro incompleto.'}/></div>
               <div><label>Usuário</label><input value={edit.login} onChange={e=>setEdit({...edit, login:e.target.value.toLowerCase()})}/></div>
               <div><label>Telefone</label><input value={edit.telefone||''} onChange={e=>setEdit({...edit,telefone:e.target.value})}/></div>
             </div>
@@ -3904,7 +3923,7 @@ function AdmCadastros({st, setSt, toast, user}){
               </div>
               <div className="muted" style={{fontSize:12,marginTop:5}}>A senha aparece somente agora. Depois de salva, será possível apenas redefini-la.</div>
             </div>
-            <button className="btn btn-p" onClick={salvarUser}>Salvar usuário</button>
+            <button className="btn btn-p" disabled={salvandoUsuario} onClick={salvarUser}>{salvandoUsuario?'Salvando usuário...':'Salvar usuário'}</button>
           </div>
         </Modal>}
       {editPlaca &&
