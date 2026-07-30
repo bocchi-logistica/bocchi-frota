@@ -3859,7 +3859,7 @@ function AdmCadastros({st, setSt, toast, user}){
               })}
             </div>
           </div>
-          <button className="btn btn-p" onClick={salvarPerfil}>Salvar perfil</button>
+          <button type="button" className="btn btn-p" onClick={salvarPerfil}>Salvar perfil</button>
         </div>
       </Modal>}
       {editTipo && <Modal titulo={editTipo.itemId?'Editar tipo de veículo':'Novo tipo de veículo'} onClose={()=>setEditTipo(null)}>
