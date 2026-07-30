@@ -232,7 +232,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 90000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '1.12.8-arquitetura-permissoes'
+  VERSAO: '1.12.9-cadastros-permissoes'
 };
 
 /* ============================================================================
@@ -3519,13 +3519,24 @@ function AdmCadastros({st, setSt, toast, user}){
   const [editPerfil,setEditPerfil]=useState(null);
   const [senhaVisivel,setSenhaVisivel]=useState(false);
   const [cad,setCad]=useState({usuarios:[],tiposVeiculo:[],veiculos:[],vinculos:[],perfis:[]});
+  const [carregandoCad,setCarregandoCad]=useState(true);
+  const [erroCad,setErroCad]=useState('');
   const [fUsuario,setFUsuario]=useState({nome:'',perfil:'',ordem:'nome-asc'});
   const [fVeiculo,setFVeiculo]=useState({placa:'',frota:'',tipo:'',ordem:'placa-asc'});
   const [fVinculo,setFVinculo]=useState({placa:'',usuario:'',status:'',ordem:'usuario-asc'});
   const perfilSelecionado=edit?cad.perfis.find(p=>String(p.itemId)===String(edit.perfilAcessoId||'')):null;
   const permiteModulosUsuario=perfilSelecionado?.permiteModulosApp===true;
   const proximoUsuarioId=()=>{const maior=cad.usuarios.reduce((m,u)=>{const x=String(u.usuarioId||'').match(/^USU-(\d+)$/i);return x?Math.max(m,Number(x[1])):m;},0);return 'USU-'+String(maior+1).padStart(3,'0');};
-  const carregar=async()=>{try{const r=await ApiService.admCadastros();setCad({usuarios:r.usuarios||[],tiposVeiculo:r.tiposVeiculo||[],veiculos:r.veiculos||[],vinculos:r.vinculos||[],perfis:r.perfis||[]});}catch(e){toast('Erro ao carregar cadastros: '+e.message);}};
+  const carregar=async()=>{
+    setCarregandoCad(true);setErroCad('');
+    try{
+      const r=await ApiService.admCadastros();
+      setCad({usuarios:r.usuarios||[],tiposVeiculo:r.tiposVeiculo||[],veiculos:r.veiculos||[],vinculos:r.vinculos||[],perfis:r.perfis||[]});
+    }catch(e){
+      const msg='Erro ao carregar cadastros: '+e.message;
+      setErroCad(msg);toast(msg);
+    }finally{setCarregandoCad(false);}
+  };
   useEffect(()=>{carregar();},[]);
   const salvarUser=async()=>{
     const login=String(edit.login||'').trim().toLowerCase(), usuarioId=String(edit.usuarioId||'').trim().toUpperCase();
@@ -3657,7 +3668,10 @@ function AdmCadastros({st, setSt, toast, user}){
         </div>
       </div>
 
-      {sub==='usuarios' && podeSub('cadastro.usuarios') && <React.Fragment>
+      {erroCad&&<div className="aviso-box" style={{borderColor:'#b42318',color:'#b42318'}}>{erroCad}<div style={{marginTop:8}}><button className="btn btn-s btn-sm" onClick={carregar}>Tentar novamente</button></div></div>}
+      {carregandoCad&&<div className="card"><div className="muted">Carregando cadastros do SharePoint...</div></div>}
+
+      {sub==='usuarios' && podeSub('cadastro.usuarios') && !carregandoCad && !erroCad && <React.Fragment>
         <div><button className="btn btn-p" onClick={()=>{setSenhaVisivel(false);const p=cad.perfis.find(x=>x.titulo==='MOTORISTA');setEdit({nome:'',usuarioId:proximoUsuarioId(),login:'',telefone:'',perfil:p?.titulo||'',perfilAcessoId:p?.itemId||'',tipoFrotaAcesso:'FROTA PESADA',ativo:true,novaSenha:'',acessoCargas:false,acessoPremiacao:false,acessoChecklist:false,acessoSinistros:false,acessoHistorico:false})}}>+ Novo usuário</button></div>
         <div className="filtros-cadastro">
           <div><label>Filtrar por nome</label><input value={fUsuario.nome} onChange={e=>setFUsuario({...fUsuario,nome:e.target.value})} placeholder="Digite o nome"/></div>
@@ -3681,7 +3695,7 @@ function AdmCadastros({st, setSt, toast, user}){
         </div>
       </React.Fragment>}
 
-      {sub==='tipos' && podeSub('cadastro.tipos_veiculo') && <React.Fragment>
+      {sub==='tipos' && podeSub('cadastro.tipos_veiculo') && !carregandoCad && !erroCad && <React.Fragment>
         <div><button className="btn btn-p" onClick={()=>setEditTipo({nome:'',tipoFrota:'FROTA PESADA',pbtKg:0,capacidadeCargaKg:0,toleranciaSuperiorKg:0,limiteInferiorKg:0,exigeAprovacaoAbaixo:false,ativo:true,observacao:''})}>+ Novo tipo de veículo</button></div>
         <div className="card" style={{overflowX:'auto'}}>
           <table><thead><tr><th>Tipo de veículo</th><th>Frota</th><th className="td-num">PBT</th><th className="td-num">Capacidade</th><th className="td-num">Tolerância superior</th><th className="td-num">Limite inferior</th><th>Status</th><th>Ações</th></tr></thead>
@@ -3690,7 +3704,7 @@ function AdmCadastros({st, setSt, toast, user}){
         <div className="aviso-box">Este cadastro é a fonte única dos tipos usados nos veículos, nas metas e nos filtros. Os limites de peso ficam armazenados para a futura auditoria, sem gerar bloqueio nesta etapa.</div>
       </React.Fragment>}
 
-      {sub==='frota' && podeSub('cadastro.veiculos') && <React.Fragment>
+      {sub==='frota' && podeSub('cadastro.veiculos') && !carregandoCad && !erroCad && <React.Fragment>
         <div><button className="btn btn-p" onClick={()=>setEditPlaca({placa:'',tipoFrota:'FROTA PESADA',tipoModelo:'',ativo:true,usoCompartilhado:false})}>+ Novo veículo</button></div>
         <div className="filtros-cadastro">
           <div><label>Placa</label><input value={fVeiculo.placa} onChange={e=>setFVeiculo({...fVeiculo,placa:e.target.value})} placeholder="Filtrar placa"/></div>
@@ -3715,7 +3729,7 @@ function AdmCadastros({st, setSt, toast, user}){
         <div className="aviso-box">A classificação da frota define qual modelo de check list o veículo recebe. Nos pesados, o tipo de veículo define também a meta da premiação; o vínculo com o motorista é usado na importação quando a planilha não traz a coluna de motorista.</div>
       </React.Fragment>}
 
-      {sub==='vinculos' && podeSub('cadastro.vinculos') && <React.Fragment>
+      {sub==='vinculos' && podeSub('cadastro.vinculos') && !carregandoCad && !erroCad && <React.Fragment>
         <div><button className="btn btn-p" onClick={()=>setEditVinculo({vinculoId:'VIN-'+String(cad.vinculos.length+1).padStart(3,'0'),usuarioItemId:'',veiculoItemId:'',dataInicio:HOJE,dataFim:'',ativo:true,principal:true,observacao:''})}>+ Novo vínculo</button></div>
         <div className="filtros-cadastro">
           <div><label>Placa</label><input value={fVinculo.placa} onChange={e=>setFVinculo({...fVinculo,placa:e.target.value})} placeholder="Filtrar placa"/></div>
@@ -3726,7 +3740,7 @@ function AdmCadastros({st, setSt, toast, user}){
         <div className="card" style={{overflowX:'auto'}}><table><thead><tr><th>Vínculo</th><th>Usuário</th><th>Veículo</th><th>Início</th><th>Fim</th><th>Principal</th><th>Status</th><th></th></tr></thead><tbody>{vinculosFiltrados.map(v=><tr key={v.itemId}><td>{v.vinculoId}</td><td><b>{v.usuarioNome}</b></td><td>{v.placa}</td><td>{dataBR((v.dataInicio||'').slice(0,10))}</td><td>{v.dataFim?dataBR(v.dataFim.slice(0,10)):'—'}</td><td>{v.principal?'Sim':'Não'}</td><td><span className={'tag '+(v.dataFim?'tag-neutro':v.ativo?'tag-ok':'tag-neg')}>{statusVinculo(v)}</span></td><td><button className="btn btn-s btn-sm" onClick={()=>setEditVinculo({...v})}>Editar</button></td></tr>)}</tbody></table></div>
       </React.Fragment>}
 
-      {sub==='perfis' && podeSub('cadastro.perfis') && <React.Fragment>
+      {sub==='perfis' && podeSub('cadastro.perfis') && !carregandoCad && !erroCad && <React.Fragment>
         <div><button className="btn btn-p" onClick={()=>setEditPerfil({titulo:'',descricao:'',areasAcesso:[],subtelasAcesso:[],nivelAcesso:'SOMENTE_VISUALIZAR',permiteModulosApp:true,ativo:true})}>+ Novo perfil</button></div>
         <div className="card" style={{overflowX:'auto'}}>
           <table><thead><tr><th>Perfil</th><th>Descrição</th><th>Áreas</th><th>Subtelas</th><th>Nível</th><th>Módulos</th><th>Status</th><th></th></tr></thead>
