@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Bocchi Frota — Portal do Motorista e ADM Logística (v1.4 — Edson.B)</title>
+<title>Bocchi Frota — Portal do Motorista e ADM Logística</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
@@ -145,6 +145,14 @@ th.td-num{text-align:right}
 .subtab{padding:8px 14px; border-radius:99px; border:1.5px solid var(--linha); background:var(--branco); font-weight:700; font-family:'Archivo'; font-size:13px; color:var(--cinza)}
 .subtab.on{background:var(--mata); border-color:var(--mata); color:#fff}
 .cards4{display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:10px}
+.card-atalho{position:relative;text-align:left;cursor:pointer;border:1.5px solid transparent;transition:transform .12s,border-color .12s,box-shadow .12s}
+.card-atalho:hover{transform:translateY(-2px);border-color:rgba(45,106,79,.35);box-shadow:0 8px 24px rgba(23,63,46,.12)}
+.card-atalho.on{border-color:var(--mata);background:#F2F8F4}
+.card-atalho:disabled{cursor:not-allowed;opacity:.55;transform:none}
+.card-atalho .seta-card{position:absolute;right:14px;top:14px;color:var(--folha);font-weight:800}
+.filtros-operacionais{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;align-items:end}
+.linha-pendente{background:#FFFCF2}
+.linha-confirmada{background:#FBFDFB}
 .kpi .l{font-size:11.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--cinza); font-weight:700}
 .kpi .v{font-family:'Archivo'; font-weight:800; font-size:24px; color:var(--mata); margin-top:2px}
 .drop{border:2px dashed var(--linha); border-radius:var(--r); padding:34px 20px; text-align:center; color:var(--cinza); background:var(--branco)}
@@ -232,8 +240,11 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 90000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '2.2.0-base-limpa'
+  VERSAO: '2.3.4'
 };
+
+// A versão exibida no login e no título do navegador vem sempre do CONFIG.
+document.title = `Bocchi Frota — Portal do Motorista e ADM Logística (${CONFIG.VERSAO})`;
 
 /* ============================================================================
    CONTROLE DE ACESSO — PERFIS + PERMISSÕES
@@ -974,7 +985,7 @@ function Login({st, onLogin}){
     <div className="login-wrap">
       <div className="login-card">
         <img src={LOGO} className="logo-login" alt="Bocchi Agrobios"/>
-        <div className="login-sub">Portal do motorista e ADM logística — v1.4 — Edson.B</div>
+        <div className="login-sub">Portal do motorista e ADM logística — Versão {CONFIG.VERSAO} — Edson.B</div>
         <div style={{display:'flex',flexDirection:'column',gap:12}}>
           <div><label>Usuário</label><input value={login} onChange={e=>setLogin(e.target.value)} placeholder="ex.: adelir" autoCapitalize="none"/></div>
           <div>
@@ -2304,7 +2315,7 @@ function PainelRH({st,dados,user}){
     <div className="row" style={{flexWrap:'wrap'}}>
       <div className="grow">
         <h2>Fechamento de premiação — RH</h2>
-        <div className="muted">Exibe os últimos valores salvos e identifica cargas alteradas após o cálculo. O recálculo ocorre somente quando solicitado. <b>Versão 2.1.0.</b></div>
+        <div className="muted">Exibe os últimos valores salvos e identifica cargas alteradas após o cálculo. O recálculo ocorre somente quando solicitado. <b>Versão {CONFIG.VERSAO}.</b></div>
       </div>
       <button
         className={'btn btn-sm '+(!periodoBloqueado&&pode(user,'quadrimestre.atualizar')?'btn-p':'btn-g')}
@@ -2401,13 +2412,17 @@ function PainelRH({st,dados,user}){
   </React.Fragment>;
 }
 
-function AdmPainel({st, dados, user}){
+function AdmPainel({st, dados, user, onNavegar}){
   const [mes,setMes]=useState(MES_ATUAL);
   const [usuariosPainel,setUsuariosPainel]=useState([]);
   const [vinculosPainel,setVinculosPainel]=useState([]);
   const [veiculosPainel,setVeiculosPainel]=useState([]);
   const [cargasPainel,setCargasPainel]=useState([]);
   const [apuracoesPainel,setApuracoesPainel]=useState({});
+  const [contestacoesPainel,setContestacoesPainel]=useState([]);
+  const [checklistsPainel,setChecklistsPainel]=useState([]);
+  const [sinistrosPainel,setSinistrosPainel]=useState([]);
+  const [periodoPendencias,setPeriodoPendencias]=useState(MES_ATUAL);
   const [carregandoPainel,setCarregandoPainel]=useState(false);
   const [erroPainel,setErroPainel]=useState('');
   const [progressoPainel,setProgressoPainel]=useState('');
@@ -2441,12 +2456,20 @@ function AdmPainel({st, dados, user}){
           const salvas={};
           (st.apuracoes||[]).filter(a=>String(a.competencia||'')===competencia).forEach(a=>{salvas[String(a.motoristaId||a.usuarioId||'')]=a});
           setApuracoesPainel(salvas);
+          setContestacoesPainel(st.contestacoes||[]);
+          setChecklistsPainel(st.checklists||[]);
+          setSinistrosPainel(st.sinistros||[]);
           return;
         }
         const [cadastros,cargasResp,apuracoesResp]=await Promise.all([
           ApiService.admCadastros(),
           ApiService.obterCargas(competencia),
           ApiService.obterApuracoesSalvas(competencia)
+        ]);
+        const [contestacoesResp,checklistsResp,sinistrosResp]=await Promise.allSettled([
+          pode(user,'contestacoes.visualizar')?ApiService.admListarContestacoes():Promise.resolve({contestacoes:[]}),
+          pode(user,'checklist.aprovacao')?ApiService.admListarChecklists():Promise.resolve({checklists:[]}),
+          pode(user,'sinistros.visualizar')?ApiService.admListarSinistros():Promise.resolve({sinistros:[]})
         ]);
         if(!ativo)return;
         const usuarios=Array.isArray(cadastros.usuarios)?cadastros.usuarios:[];
@@ -2460,6 +2483,15 @@ function AdmPainel({st, dados, user}){
           salvas[String(item.motoristaId||'')]=apuracaoSalvaParaTela(item,u?.nome||'');
         });
         setApuracoesPainel(salvas);
+        setContestacoesPainel(contestacoesResp.status==='fulfilled'?(contestacoesResp.value.contestacoes||[]):[]);
+        const dadosChecklist=checklistsResp.status==='fulfilled'?(checklistsResp.value.itens||checklistsResp.value.checklists||[]):[];
+        setChecklistsPainel(dadosChecklist.map(x=>({
+          ...x,
+          motorista:x.motorista||x.motoristaNome||'',
+          data:String(x.data||x.dataHoraLocal||'').slice(0,10),
+          status:String(x.status||'PENDENTE').toLowerCase()
+        })));
+        setSinistrosPainel(sinistrosResp.status==='fulfilled'?(sinistrosResp.value.sinistros||[]):[]);
       }catch(e){
         if(ativo)setErroPainel('Não foi possível carregar o painel: '+e.message);
       }finally{
@@ -2520,8 +2552,8 @@ function AdmPainel({st, dados, user}){
     cargasPorMotorista.get(chave).push(carga);
   }
   const pendenciasNome=nome=>{
-    const contestacoes=(st.contestacoes||[]).filter(c=>String(c.status||'').toLowerCase()==='pendente'&&normalizar(c.motorista)===normalizar(nome)).length;
-    const checklists=(st.checklists||[]).filter(c=>String(c.status||'').toLowerCase()==='pendente'&&normalizar(c.motoristaNome||c.motorista)===normalizar(nome)).length;
+    const contestacoes=contestacoesPainel.filter(c=>String(c.status||'').toLowerCase()==='pendente'&&String(c.dataCarga||c.data||'').slice(0,7)===competencia&&normalizar(c.motorista)===normalizar(nome)).length;
+    const checklists=checklistsPainel.filter(c=>String(c.status||'').toLowerCase()==='pendente'&&String(c.data||'').slice(0,7)===competencia&&normalizar(c.motoristaNome||c.motorista)===normalizar(nome)).length;
     return contestacoes+checklists;
   };
   const linhas=motoristas.map(u=>{
@@ -2553,9 +2585,18 @@ function AdmPainel({st, dados, user}){
   const totalCargas=linhasFiltradas.reduce((s,l)=>s+l.cargas.length,0);
   const totalPendencias=linhasFiltradas.reduce((s,l)=>s+l.pendencias,0);
   const totalDivergencias=linhasFiltradas.filter(l=>l.situacao==='DIVERGENTE').length;
-  const totalContestacoes=(st.contestacoes||[]).filter(c=>String(c.status||'').toLowerCase()==='pendente').length;
-  const totalChecklist=(st.checklists||[]).filter(c=>String(c.status||'').toLowerCase()==='pendente').length;
-  const totalAutorizacoes=totalChecklist;
+  const competenciaPendencias=periodoPendencias==='TODOS'?'':periodoPendencias.slice(3)+'-'+periodoPendencias.slice(0,2);
+  const dentroPeriodo=data=>!competenciaPendencias||String(data||'').slice(0,7)===competenciaPendencias;
+  const contestacoesPendentes=contestacoesPainel.filter(c=>
+    String(c.status||'').toLowerCase()==='pendente'&&dentroPeriodo(c.dataCarga||c.data)
+  );
+  const totalContestacoesCarga=contestacoesPendentes.filter(c=>String(c.tipoContestacao||'ERRO_CARGA').toUpperCase()==='ERRO_CARGA').length;
+  const totalPBT=contestacoesPendentes.filter(c=>String(c.tipoContestacao||'').toUpperCase()==='DIVERGENCIA_PBT').length;
+  const totalChecklist=checklistsPainel.filter(c=>String(c.status||'').toLowerCase()==='pendente'&&dentroPeriodo(c.data||c.dataHoraLocal)).length;
+  const totalSinistros=sinistrosPainel.filter(s=>
+    !['CONCLUIDO','CANCELADO'].includes(normalizarPerfil(s.statusSinistro))&&
+    dentroPeriodo(s.dataHoraOcorrido||s.dataCriacao||s.created)
+  ).length;
   const limparFiltros=()=>{setFMotorista('');setFTipo('');setFSituacao('')};
   const rotuloSituacao=s=>({CONFERIDO:'Conferido',PENDENTE:'Pendente',DIVERGENTE:'Divergente',SEM_MOVIMENTO:'Sem movimento',FECHADO:'Fechado'}[s]||s);
   const corSituacao=s=>({CONFERIDO:'var(--mata)',PENDENTE:'var(--colheita-escura)',DIVERGENTE:'var(--erro)',SEM_MOVIMENTO:'var(--texto-suave)',FECHADO:'var(--azul)'}[s]||'inherit');
@@ -2564,9 +2605,8 @@ function AdmPainel({st, dados, user}){
     setFBuscaDetalhe('');setFProdutoDetalhe('');setFDataInicialDetalhe('');setFDataFinalDetalhe('');
     setSubPainel('detalhes');
   };
-  const irParaSubtela=(sub,filtro='')=>{
-    if(sub==='cargas'&&filtro)setFSituacao(filtro);
-    setSubPainel(sub);
+  const abrirModulo=(id,parametros={})=>{
+    if(onNavegar)onNavegar(id,parametros);
   };
 
   const produtosDetalhe=[...new Set((motoristaDetalhe?.cargas||[]).map(c=>String(c.produto||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
@@ -2586,13 +2626,10 @@ function AdmPainel({st, dados, user}){
   const Subtabs=()=> <div className="subtabs" style={{marginBottom:12}}>
     <button className={'subtab'+(subPainel==='visao'?' on':'')} onClick={()=>setSubPainel('visao')}>Visão geral</button>
     <button className={'subtab'+(['cargas','detalhes'].includes(subPainel)?' on':'')} onClick={()=>setSubPainel('cargas')}>Cargas</button>
-    <button className={'subtab'+(subPainel==='pendencias'?' on':'')} onClick={()=>setSubPainel('pendencias')}>Pendências</button>
-    <button className={'subtab'+(subPainel==='autorizacoes'?' on':'')} onClick={()=>setSubPainel('autorizacoes')}>Autorizações</button>
-    <button className={'subtab'+(subPainel==='contestacoes'?' on':'')} onClick={()=>setSubPainel('contestacoes')}>Contestações</button>
   </div>;
 
   const Cabecalho=()=> <div className="row" style={{flexWrap:'wrap',gap:10,alignItems:'flex-end'}}>
-    <div className="grow"><h2 style={{marginBottom:2}}>Painel operacional</h2><div className="muted">Indicadores para direcionar a equipe às telas responsáveis</div></div>
+    <div className="grow"><h2 style={{marginBottom:2}}>Painel operacional</h2><div className="muted">Pendências que aguardam análise, aprovação ou reprovação</div></div>
     <button className="btn btn-s btn-sm" disabled={carregandoPainel} onClick={()=>setRevisao(v=>v+1)}>{carregandoPainel?'Carregando...':'Recarregar dados'}</button>
     {pode(user,'apuracao.mensal.atualizar')&&<button
       className="btn btn-p btn-sm"
@@ -2646,19 +2683,32 @@ function AdmPainel({st, dados, user}){
     {erroPainel&&<div className="aviso-box" style={{color:'var(--erro)'}}>{erroPainel}</div>}
 
     {!carregandoPainel&&!erroPainel&&subPainel==='visao'&&<React.Fragment>
-      <div className="cards4">
-        <button className="card kpi" style={{textAlign:'left',cursor:'pointer'}} onClick={()=>irParaSubtela('cargas')}><div className="l">Cargas na competência</div><div className="v num">{totalCargas}</div><div className="muted">Abrir resumo por motorista</div></button>
-        <button className="card kpi" style={{textAlign:'left',cursor:'pointer'}} onClick={()=>irParaSubtela('cargas','DIVERGENTE')}><div className="l">Divergências de cargas</div><div className="v num" style={{color:totalDivergencias?'var(--erro)':'var(--mata)'}}>{totalDivergencias}</div><div className="muted">Ver cargas que exigem conferência</div></button>
-        <button className="card kpi" style={{textAlign:'left',cursor:'pointer'}} onClick={()=>irParaSubtela('pendencias')}><div className="l">Pendências gerais</div><div className="v num" style={{color:totalPendencias?'var(--colheita-escura)':'var(--mata)'}}>{totalPendencias}</div><div className="muted">Abrir central de direcionamento</div></button>
-        <button className="card kpi" style={{textAlign:'left',cursor:'pointer'}} onClick={()=>irParaSubtela('autorizacoes')}><div className="l">Autorizações</div><div className="v num" style={{color:totalAutorizacoes?'var(--colheita-escura)':'var(--mata)'}}>{totalAutorizacoes}</div><div className="muted">Ir para o módulo responsável</div></button>
+      <div className="card" style={{padding:12}}>
+        <div className="row" style={{flexWrap:'wrap',alignItems:'end'}}>
+          <label style={{minWidth:220}}>Período das pendências
+            <select value={periodoPendencias} onChange={e=>setPeriodoPendencias(e.target.value)}>
+              <option value="TODOS">Todos os meses</option>
+              {MESES_2026.map(m=><option key={m} value={m}>{mesLabel(m)}</option>)}
+            </select>
+          </label>
+          <div className="muted grow">Os cards mostram somente registros aguardando decisão. Clique para abrir diretamente a tela responsável.</div>
+        </div>
       </div>
       <div className="cards4">
-        <button className="card kpi" style={{textAlign:'left',cursor:'pointer'}} onClick={()=>irParaSubtela('contestacoes')}><div className="l">Contestações abertas</div><div className="v num" style={{color:totalContestacoes?'var(--erro)':'var(--mata)'}}>{totalContestacoes}</div><div className="muted">Abrir contestações</div></button>
-        <div className="card kpi"><div className="l">Motoristas aplicáveis</div><div className="v num">{linhas.length}</div></div>
-        <div className="card kpi"><div className="l">Peso transportado</div><div className="v num">{brn(linhas.reduce((s,l)=>s+l.peso,0),1)} t</div></div>
-        <div className="card kpi"><div className="l">Frete total</div><div className="v num">{brl(linhas.reduce((s,l)=>s+l.frete,0))}</div></div>
+        <button className="card kpi card-atalho" disabled={!pode(user,'contestacoes.visualizar')} onClick={()=>abrirModulo('contest',{tipoContestacao:'ERRO_CARGA',competencia:competenciaPendencias})}>
+          <span className="seta-card">→</span><div className="l">Cargas</div><div className="v num" style={{color:totalContestacoesCarga?'var(--erro)':'var(--mata)'}}>{pode(user,'contestacoes.visualizar')?totalContestacoesCarga:'—'}</div><div className="muted">Contestações de carga pendentes</div>
+        </button>
+        <button className="card kpi card-atalho" disabled={!pode(user,'contestacoes.visualizar')} onClick={()=>abrirModulo('contest',{tipoContestacao:'DIVERGENCIA_PBT',competencia:competenciaPendencias})}>
+          <span className="seta-card">→</span><div className="l">PBT</div><div className="v num" style={{color:totalPBT?'var(--erro)':'var(--mata)'}}>{pode(user,'contestacoes.visualizar')?totalPBT:'—'}</div><div className="muted">Divergências de peso aguardando decisão</div>
+        </button>
+        <button className="card kpi card-atalho" disabled={!pode(user,'checklist.aprovacao')} onClick={()=>abrirModulo('check',{sub:'aprovar',competencia:competenciaPendencias})}>
+          <span className="seta-card">→</span><div className="l">Check list</div><div className="v num" style={{color:totalChecklist?'var(--colheita-escura)':'var(--mata)'}}>{pode(user,'checklist.aprovacao')?totalChecklist:'—'}</div><div className="muted">Aguardando aprovação ou reprovação</div>
+        </button>
+        <button className="card kpi card-atalho" disabled={!pode(user,'sinistros.visualizar')} onClick={()=>abrirModulo('sinistros',{sub:'gestao',status:'ABERTOS',competencia:competenciaPendencias})}>
+          <span className="seta-card">→</span><div className="l">Sinistros</div><div className="v num" style={{color:totalSinistros?'var(--erro)':'var(--mata)'}}>{pode(user,'sinistros.visualizar')?totalSinistros:'—'}</div><div className="muted">Registros em aberto para tratamento</div>
+        </button>
       </div>
-      <div className="aviso-box">O Painel indica onde a equipe precisa agir. Aprovações e decisões continuam sendo executadas dentro do módulo responsável.</div>
+      <div className="aviso-box">O painel apenas sinaliza o volume pendente e direciona para o módulo de origem. A decisão continua sendo registrada na tela responsável.</div>
     </React.Fragment>}
 
     {!carregandoPainel&&!erroPainel&&subPainel==='cargas'&&<React.Fragment>
@@ -2683,27 +2733,8 @@ function AdmPainel({st, dados, user}){
       <div className="aviso-box">O resumo consulta os dados existentes. O detalhamento abre em uma subtela própria para evitar uma página extensa.</div>
     </React.Fragment>}
 
-    {!carregandoPainel&&!erroPainel&&subPainel==='pendencias'&&<React.Fragment>
-      <div className="cards4">
-        <button className="card kpi" style={{textAlign:'left',cursor:'pointer'}} onClick={()=>irParaSubtela('cargas','DIVERGENTE')}><div className="l">Divergências de cargas</div><div className="v num">{totalDivergencias}</div><div className="muted">Abrir Cargas filtradas</div></button>
-        <button className="card kpi" style={{textAlign:'left',cursor:'pointer'}} onClick={()=>setSubPainel('autorizacoes')}><div className="l">Autorizações pendentes</div><div className="v num">{totalAutorizacoes}</div><div className="muted">Ver direcionamentos</div></button>
-        <button className="card kpi" style={{textAlign:'left',cursor:'pointer'}} onClick={()=>setSubPainel('contestacoes')}><div className="l">Contestações abertas</div><div className="v num">{totalContestacoes}</div><div className="muted">Ir para Contestações</div></button>
-      </div>
-      <div className="aviso-box">Esta subtela consolida indicadores. A correção ou decisão é realizada no módulo de origem.</div>
-    </React.Fragment>}
 
-    {!carregandoPainel&&!erroPainel&&subPainel==='autorizacoes'&&<React.Fragment>
-      <div className="card"><h3>Central de autorizações</h3><p className="muted">Resumo das análises aguardando ação. Cada item deve abrir o módulo responsável.</p>
-        <div className="linha-item"><span>Checklists aguardando análise</span><b>{totalChecklist}</b></div>
-        <div className="linha-item"><span>PBT aguardando análise</span><b>Disponível quando o módulo PBT for implantado</b></div>
-      </div>
-      <div className="aviso-box">Checklist continua em Check list &gt; Aprovação. O futuro PBT ficará em PBT &gt; Aprovações.</div>
-    </React.Fragment>}
 
-    {!carregandoPainel&&!erroPainel&&subPainel==='contestacoes'&&<React.Fragment>
-      <div className="card"><h3>Contestações</h3><div className="linha-item"><span>Contestações abertas</span><b>{totalContestacoes}</b></div><p className="muted">A análise completa permanece na tela própria de Contestações.</p></div>
-      <div className="aviso-box">O Painel apenas indica o volume e direciona. O histórico e a decisão não serão duplicados aqui.</div>
-    </React.Fragment>}
   </React.Fragment>;
 }
 /* ================= ADM: IMPORTAÇÃO ================= */
@@ -2878,20 +2909,29 @@ function AdmImportar({st, setSt, toast}){
 }
 
 /* ================= ADM: CONTESTAÇÕES ================= */
-function AdmContestacoes({st, setSt, toast}){
+function AdmContestacoes({st, setSt, toast, foco}){
   const [filtro,setFiltro]=useState('pendente');
   const [tipoFiltro,setTipoFiltro]=useState('todos');
   const [motoristaFiltro,setMotoristaFiltro]=useState('');
+  const [competenciaFiltro,setCompetenciaFiltro]=useState('');
   const [respondendo,setRespondendo]=useState(null);
   const [resposta,setResposta]=useState('');
   const [decisao,setDecisao]=useState('procede');
   const [carregando,setCarregando]=useState(!CONFIG.MODO_DEMONSTRACAO);
   const [salvando,setSalvando]=useState(false);
+  useEffect(()=>{
+    if(!foco?.chave)return;
+    setFiltro('pendente');
+    setTipoFiltro(foco.parametros?.tipoContestacao||'todos');
+    setMotoristaFiltro('');
+    setCompetenciaFiltro(foco.parametros?.competencia||'');
+  },[foco?.chave]);
   const motoristasContestacoes=[...new Set((st.contestacoes||[]).map(c=>c.motorista).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
   const lista = (st.contestacoes||[])
     .filter(c=>filtro==='todas'||c.status===filtro)
     .filter(c=>tipoFiltro==='todos'||c.tipoContestacao===tipoFiltro)
     .filter(c=>!motoristaFiltro||c.motorista===motoristaFiltro)
+    .filter(c=>!competenciaFiltro||String(c.dataCarga||c.data||'').slice(0,7)===competenciaFiltro)
     .sort((a,b)=>String(b.data||'').localeCompare(String(a.data||'')));
   const cargaDe = id => st.cargas.find(c=>c.id===id);
   const carregar=async()=>{
@@ -2936,14 +2976,17 @@ function AdmContestacoes({st, setSt, toast}){
               <option value="ERRO_CARGA">Erro de carga</option>
             </select>
           </label>
+          <label style={{minWidth:170}}>Competência
+            <input type="month" value={competenciaFiltro} onChange={e=>setCompetenciaFiltro(e.target.value)}/>
+          </label>
           <label style={{minWidth:210,flex:1}}>Motorista
             <select value={motoristaFiltro} onChange={e=>setMotoristaFiltro(e.target.value)}>
               <option value="">Todos os motoristas</option>
               {motoristasContestacoes.map(nome=><option key={nome} value={nome}>{nome}</option>)}
             </select>
           </label>
-          {(tipoFiltro!=='todos'||motoristaFiltro) &&
-            <button className="btn btn-g btn-sm" onClick={()=>{setTipoFiltro('todos');setMotoristaFiltro('');}}>Limpar filtros</button>}
+          {(tipoFiltro!=='todos'||motoristaFiltro||competenciaFiltro) &&
+            <button className="btn btn-g btn-sm" onClick={()=>{setTipoFiltro('todos');setMotoristaFiltro('');setCompetenciaFiltro('');}}>Limpar filtros</button>}
         </div>
       </div>
       {carregando && <div className="card muted">Carregando contestações do SharePoint...</div>}
@@ -2991,7 +3034,7 @@ function AdmContestacoes({st, setSt, toast}){
 }
 
 /* ================= ADM: CHECK LIST (aprovação + perguntas + relatório) ================= */
-function AdmChecklist({st, setSt, toast, user}){
+function AdmChecklist({st, setSt, toast, user, foco}){
   /* ALTERAÇÃO V6: fora do modo demonstração, o painel carrega os registros pela
      API (GET /admin/checklists) em vez de usar apenas o estado do navegador. */
   const [sub,setSub]=useState(pode(user,'checklist.aprovacao')?'aprovar':pode(user,'checklist.perguntas')?'perguntas':'relatorio');
@@ -3025,7 +3068,14 @@ function AdmChecklist({st, setSt, toast, user}){
   const [fMes,setFMes]=useState(mesAtualFiltro);
   const [fPlaca,setFPlaca]=useState('todas');
   const [fStatus,setFStatus]=useState('todos');
+  const [fMesAprovacao,setFMesAprovacao]=useState('');
   const [carregandoCatalogo,setCarregandoCatalogo]=useState(false);
+
+  useEffect(()=>{
+    if(!foco?.chave||!pode(user,'checklist.aprovacao'))return;
+    setSub('aprovar');
+    setFMesAprovacao(foco.parametros?.competencia||'');
+  },[foco?.chave]);
 
   const carregarCatalogo = async ()=>{
     setCarregandoCatalogo(true);
@@ -3053,7 +3103,8 @@ function AdmChecklist({st, setSt, toast, user}){
 
   useEffect(()=>{ carregarCatalogo(); sincronizar(); },[]);
 
-  const pendentes = st.checklists.filter(c=>c.status==='pendente');
+  const pendentesTodos = st.checklists.filter(c=>c.status==='pendente');
+  const pendentes = pendentesTodos.filter(c=>!fMesAprovacao||String(c.data||'').slice(0,7)===fMesAprovacao);
   const decidir=async(ck, status, motivo)=>{
     /* ALTERAÇÃO V6: em produção a decisão também é gravada no SharePoint via API */
     if (!CONFIG.MODO_DEMONSTRACAO && ck.id && !String(ck.id).startsWith('DEMO-')){
@@ -3118,7 +3169,16 @@ function AdmChecklist({st, setSt, toast, user}){
       </div>
 
       {sub==='aprovar' && pode(user,'checklist.aprovacao') && <React.Fragment>
-        {pendentes.length===0 && <div className="card muted">Nenhum check list aguardando aprovação.</div>}
+        <div className="card" style={{padding:12}}>
+          <div className="row" style={{flexWrap:'wrap',alignItems:'end'}}>
+            <label style={{minWidth:190}}>Competência
+              <input type="month" value={fMesAprovacao} onChange={e=>setFMesAprovacao(e.target.value)}/>
+            </label>
+            {fMesAprovacao&&<button className="btn btn-g btn-sm" onClick={()=>setFMesAprovacao('')}>Todos os meses</button>}
+            <div className="muted grow">{pendentes.length} checklist(s) aguardando decisão no período selecionado.</div>
+          </div>
+        </div>
+        {pendentes.length===0 && <div className="card muted">Nenhum check list aguardando aprovação no período selecionado.</div>}
         {pendentes.map(ck=>
           <div className="card row" key={ck.id}>
             <div className="grow"><b>{primeiroNome(ck.motorista)}</b><div className="muted">{dataBR(ck.data)} · {ck.placa} · {ck.respostas.filter(r=>r.resp==='NC').length} não conformidade(s)</div></div>
@@ -3244,6 +3304,10 @@ function AdmPremiacao({st, setSt, toast, user}){
   const [competencia,setCompetencia]=useState(MES_ATUAL.slice(3)+'-'+MES_ATUAL.slice(0,2));
   const [fMotorista,setFMotorista]=useState('');
   const [fTipoMeta,setFTipoMeta]=useState('');
+  const [fStatusDesc,setFStatusDesc]=useState('PENDENTES');
+  const [fCategoriaDesc,setFCategoriaDesc]=useState('');
+  const [fSituacaoDesc,setFSituacaoDesc]=useState('');
+  const [fBuscaDesc,setFBuscaDesc]=useState('');
   const [painel,setPainel]=useState({metas:[],tiposVeiculo:[],descontos:[],elegiveis:[],pendencias:{}});
   const [novoDesc,setNovoDesc]=useState({motoristaId:'',motoristaNome:'',categoria:'Multas',situacao:'Sem ocorrência',quantidade:0,valor:0,percentual:0,dataOcorrencia:'',motivo:'',exibir:true});
   const categorias=['Notificação / Advertência','Multas','Auditoria Interna'];
@@ -3317,6 +3381,36 @@ function AdmPremiacao({st, setSt, toast, user}){
     .map(m=>({...m,tipo:tipoOficial(m.tipo,m.chave)}))
     .filter(m=>!fTipoMeta||chaveTipo(m.tipo)===chaveTipo(fTipoMeta));
   const elegiveis=(painel.elegiveis||[]).filter(u=>!fMotorista||u.motoristaId===fMotorista);
+  const acompanhamentoDescontos=(painel.elegiveis||[]).flatMap(u=>categorias.map(categoria=>{
+    const registro=(painel.descontos||[]).find(d=>String(d.motoristaId)===String(u.motoristaId)&&String(d.categoria)===categoria);
+    return {
+      motoristaId:String(u.motoristaId),motoristaNome:u.nome,categoria,
+      status:registro?'CONFERIDO':'PENDENTE',registro:registro||null,
+      situacao:registro?.situacao||'',motivo:registro?.motivo||'',
+      valor:Number(registro?.valor||0),dataOcorrencia:registro?.dataOcorrencia||''
+    };
+  })).filter(linha=>{
+    const busca=normalizar(fBuscaDesc);
+    const okBusca=!busca||normalizar(linha.motoristaNome).includes(busca)||normalizar(linha.categoria).includes(busca)||normalizar(linha.motivo).includes(busca);
+    const okMotorista=!fMotorista||linha.motoristaId===String(fMotorista);
+    const okCategoria=!fCategoriaDesc||linha.categoria===fCategoriaDesc;
+    const okStatus=fStatusDesc==='TODOS'||linha.status===fStatusDesc.slice(0,-1);
+    const okSituacao=!fSituacaoDesc||linha.situacao===fSituacaoDesc;
+    return okBusca&&okMotorista&&okCategoria&&okStatus&&okSituacao;
+  }).sort((a,b)=>a.status.localeCompare(b.status)||a.motoristaNome.localeCompare(b.motoristaNome,'pt-BR')||a.categoria.localeCompare(b.categoria,'pt-BR'));
+  const selecionarCategoria=categoria=>{
+    setFCategoriaDesc(categoria);setFStatusDesc('PENDENTES');setFSituacaoDesc('');
+    setNovoDesc(v=>({...v,itemId:undefined,motoristaId:'',motoristaNome:'',categoria,situacao:'Sem ocorrência',quantidade:0,valor:0,percentual:0,dataOcorrencia:'',motivo:''}));
+  };
+  const prepararConferencia=linha=>{
+    if(linha.registro){
+      const d=linha.registro;
+      setNovoDesc({itemId:d.itemId,motoristaId:d.motoristaId,motoristaNome:d.motoristaNome,categoria:d.categoria,situacao:d.situacao||'Sem ocorrência',quantidade:d.quantidade||0,valor:d.valor||0,percentual:d.percentual||0,dataOcorrencia:d.dataOcorrencia||'',motivo:d.motivo||'',exibir:d.exibir!==false});
+    }else{
+      setNovoDesc({motoristaId:linha.motoristaId,motoristaNome:linha.motoristaNome,categoria:linha.categoria,situacao:'Sem ocorrência',quantidade:0,valor:0,percentual:0,dataOcorrencia:'',motivo:'',exibir:true});
+    }
+    setTimeout(()=>document.getElementById('form-descontos')?.scrollIntoView({behavior:'smooth',block:'start'}),0);
+  };
   return (
     <React.Fragment>
       <div className="row" style={{flexWrap:'wrap'}}>
@@ -3371,19 +3465,37 @@ function AdmPremiacao({st, setSt, toast, user}){
       </React.Fragment>}
 
       {sub==='desc' && pode(user,'descontos.visualizar') && <React.Fragment>
-        <div className="row" style={{marginBottom:12,flexWrap:'wrap'}}>
-          <input type="month" style={{width:'auto'}} value={competencia} onChange={e=>setCompetencia(e.target.value)}/>
-          <select style={{width:'auto'}} value={fMotorista} onChange={e=>setFMotorista(e.target.value)}><option value="">Todos os motoristas</option>{(painel.elegiveis||[]).map(u=><option key={u.motoristaId} value={u.motoristaId}>{u.nome}</option>)}</select>
+        <div className="card" style={{padding:12}}>
+          <div className="filtros-operacionais">
+            <div><label>Competência</label><input type="month" value={competencia} onChange={e=>setCompetencia(e.target.value)}/></div>
+            <div><label>Motorista</label><select value={fMotorista} onChange={e=>setFMotorista(e.target.value)}><option value="">Todos os motoristas</option>{(painel.elegiveis||[]).map(u=><option key={u.motoristaId} value={u.motoristaId}>{u.nome}</option>)}</select></div>
+            <div><label>Buscar</label><input value={fBuscaDesc} onChange={e=>setFBuscaDesc(e.target.value)} placeholder="Motorista, categoria ou motivo"/></div>
+            <div><label>Status da conferência</label><select value={fStatusDesc} onChange={e=>{setFStatusDesc(e.target.value);if(e.target.value==='PENDENTES')setFSituacaoDesc('')}}><option value="PENDENTES">Somente pendentes</option><option value="CONFERIDOS">Somente conferidos</option><option value="TODOS">Todos</option></select></div>
+            <div><label>Categoria</label><select value={fCategoriaDesc} onChange={e=>setFCategoriaDesc(e.target.value)}><option value="">Todas as categorias</option>{categorias.map(c=><option key={c}>{c}</option>)}</select></div>
+            <div><label>Situação lançada</label><select disabled={fStatusDesc==='PENDENTES'} value={fSituacaoDesc} onChange={e=>setFSituacaoDesc(e.target.value)}><option value="">Todas</option><option>Sem ocorrência</option><option>Com ocorrência</option></select></div>
+            <div><button className="btn btn-g" style={{width:'100%'}} onClick={()=>{setFMotorista('');setFBuscaDesc('');setFStatusDesc('PENDENTES');setFCategoriaDesc('');setFSituacaoDesc('')}}>Limpar filtros</button></div>
+          </div>
         </div>
+
         <div className="totais">
-          {categorias.map(c=><div className="card" key={c}><div className="v num">{((painel.pendencias||{})[c]||[]).filter(u=>!fMotorista||u.motoristaId===fMotorista).length}</div><div className="l">{c}<br/><span className="muted">pendentes</span></div></div>)}
+          {categorias.map(c=>{
+            const buscaCard=normalizar(fBuscaDesc);
+            const quantidade=((painel.pendencias||{})[c]||[]).filter(u=>(!fMotorista||String(u.motoristaId)===String(fMotorista))&&(!buscaCard||normalizar(u.nome).includes(buscaCard))).length;
+            return <button className={'card card-atalho'+(fCategoriaDesc===c&&fStatusDesc==='PENDENTES'?' on':'')} key={c} onClick={()=>selecionarCategoria(c)}>
+              <span className="seta-card">→</span><div className="v num" style={{color:quantidade?'var(--colheita-escura)':'var(--mata)'}}>{quantidade}</div><div className="l">{c}<br/><span className="muted">pendentes — clique para localizar</span></div>
+            </button>;
+          })}
         </div>
-        {podeEditarDescontos&&<div className="card">
-          <h3 style={{marginBottom:10}}>Conferir desconto</h3>
+
+        {podeEditarDescontos&&<div className="card" id="form-descontos">
+          <div className="row" style={{marginBottom:10,flexWrap:'wrap'}}>
+            <div className="grow"><h3>{novoDesc.itemId?'Editar conferência':'Conferir desconto'}</h3><div className="muted">Para o cenário padrão, selecione todos os pendentes e grave como “Sem ocorrência”. As exceções podem ser tratadas individualmente.</div></div>
+            {!novoDesc.itemId&&((painel.pendencias||{})[novoDesc.categoria]||[]).length>0&&<button className="btn btn-s btn-sm" onClick={()=>setNovoDesc({...novoDesc,motoristaId:'__TODOS__',motoristaNome:'',situacao:'Sem ocorrência',quantidade:0,valor:0,percentual:0,dataOcorrencia:'',motivo:''})}>Selecionar todos os pendentes</button>}
+          </div>
           {novoDesc.itemId&&<div className="aviso-box" style={{marginBottom:12}}>Editando lançamento existente. Ao salvar, o registro será atualizado sem criar duplicidade.</div>}
           <div className="form-grid">
             <div><label>Motorista</label>
-              <select value={novoDesc.motoristaId} onChange={e=>{const u=(painel.elegiveis||[]).find(x=>x.motoristaId===e.target.value);setNovoDesc({...novoDesc,motoristaId:e.target.value,motoristaNome:u?.nome||''})}}>
+              <select value={novoDesc.motoristaId} onChange={e=>{const u=(painel.elegiveis||[]).find(x=>String(x.motoristaId)===String(e.target.value));setNovoDesc({...novoDesc,motoristaId:e.target.value,motoristaNome:u?.nome||''})}}>
                 <option value="">Selecionar...</option>
                 {!novoDesc.itemId&&<option value="__TODOS__">✓ Todos os motoristas pendentes</option>}
                 {elegiveis.map(u=><option key={u.motoristaId} value={u.motoristaId}>{u.nome}</option>)}
@@ -3398,32 +3510,28 @@ function AdmPremiacao({st, setSt, toast, user}){
               <div style={{gridColumn:'1/-1'}}><label>Motivo</label><textarea value={novoDesc.motivo} onChange={e=>setNovoDesc({...novoDesc,motivo:e.target.value})}/></div>
             </React.Fragment>}
           </div>
-          {novoDesc.motoristaId==='__TODOS__'&&
-            <div className="aviso-box" style={{marginTop:12}}>
-              Serão gravados como <b>Sem ocorrência</b> todos os {((painel.pendencias||{})[novoDesc.categoria]||[]).length} motoristas ainda pendentes em {novoDesc.categoria}. Quem já foi conferido não será alterado.
-            </div>}
+          {novoDesc.motoristaId==='__TODOS__'&&<div className="aviso-box" style={{marginTop:12}}>Serão gravados como <b>Sem ocorrência</b> todos os {((painel.pendencias||{})[novoDesc.categoria]||[]).length} motoristas ainda pendentes em {novoDesc.categoria}. Quem já foi conferido não será alterado.</div>}
           <div className="row" style={{marginTop:12}}>
             <button className="btn btn-p" onClick={addDesc}>{novoDesc.itemId?'Salvar edição':'Salvar conferência'}</button>
-            {novoDesc.itemId&&<button className="btn btn-s" onClick={()=>setNovoDesc({motoristaId:'',motoristaNome:'',categoria:'Multas',situacao:'Sem ocorrência',quantidade:0,valor:0,percentual:0,dataOcorrencia:'',motivo:'',exibir:true})}>Cancelar edição</button>}
+            {(novoDesc.itemId||novoDesc.motoristaId)&&<button className="btn btn-s" onClick={()=>setNovoDesc({motoristaId:'',motoristaNome:'',categoria:novoDesc.categoria||'Multas',situacao:'Sem ocorrência',quantidade:0,valor:0,percentual:0,dataOcorrencia:'',motivo:'',exibir:true})}>Limpar lançamento</button>}
           </div>
         </div>}
+
         <div className="card" style={{overflowX:'auto'}}>
+          <div className="row" style={{marginBottom:10,flexWrap:'wrap'}}><div className="grow"><h3>Acompanhamento da conferência</h3><div className="muted">{acompanhamentoDescontos.length} registro(s) encontrados nos filtros.</div></div></div>
           <table>
-            <thead><tr><th>Motorista</th><th>Mês</th><th>Item</th><th>Motivo</th><th className="td-num">Valor</th><th>Origem</th><th></th></tr></thead>
-            <tbody>{(painel.descontos||[]).filter(d=>!fMotorista||d.motoristaId===fMotorista).map(d=>
-              <tr key={d.itemId}>
-                <td><b>{d.motoristaNome}</b></td>
-                <td>{competencia.slice(5,7)+'/'+competencia.slice(0,4)}</td><td>{d.categoria}</td>
-                <td>{d.motivo||'—'}</td>
-                <td className="td-num num" style={{color:d.valor?'var(--erro)':'var(--cinza)'}}>{brl(-Math.abs(d.valor||0))}</td>
-                <td className="muted">{d.situacao}</td>
-                <td>{podeEditarDescontos&&<button className="btn btn-s btn-sm" onClick={()=>setNovoDesc({
-                  itemId:d.itemId,motoristaId:d.motoristaId,motoristaNome:d.motoristaNome,
-                  categoria:d.categoria,situacao:d.situacao||'Sem ocorrência',
-                  quantidade:d.quantidade||0,valor:d.valor||0,percentual:d.percentual||0,
-                  dataOcorrencia:d.dataOcorrencia||'',motivo:d.motivo||'',exibir:d.exibir!==false
-                })}>Editar</button>}</td>
-              </tr>)}</tbody>
+            <thead><tr><th>Motorista</th><th>Categoria</th><th>Status</th><th>Situação</th><th>Data / motivo</th><th className="td-num">Valor</th><th></th></tr></thead>
+            <tbody>{acompanhamentoDescontos.map(linha=>{
+              const d=linha.registro;
+              return <tr key={linha.motoristaId+'|'+linha.categoria} className={linha.status==='PENDENTE'?'linha-pendente':'linha-confirmada'}>
+                <td><b>{linha.motoristaNome}</b></td><td>{linha.categoria}</td>
+                <td><span className={'tag '+(linha.status==='PENDENTE'?'tag-pend':'tag-ok')}>{linha.status==='PENDENTE'?'Pendente':'Conferido'}</span></td>
+                <td>{linha.status==='PENDENTE'?<span className="muted">Ainda não lançado</span>:<span className={'tag '+(linha.situacao==='Com ocorrência'?'tag-neg':'tag-neutro')}>{linha.situacao||'Conferido'}</span>}</td>
+                <td>{d?<React.Fragment>{d.dataOcorrencia&&<div>{dataBR(String(d.dataOcorrencia).slice(0,10))}</div>}<div className="muted">{d.motivo||'Sem motivo informado'}</div></React.Fragment>:<span className="muted">Aguardando conferência</span>}</td>
+                <td className="td-num num" style={{color:linha.valor?'var(--erro)':'var(--cinza)'}}>{d?brl(-Math.abs(linha.valor||0)):'—'}</td>
+                <td>{podeEditarDescontos&&<button className="btn btn-s btn-sm" onClick={()=>prepararConferencia(linha)}>{linha.status==='PENDENTE'?'Conferir':'Editar'}</button>}</td>
+              </tr>;
+            })}{!acompanhamentoDescontos.length&&<tr><td colSpan="7" className="muted" style={{textAlign:'center',padding:24}}>Nenhum registro encontrado para os filtros selecionados.</td></tr>}</tbody>
           </table>
         </div>
       </React.Fragment>}
@@ -3886,13 +3994,13 @@ function AdmCadastros({st, setSt, toast, user}){
 
 
 /* ================= ADM: SINISTROS ================= */
-function AdmSinistros({toast,user}){
+function AdmSinistros({toast,user,foco}){
   const podeGestao=pode(user,'sinistros.visualizar');
   const podeConfig=pode(user,'sinistros.configuracoes');
   const podeEditarConfig=pode(user,'sinistros.configuracoes.editar');
   const [sub,setSub]=useState(podeGestao?'gestao':'config');
   const [lista,setLista]=useState([]),[carregando,setCarregando]=useState(false),[selecionado,setSelecionado]=useState(null);
-  const [filtro,setFiltro]=useState({texto:'',status:'ABERTOS',gravidade:''});
+  const [filtro,setFiltro]=useState({texto:'',status:'ABERTOS',gravidade:'',competencia:''});
   const [edicao,setEdicao]=useState({statusSinistro:'',gravidade:'',observacao:''});
   const [config,setConfig]=useState(null),[salvandoConfig,setSalvandoConfig]=useState(false);
   const carregar=async()=>{
@@ -3915,6 +4023,12 @@ function AdmSinistros({toast,user}){
     }catch(e){toast('Erro ao carregar configurações: '+e.message);}
   };
   useEffect(()=>{if(podeGestao)carregar();if(podeConfig)carregarConfig();},[]);
+  useEffect(()=>{
+    if(foco?.chave&&podeGestao){
+      setSub('gestao');
+      setFiltro(f=>({...f,status:'ABERTOS',competencia:foco.parametros?.competencia||''}));
+    }
+  },[foco?.chave]);
   useEffect(()=>{
     if(sub==='gestao'&&!podeGestao&&podeConfig)setSub('config');
     if(sub==='config'&&!podeConfig&&podeGestao)setSub('gestao');
@@ -3944,7 +4058,8 @@ function AdmSinistros({toast,user}){
     const encerrado=['CONCLUIDO','CANCELADO'].includes(normalizarPerfil(s.statusSinistro));
     const okStatus=filtro.status==='TODOS'||(filtro.status==='ABERTOS'&&!encerrado)||normalizarPerfil(s.statusSinistro)===filtro.status;
     const okGrav=!filtro.gravidade||normalizarPerfil(s.gravidade)===filtro.gravidade;
-    return okTexto&&okStatus&&okGrav;
+    const okPeriodo=!filtro.competencia||String(s.dataHoraOcorrido||s.dataCriacao||s.created||'').slice(0,7)===filtro.competencia;
+    return okTexto&&okStatus&&okGrav&&okPeriodo;
   });
   return <React.Fragment>
     <div className="row" style={{flexWrap:'wrap'}}><div className="grow"><h2>Sinistros</h2><div className="muted">Gestão dos registros e parâmetros operacionais do módulo.</div></div>{sub==='gestao'&&podeGestao&&<button className="btn btn-s" onClick={carregar}>Atualizar</button>}</div>
@@ -3957,6 +4072,7 @@ function AdmSinistros({toast,user}){
       <div className="card"><div className="filtros-cadastro" style={{margin:0}}>
         <div><label>Buscar</label><input value={filtro.texto} onChange={e=>setFiltro({...filtro,texto:e.target.value})} placeholder="Protocolo, placa ou motorista"/></div>
         <div><label>Status</label><select value={filtro.status} onChange={e=>setFiltro({...filtro,status:e.target.value})}><option value="ABERTOS">Em aberto</option><option value="TODOS">Todos</option>{['ABERTO','AGUARDANDO_ANALISE','EM_ATENDIMENTO','AGUARDANDO_DOCUMENTOS','ENCAMINHADO_SEGURADORA','AGUARDANDO_ORCAMENTO','EM_REPARO','AGUARDANDO_TERCEIRO','CONCLUIDO','CANCELADO'].map(x=><option key={x} value={x}>{x.replaceAll('_',' ')}</option>)}</select></div>
+        <div><label>Competência</label><input type="month" value={filtro.competencia||''} onChange={e=>setFiltro({...filtro,competencia:e.target.value})}/></div>
         <div><label>Gravidade</label><select value={filtro.gravidade} onChange={e=>setFiltro({...filtro,gravidade:e.target.value})}><option value="">Todas</option>{['BAIXA','MEDIA','ALTA','CRITICA'].map(x=><option key={x}>{x}</option>)}</select></div>
       </div></div>
       <div className="cards4"><div className="card kpi"><div className="l">Registros filtrados</div><div className="v">{filtrados.length}</div></div><div className="card kpi"><div className="l">Com vítima</div><div className="v">{filtrados.filter(s=>s.possuiVitima).length}</div></div><div className="card kpi"><div className="l">Alta/crítica</div><div className="v">{filtrados.filter(s=>['ALTA','CRITICA'].includes(normalizarPerfil(s.gravidade))).length}</div></div></div>
@@ -4023,6 +4139,15 @@ function AdmApp({st, setSt, user, onSair, toast}){
     (pode(user,'cadastro.usuarios')||pode(user,'cadastro.tipos_veiculo')||pode(user,'cadastro.veiculos')||pode(user,'cadastro.vinculos')||pode(user,'cadastro.perfis'))&&['cad','Cadastros']
   ].filter(Boolean);
   const [aba,setAba]=useState(abas[0]?.[0]||'');
+  const [destino,setDestino]=useState(null);
+  const navegarPara=(id,parametros={})=>{
+    if(!abas.some(([codigo])=>codigo===id)){
+      toast('Seu perfil não possui acesso ao módulo solicitado.');
+      return;
+    }
+    setDestino({id,parametros,chave:Date.now()});
+    setAba(id);
+  };
   useEffect(()=>{
     if(CONFIG.MODO_DEMONSTRACAO||!pode(user,'checklist.administrar')) return;
     ApiService.admListarChecklists().then(r=>{
@@ -4043,18 +4168,18 @@ function AdmApp({st, setSt, user, onSair, toast}){
         <div className="atop-in">
           <div className="marca">Bocchi <em>Frota</em></div>
           <nav className="anav grow">
-            {abas.map(([id,nome])=><button key={id} className={aba===id?'on':''} onClick={()=>setAba(id)}>{nome}</button>)}
+            {abas.map(([id,nome])=><button key={id} className={aba===id?'on':''} onClick={()=>{setDestino(null);setAba(id)}}>{nome}</button>)}
           </nav>
           <button className="btn btn-sm" style={{color:'rgba(255,255,255,.8)'}} onClick={onSair}>Sair</button>
         </div>
       </div>
       <div className="abody">
         {aba==='rh' && <PainelRH st={st} dados={dados} user={user}/>}
-        {aba==='painel' && <AdmPainel st={st} dados={dados} user={user}/>}
+        {aba==='painel' && <AdmPainel st={st} dados={dados} user={user} onNavegar={navegarPara}/>}
         {aba==='importar' && <AdmImportar st={st} setSt={setSt} toast={toast}/>}
-        {aba==='contest' && <AdmContestacoes st={st} setSt={setSt} toast={toast}/>}
-        {aba==='sinistros' && <AdmSinistros toast={toast} user={user}/>}
-        {aba==='check' && <AdmChecklist st={st} setSt={setSt} toast={toast} user={user}/>}
+        {aba==='contest' && <AdmContestacoes st={st} setSt={setSt} toast={toast} foco={destino?.id==='contest'?destino:null}/>}
+        {aba==='sinistros' && <AdmSinistros toast={toast} user={user} foco={destino?.id==='sinistros'?destino:null}/>}
+        {aba==='check' && <AdmChecklist st={st} setSt={setSt} toast={toast} user={user} foco={destino?.id==='check'?destino:null}/>}
         {aba==='prem' && <AdmPremiacao st={st} setSt={setSt} toast={toast} user={user}/>}
         {aba==='cad' && <AdmCadastros st={st} setSt={setSt} toast={toast} user={user}/>}
       </div>
