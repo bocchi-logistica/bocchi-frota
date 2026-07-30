@@ -240,7 +240,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 90000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '2.3.4'
+  VERSAO: '2.3.6'
 };
 
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
@@ -2214,25 +2214,18 @@ function PainelRH({st,dados,user}){
       return;
     }
     const pergunta=acao==='FECHAR'
-      ?`Fechar o ${quadrimestre}º quadrimestre de ${ano}? Os valores ficarão bloqueados.`
-      :`Reabrir o ${quadrimestre}º quadrimestre de ${ano}? As apurações voltarão para PENDENTE e precisarão ser atualizadas novamente.`;
+      ?`Fechar TODO o ${quadrimestre}º quadrimestre de ${ano}? Os valores ficarão bloqueados. A seleção de motoristas é usada somente para atualizar apurações.`
+      :`Reabrir TODO o ${quadrimestre}º quadrimestre de ${ano}? Somente os registros que ainda estão FECHADOS voltarão para PENDENTE. A seleção de motoristas não altera esta ação.`;
     if(!window.confirm(pergunta))return;
     setCarregandoRH(true);setErroRH('');setSucessoRH('');
     setProgressoRH(acao==='FECHAR'
       ?'Fechando o quadrimestre e bloqueando os lançamentos. Aguarde...'
-      :'Reabrindo o quadrimestre e liberando os lançamentos. Aguarde...');
+      :'Reabrindo os registros fechados do quadrimestre. Aguarde...');
     try{
-      let totalAlterado=0;
-      for(let indice=0;indice<motoristasPeriodo.length;indice++){
-        const motorista=motoristasPeriodo[indice];
-        setProgressoRH(
-          `${acao==='FECHAR'?'Fechando':'Reabrindo'} ${indice+1} de ${motoristasPeriodo.length}: ${motorista.nome||'Motorista'}`
-        );
-        const respostaMotorista=await executarComRetentativaGraph(()=>
-          ApiService.alterarStatusQuadrimestre(ano,quadrimestre,acao,idUsuario(motorista))
-        );
-        totalAlterado+=Number(respostaMotorista.total||0);
-      }
+      const resposta=await executarComRetentativaGraph(()=>
+        ApiService.alterarStatusQuadrimestre(ano,quadrimestre,acao)
+      );
+      const totalAlterado=Number(resposta.total||0);
       const atualizadas=await ApiService.obterApuracoesSalvas();
       const porMotorista={};
       (atualizadas.apuracoes||[]).forEach(item=>{
@@ -2244,7 +2237,9 @@ function PainelRH({st,dados,user}){
       setApuracoesRH(porMotorista);
       setSucessoRH(acao==='FECHAR'
         ?`Quadrimestre fechado com sucesso. ${totalAlterado} apuração(ões) foram bloqueadas.`
-        :`Quadrimestre reaberto com sucesso. ${totalAlterado} apuração(ões) voltaram para PENDENTE.`);
+        :totalAlterado
+          ?`Quadrimestre reaberto com sucesso. ${totalAlterado} apuração(ões) fechadas voltaram para PENDENTE.`
+          :'O quadrimestre já não possuía registros FECHADOS para reabrir.');
     }catch(e){
       setErroRH('Falha ao alterar o fechamento: '+e.message);
       try{
@@ -2301,11 +2296,13 @@ function PainelRH({st,dados,user}){
     const aplicaveis=vindas.filter(a=>competenciasAplicaveis.includes(String(a.competencia||'')));
     const faltantes=Math.max(0,competenciasAplicaveis.length-aplicaveis.length);
     const statusSalvos=aplicaveis.map(a=>String(a.status||'PENDENTE').toUpperCase());
+    const quantidadeFechada=statusSalvos.filter(s=>s==='FECHADO').length;
     const statusMotorista=
       statusSalvos.some(s=>s==='ERRO')?'ERRO':
       faltantes>0?'NÃO CALCULADO':
       aplicaveis.some(a=>a.desatualizada===true)?'NOVAS CARGAS — RECALCULAR':
-      statusSalvos.length&&statusSalvos.every(s=>s==='FECHADO')?'FECHADO':
+      statusSalvos.length&&quantidadeFechada===statusSalvos.length?'FECHADO':
+      quantidadeFechada>0?'FECHADO PARCIAL':
       statusSalvos.some(s=>s==='PENDENTE')?'PENDENTE':
       statusSalvos.length?'CALCULADO':'AGUARDANDO';
     return {u,apuracoes,acumulado,pagar:Math.max(0,acumulado),statusMotorista};
@@ -2344,12 +2341,13 @@ function PainelRH({st,dados,user}){
         <div><label>Motorista</label><input value={nome} onChange={e=>setNome(e.target.value)} placeholder="Filtrar por nome"/></div>
         <div><label>Ano</label><select value={ano} onChange={e=>setAno(e.target.value)}>{[2025,2026,2027,2028].map(a=><option key={a}>{a}</option>)}</select></div>
         <div><label>Pagamento</label><select value={quadrimestre} onChange={e=>setQuadrimestre(e.target.value)}><option value="1">1º quadrimestre — jan a abr</option><option value="2">2º quadrimestre — mai a ago</option><option value="3">3º quadrimestre — set a dez</option></select></div>
-        <div><label>Quem atualizar</label><select value={modoAtualizacao} disabled={filaRH.rodando} onChange={e=>setModoAtualizacao(e.target.value)}>
+        <div><label>Escopo da atualização</label><select value={modoAtualizacao} disabled={filaRH.rodando} onChange={e=>setModoAtualizacao(e.target.value)}>
           <option value="PENDENTES">Somente pendentes/erros</option>
           <option value="TODOS">Todos os motoristas</option>
           <option value="SELECIONADOS">Motoristas selecionados</option>
         </select></div>
       </div>
+      <div className="muted" style={{marginTop:8}}>A seleção de motoristas vale somente para <b>Atualizar selecionados</b>. Fechar e reabrir são ações do quadrimestre inteiro.</div>
     </div>
     {filaRH.rodando&&<div className="aviso-box"><b>Atualização em andamento:</b> {filaRH.atual} de {filaRH.total}{filaRH.motorista?' — '+filaRH.motorista:''}. Você pode navegar pelas outras telas do aplicativo, mas não feche nem atualize esta página.</div>}
     <div className="cards4">
@@ -3601,9 +3599,9 @@ const AREAS_E_SUBTELAS = {
 };
 const ROTULOS_AREAS={PAINEL:'Painel',IMPORTACAO:'Importação',CONTESTACOES:'Contestações',RH_FECHAMENTO:'RH / Fechamento',PREMIACAO:'Premiação',CHECKLIST:'Check list',SINISTROS:'Sinistros',CADASTROS:'Cadastros'};
 const canonCodigoAcesso=(codigo)=>{
-  const alvo=norm(codigo);
+  const alvo=normalizarPerfil(codigo);
   return [...Object.keys(AREAS_E_SUBTELAS),...Object.values(AREAS_E_SUBTELAS).flat().map(([c])=>c)]
-    .find(c=>norm(c)===alvo)||String(codigo||'').trim().toUpperCase();
+    .find(c=>normalizarPerfil(c)===alvo)||String(codigo||'').trim().toUpperCase();
 };
 const canonListaAcesso=(lista)=>[...new Set((lista||[]).map(canonCodigoAcesso).filter(Boolean))];
 
@@ -3801,7 +3799,7 @@ function AdmCadastros({st, setSt, toast, user}){
                 <td><span className="tag tag-ok">{u.perfil}</span></td>
                 <td>{u.senhaCadastrada?'Cadastrada':'Pendente'}</td>
                 <td><span className={'tag '+(u.ativo?'tag-ok':'tag-neutro')}>{u.ativo?'Ativo':'Inativo'}</span></td>
-                <td><div className="row" style={{gap:6,flexWrap:'nowrap'}}><button className="btn btn-s btn-sm" onClick={()=>{setSenhaVisivel(false);setEdit({...u,novaSenha:''})}}>Editar</button><button className={'btn btn-sm '+(u.ativo?'btn-s':'btn-p')} onClick={()=>alterarStatusUsuario(u)}>{u.ativo?'Inativar':'Reativar'}</button></div></td>
+                <td><div className="row" style={{gap:6,flexWrap:'nowrap'}}><button className="btn btn-s btn-sm" onClick={()=>{setSenhaVisivel(false);setEdit({...u,usuarioId:String(u.usuarioId||'').trim()||proximoUsuarioId(),novaSenha:''})}}>Editar</button><button className={'btn btn-sm '+(u.ativo?'btn-s':'btn-p')} onClick={()=>alterarStatusUsuario(u)}>{u.ativo?'Inativar':'Reativar'}</button></div></td>
               </tr>)}</tbody>
           </table>
         </div>
