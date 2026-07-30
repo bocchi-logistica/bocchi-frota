@@ -590,9 +590,12 @@ const ApiService = {
   alterarStatusQuadrimestre(ano,quadrimestre,acao,motoristaId=''){
     return this._req('POST','/admin/apuracoes/quadrimestre/status',{ano,quadrimestre,acao,motoristaId});
   },
-  admPremiacao(competencia=''){
+  admPremiacaoMetas(){
+    return this._req('GET','/admin/premiacao/metas');
+  },
+  admPremiacaoDescontos(competencia=''){
     const q=competencia?'?competencia='+encodeURIComponent(competencia):'';
-    return this._req('GET','/admin/premiacao'+q);
+    return this._req('GET','/admin/premiacao/descontos'+q);
   },
   salvarMeta(d){ return this._req('POST','/admin/premiacao/metas/salvar',d); },
   salvarDesconto(d){ return this._req('POST','/admin/premiacao/descontos/salvar',d); },
@@ -3244,8 +3247,25 @@ function AdmPremiacao({st, setSt, toast, user}){
   const [painel,setPainel]=useState({metas:[],tiposVeiculo:[],descontos:[],elegiveis:[],pendencias:{}});
   const [novoDesc,setNovoDesc]=useState({motoristaId:'',motoristaNome:'',categoria:'Multas',situacao:'Sem ocorrência',quantidade:0,valor:0,percentual:0,dataOcorrencia:'',motivo:'',exibir:true});
   const categorias=['Notificação / Advertência','Multas','Auditoria Interna'];
-  const carregar=async()=>{try{const r=await ApiService.admPremiacao(competencia);setPainel(r);setSt(s=>({...s,metas:r.metas||s.metas}));}catch(e){toast('Erro ao carregar premiação: '+e.message)}};
-  useEffect(()=>{carregar();},[competencia]);
+  const carregarMetas=async()=>{
+    try{
+      const r=await ApiService.admPremiacaoMetas();
+      setPainel(p=>({...p,metas:r.metas||[],tiposVeiculo:r.tiposVeiculo||[],veiculosPremiacao:r.veiculosPremiacao||[]}));
+      setSt(s=>({...s,metas:r.metas||s.metas}));
+    }catch(e){toast('Erro ao carregar metas: '+e.message)}
+  };
+  const carregarDescontos=async()=>{
+    try{
+      const r=await ApiService.admPremiacaoDescontos(competencia);
+      setPainel(p=>({...p,competencia:r.competencia,descontos:r.descontos||[],elegiveis:r.elegiveis||[],pendencias:r.pendencias||{},diagnosticoElegibilidade:r.diagnosticoElegibilidade||[]}));
+    }catch(e){toast('Erro ao carregar descontos: '+e.message)}
+  };
+  const carregarAtual=async()=>{
+    if(sub==='metas') return carregarMetas();
+    if(sub==='desc') return carregarDescontos();
+    await Promise.all([carregarMetas(),carregarDescontos()]);
+  };
+  useEffect(()=>{carregarAtual();},[sub,competencia]);
   const statusMeta=m=>{
     const hoje=HOJE;
     if(m.ativo===false)return'Inativa';
@@ -3256,7 +3276,7 @@ function AdmPremiacao({st, setSt, toast, user}){
   const salvarMeta=async(e)=>{
     if(e&&e.preventDefault)e.preventDefault();
     if(!edit.tipo||!edit.vigIni||!edit.vigFim){toast('Preencha tipo de veículo e vigência.');return;}
-    try{await ApiService.salvarMeta(edit);setEdit(null);await carregar();toast('Meta salva no SharePoint.');}
+    try{await ApiService.salvarMeta(edit);setEdit(null);await carregarMetas();toast('Meta salva no SharePoint.');}
     catch(e){toast('Erro ao salvar meta: '+e.message)}
   };
   const addDesc=async()=>{
@@ -3273,14 +3293,14 @@ function AdmPremiacao({st, setSt, toast, user}){
             quantidade:0,valor:0,percentual:0,dataOcorrencia:'',motivo:''
           });
         }
-        await carregar();
+        await carregarDescontos();
         setNovoDesc({motoristaId:'',motoristaNome:'',categoria:novoDesc.categoria,situacao:'Sem ocorrência',quantidade:0,valor:0,percentual:0,dataOcorrencia:'',motivo:'',exibir:true});
         toast(`${pendentes.length} motoristas foram lançados como Sem ocorrência.`);
       }catch(e){toast('Erro no lançamento em massa: '+e.message)}
       return;
     }
     if(novoDesc.situacao==='Com ocorrência'&&!Number(novoDesc.valor)&&!Number(novoDesc.percentual)){toast('Informe o valor ou percentual do desconto.');return;}
-    try{await ApiService.salvarDesconto({...novoDesc,competencia});await carregar();setNovoDesc({motoristaId:'',motoristaNome:'',categoria:'Multas',situacao:'Sem ocorrência',quantidade:0,valor:0,percentual:0,dataOcorrencia:'',motivo:'',exibir:true});toast(novoDesc.itemId?'Lançamento atualizado no SharePoint.':'Conferência salva no SharePoint.');}
+    try{await ApiService.salvarDesconto({...novoDesc,competencia});await carregarDescontos();setNovoDesc({motoristaId:'',motoristaNome:'',categoria:'Multas',situacao:'Sem ocorrência',quantidade:0,valor:0,percentual:0,dataOcorrencia:'',motivo:'',exibir:true});toast(novoDesc.itemId?'Lançamento atualizado no SharePoint.':'Conferência salva no SharePoint.');}
     catch(e){toast('Erro ao salvar conferência: '+e.message)}
   };
   const tiposMeta=[...new Map(
