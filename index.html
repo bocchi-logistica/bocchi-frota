@@ -67,8 +67,9 @@ label{font-size:12.5px; font-weight:600; color:var(--cinza); display:block; marg
 .mtabs{position:sticky; bottom:0; margin-top:0; width:100%; max-width:520px; background:var(--branco); border-top:1px solid var(--linha); display:flex; z-index:30; padding-bottom:env(safe-area-inset-bottom)}
 .mtab{flex:1; padding:10px 4px 12px; text-align:center; color:var(--cinza); font-size:11.5px; font-weight:600}
 .mtab .ic{font-size:21px; display:block; margin-bottom:2px}
-.mtab.on{color:var(--mata)}
-.mtab.on .ic{transform:translateY(-1px)}
+.mtab.on{color:var(--mata);background:rgba(20,78,58,.09);box-shadow:inset 0 0 0 1.5px rgba(20,78,58,.28);border-radius:14px 14px 0 0;margin:5px 4px 4px;padding:7px 4px 8px}
+.mtab.on .ic{transform:translateY(-1px);filter:drop-shadow(0 1px 0 rgba(20,78,58,.15))}
+.mtab:focus-visible{outline:3px solid rgba(20,78,58,.28);outline-offset:-3px}
 .seletor-mes{display:flex; gap:6px; overflow-x:auto; padding-bottom:2px}
 .mes-pill{padding:8px 14px; border-radius:99px; background:var(--branco); border:1.5px solid var(--linha); font-family:'Archivo'; font-weight:700; font-size:13px; white-space:nowrap; color:var(--cinza)}
 .mes-pill.on{background:var(--mata); border-color:var(--mata); color:#fff}
@@ -240,7 +241,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 90000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '2.3.7'
+  VERSAO: '2.3.9'
 };
 
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
@@ -578,6 +579,7 @@ const ApiService = {
   },
   criarSinistro(dados){ return this._req('POST','/sinistros',dados); },
   obterMeusSinistros(){ return this._req('GET','/sinistros/me'); },
+  obterContatoSinistros(){ return this._req('GET','/sinistros/configuracoes-contato'); },
   admListarSinistros(){ return this._req('GET','/admin/sinistros'); },
   admAtualizarSinistro(id,dados){ return this._req('PATCH','/admin/sinistros/'+encodeURIComponent(id),dados); },
   admObterConfiguracoesSinistros(){ return this._req('GET','/admin/sinistros/configuracoes'); },
@@ -1075,7 +1077,7 @@ function TelaCargas({st, setSt, user, dados, toast}){
                 <div className="rota">{c.origem} <span className="seta">→</span> {c.destino}</div>
                 <div className="meta-l">{dataBR(c.data)} · {c.produto} · NF {c.nota} · <span className="num">{brn(c.peso)} t</span> · <span className="num">R$ {brn(c.rt)}/t</span></div>
                 {c.pbtForaFaixa&&<div className="tag tag-neg" style={{marginTop:7}}>
-                  PBT fora da faixa — limite {brn(Number(limiteFaixaKg||0)/1000,2)} t
+                  PBT fora da faixa — limite <span style={{whiteSpace:'nowrap'}}>{brn(Number(limiteFaixaKg||0)/1000,2)} t</span>
                 </div>}
               </div>
               <div style={{textAlign:'right'}}>
@@ -1774,6 +1776,7 @@ function TelaSinistro({user,toast}){
   const [historico,setHistorico]=useState([]);
   const [carregando,setCarregando]=useState(true);
   const [enviando,setEnviando]=useState(false);
+  const [contatoEmergencia,setContatoEmergencia]=useState({nome:'Logística',telefone:''});
   const [form,setForm]=useState({
     placa:'',motoristaNome:user.nome||'',motoristaTelefone:'',dataHoraOcorrido:'',
     localOcorrido:'',municipio:'',uf:'RS',tipoSinistro:'Colisão',descricaoOcorrido:'',
@@ -1784,13 +1787,16 @@ function TelaSinistro({user,toast}){
   const carregar=async()=>{
     setCarregando(true);
     try{
-      const [rv,rh]=await Promise.allSettled([ApiService.obterVeiculos(),ApiService.obterMeusSinistros()]);
+      const [rv,rh,rc]=await Promise.allSettled([ApiService.obterVeiculos(),ApiService.obterMeusSinistros(),ApiService.obterContatoSinistros()]);
       if(rv.status==='fulfilled'){
         const lista=rv.value.veiculos||[];
         setVeiculos(lista);
         setForm(f=>({...f,placa:f.placa||lista[0]?.placa||''}));
       }
       if(rh.status==='fulfilled')setHistorico(rh.value.sinistros||[]);
+      if(rc.status==='fulfilled'&&rc.value?.contato){
+        setContatoEmergencia({nome:rc.value.contato.nome||'Logística',telefone:rc.value.contato.telefone||''});
+      }
     }finally{setCarregando(false);}
   };
   useEffect(()=>{carregar();},[]);
@@ -1835,12 +1841,19 @@ function TelaSinistro({user,toast}){
       <div className="row"><div style={{fontSize:34}}>🚨</div><div className="grow"><h2>Comunicar sinistro</h2><div className="muted">Registre imediatamente o ocorrido. O envio gera protocolo, histórico e alerta para a equipe administrativa.</div></div></div>
     </div>
     <div className="card sinistro-alerta"><b>Primeiro, preserve a segurança.</b><div className="muted" style={{marginTop:4}}>Pare em local seguro quando possível, sinalize o local, acione os serviços de emergência quando necessário e não assuma responsabilidade antes da análise.</div></div>
+    <div className="card" style={{border:'1.5px solid rgba(20,78,58,.22)',background:'rgba(20,78,58,.055)'}}>
+      <div className="row">
+        <div style={{fontSize:28}}>📞</div>
+        <div className="grow"><div className="muted" style={{fontSize:12,textTransform:'uppercase',fontWeight:700,letterSpacing:'.04em'}}>Contato de emergência da logística</div><b>{contatoEmergencia.nome||'Logística'}</b>{!contatoEmergencia.telefone&&<div className="muted">Telefone não cadastrado nas configurações.</div>}</div>
+        {contatoEmergencia.telefone&&<a className="btn btn-p btn-sm" href={'tel:'+String(contatoEmergencia.telefone).replace(/[^0-9+]/g,'')}>Ligar: {contatoEmergencia.telefone}</a>}
+      </div>
+    </div>
     <div className="card">
       <h3 style={{marginBottom:10}}>Como proceder</h3>
       <div className="sinistro-passos">
         <div className="sinistro-passo">Proteja as pessoas e sinalize o local.</div>
-        <div className="sinistro-passo">Acione autoridade, emergência ou guincho quando necessário.</div>
-        <div className="sinistro-passo">Fotografe o local, os veículos, placas, avarias, chassi e painel.</div>
+        <div className="sinistro-passo">Acione a autoridade ou o serviço de emergência quando necessário. Para guincho, comunique a logística e aguarde autorização.</div>
+        <div className="sinistro-passo">Fotografe o local, os veículos, placas, avarias e o painel ligado.</div>
         <div className="sinistro-passo">Colete os dados e documentos do terceiro, quando houver.</div>
         <div className="sinistro-passo">Preencha e envie este registro para a logística.</div>
       </div>
@@ -1848,9 +1861,9 @@ function TelaSinistro({user,toast}){
     <div className="card">
       <h3 style={{marginBottom:10}}>Documentos e evidências</h3>
       <div className="sinistro-docs">
-        {['Boletim de ocorrência','Documento do terceiro','RG e CNH do terceiro','Foto frontal e traseira com placa','Foto do chassi','Foto do painel ligado','Fotos das avarias','Fotos do local'].map(x=><div className="sinistro-doc" key={x}>✓ {x}</div>)}
+        {['Número do B.O., quando emitido pela autoridade','Documento do terceiro','RG e CNH do terceiro','Foto frontal e traseira com placa','Foto do painel ligado','Fotos das avarias','Fotos do local'].map(x=><div className="sinistro-doc" key={x}>✓ {x}</div>)}
       </div>
-      <div className="muted" style={{marginTop:8}}>O registro inicial pode ser enviado mesmo que algum documento ainda esteja pendente.</div>
+      <div className="muted" style={{marginTop:8}}>Se a polícia atender o local, informe o número do B.O. Caso não haja atendimento presencial, envie os dados e evidências normalmente para que a logística avalie a abertura do B.O. online.</div>
     </div>
     <div className="card">
       <h3 style={{marginBottom:12}}>Dados do ocorrido</h3>
@@ -1867,7 +1880,7 @@ function TelaSinistro({user,toast}){
       </div>
       <div className="form-grid" style={{marginTop:12}}>
         {[['possuiVitima','Possui vítima?'],['possuiTerceiro','Possui terceiro?'],['veiculoImobilizado','Veículo imobilizado?'],['necessitaGuincho','Necessita guincho?'],['autoridadeAcionada','Autoridade acionada?']].map(([k,l])=><div key={k}><label>{l}</label><select value={form[k]?'sim':'nao'} onChange={e=>setForm({...form,[k]:e.target.value==='sim'})}><option value="nao">Não</option><option value="sim">Sim</option></select></div>)}
-        <div><label>Número do B.O.</label><input value={form.numeroBoletim} onChange={e=>setForm({...form,numeroBoletim:e.target.value})}/></div>
+        <div><label>Número do B.O., se disponível</label><input value={form.numeroBoletim} onChange={e=>setForm({...form,numeroBoletim:e.target.value})} placeholder="Informe quando emitido pela autoridade"/><div className="muted" style={{marginTop:5}}>Sem B.O. no local? Envie o sinistro normalmente; a logística avaliará o registro online.</div></div>
       </div>
       <div style={{marginTop:12}}><label>Descrição do ocorrido *</label><textarea rows="5" value={form.descricaoOcorrido} onChange={e=>setForm({...form,descricaoOcorrido:e.target.value})} placeholder="Relate de forma objetiva o que ocorreu, sentido da via, condições e envolvidos."/></div>
       <div style={{marginTop:12}}><label>Anexos</label><input type="file" multiple accept="image/*,.pdf,.doc,.docx,video/*" onChange={e=>lerArquivos(e.target.files||[])}/><div className="muted">Até 12 arquivos, 4 MB por arquivo e 18 MB no total.</div>
