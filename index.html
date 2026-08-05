@@ -172,6 +172,10 @@ th.td-num{text-align:right}
 .sinistro-gravidade-CRITICA{background:#7f1d1d;color:#fff}.sinistro-gravidade-ALTA{background:var(--erro-claro);color:var(--erro)}
 .sinistro-gravidade-MEDIA{background:var(--aviso);color:#765600}.sinistro-gravidade-BAIXA{background:var(--folha-clara);color:var(--mata)}
 
+
+/* ---------- AGENDAMENTOS ---------- */
+.agenda-top{background:var(--mata);color:#fff;border-radius:14px;padding:14px}.agenda-filtros{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px}.agenda-filtros label{color:#d8e5dc}.agenda-cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border:1px solid var(--linha);border-radius:14px;overflow:hidden;background:#fff}.agenda-dia{min-height:92px;border-right:1px solid var(--linha);border-bottom:1px solid var(--linha);padding:6px;min-width:0}.agenda-dia:nth-child(7n){border-right:none}.agenda-dia.off{background:#f3f3ef;color:#aaa}.agenda-semana{padding:8px 3px;text-align:center;font-size:11px;font-weight:800;color:var(--cinza);background:#f8f8f5}.agenda-evento{display:block;width:100%;margin-top:4px;padding:5px 6px;border-left:4px solid var(--folha);background:var(--folha-clara);border-radius:7px;text-align:left;font-size:10px;overflow:hidden}.agenda-acoes{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.agenda-status{font-size:11px;font-weight:800;padding:4px 8px;border-radius:99px;background:var(--folha-clara);color:var(--mata)}.agenda-status.CANCELADO,.agenda-status.DEVOLUCAO_ATRASADA{background:var(--erro-claro);color:var(--erro)}.agenda-status.AGUARDANDO_RETIRADA{background:var(--aviso);color:#765600}.agenda-lista-item{padding:12px;border-bottom:1px solid var(--linha)}.agenda-lista-item:last-child{border-bottom:none}.agenda-modal-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.agenda-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}.agenda-kpi{padding:12px;border-radius:12px;background:#f5f7f5}.agenda-kpi b{display:block;font-size:23px;color:var(--mata)}@media(max-width:620px){.agenda-cal{font-size:11px}.agenda-dia{min-height:75px;padding:3px}.agenda-evento{font-size:8.5px;padding:4px}.agenda-modal-grid{grid-template-columns:1fr}}
+
 /* ---------- MODAL / TOAST ---------- */
 .overlay{position:fixed; inset:0; background:rgba(20,30,24,.55); display:flex; align-items:flex-end; justify-content:center; z-index:100; padding:0}
 @media(min-width:640px){.overlay{align-items:center; padding:20px}}
@@ -241,7 +245,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 90000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '2.3.9'
+  VERSAO: '2.4.0-agendamentos'
 };
 
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
@@ -319,7 +323,11 @@ const ACESSO_NOVO_POR_PERMISSAO = {
   'apuracao.mensal.atualizar':{area:'PAINEL',subtela:'ATUALIZARAPURACAOMENSAL_PAINEL',editar:true},
   'quadrimestre.atualizar':{area:'RH_FECHAMENTO',subtela:'ATUALIZARAPURACOESDOQUADRIMESTRE_RH_FECHAMENTO',editar:true},
   'quadrimestre.fechar':{area:'RH_FECHAMENTO',subtela:'FECHARQUADRIMESTRE_RH_FECHAMENTO',editar:true},
-  'quadrimestre.reabrir':{area:'RH_FECHAMENTO',subtela:'REABRIQUADRIMESTRE_RH_FECHAMENTO',editar:true}
+  'quadrimestre.reabrir':{area:'RH_FECHAMENTO',subtela:'REABRIQUADRIMESTRE_RH_FECHAMENTO',editar:true},
+  'agendamentos.agenda':{area:'AGENDAMENTOS',subtela:'AGENDAMENTOS_AGENDA_GERAL'},
+  'agendamentos.monitoramento':{area:'AGENDAMENTOS',subtela:'AGENDAMENTOS_MONITORAMENTO',editar:true},
+  'agendamentos.relatorio':{area:'AGENDAMENTOS',subtela:'AGENDAMENTOS_RELATORIO'},
+  'agendamentos.parametros':{area:'AGENDAMENTOS',subtela:'AGENDAMENTOS_PARAMETROS',editar:true}
 };
 function podePeloPerfilNovo(user,permissao){
   if(!user?.acessosPerfilDefinidos)return false;
@@ -529,7 +537,8 @@ const ApiService = {
     cargas: false,
     premiacao: false,
     checklist: false,
-    sinistros: false
+    sinistros: false,
+    agendamentos: false
   }
 }
     };
@@ -584,6 +593,14 @@ const ApiService = {
   admAtualizarSinistro(id,dados){ return this._req('PATCH','/admin/sinistros/'+encodeURIComponent(id),dados); },
   admObterConfiguracoesSinistros(){ return this._req('GET','/admin/sinistros/configuracoes'); },
   admSalvarConfiguracoesSinistros(dados){ return this._req('PATCH','/admin/sinistros/configuracoes',dados); },
+  obterAgendamentos(de='',ate=''){ const q=new URLSearchParams();if(de)q.set('de',de);if(ate)q.set('ate',ate);return this._req('GET','/agendamentos/bootstrap'+(q.toString()?'?'+q.toString():'')); },
+  criarAgendamento(d){return this._req('POST','/agendamentos',d);},
+  alterarAgendamento(id,d){return this._req('PATCH','/agendamentos/'+encodeURIComponent(id),d);},
+  cancelarAgendamento(id,motivo,observacao=''){return this._req('POST','/agendamentos/'+encodeURIComponent(id)+'/cancelar',{motivo,observacao});},
+  retirarAgendamento(id,d){return this._req('POST','/agendamentos/'+encodeURIComponent(id)+'/retirar',d);},
+  finalizarAgendamento(id,d){return this._req('POST','/agendamentos/'+encodeURIComponent(id)+'/finalizar',d);},
+  admAgendamentos(de='',ate=''){const q=new URLSearchParams();if(de)q.set('de',de);if(ate)q.set('ate',ate);return this._req('GET','/admin/agendamentos'+(q.toString()?'?'+q.toString():''));},
+  admCorrigirKmAgendamento(id,d){return this._req('POST','/admin/agendamentos/'+encodeURIComponent(id)+'/corrigir-km',d);},
   obterPremiacao(){ return this._req('GET','/premiacao/me'); },
   obterPremiacaoMotorista(nome,competencias=[]){
     const q=new URLSearchParams({motoristaNome:nome});
@@ -1895,6 +1912,44 @@ function TelaSinistro({user,toast}){
   </React.Fragment>;
 }
 
+
+/* ================= AGENDAMENTOS: COMPONENTES ================= */
+const AG_STATUS_LABEL={AGENDADO:'Agendado',AGUARDANDO_RETIRADA:'Aguardando retirada',EM_USO:'Em uso',PENDENTE_FINALIZACAO:'Pendente finalização',DEVOLUCAO_ATRASADA:'Devolução atrasada',BLOQUEADO_NC:'Bloqueado por NC',PENDENTE_ANALISE:'Pendente análise',FINALIZADO:'Finalizado',CANCELADO:'Cancelado'};
+const fmtDataHora=v=>v?new Date(v).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'}):'—';
+function AgendaStatus({status}){return <span className={'agenda-status '+status}>{AG_STATUS_LABEL[status]||status}</span>}
+function CalendarioAgenda({mes,eventos,onAbrir}){
+  const ano=mes.getFullYear(),m=mes.getMonth(),primeiro=new Date(ano,m,1),offset=(primeiro.getDay()+6)%7,inicio=new Date(ano,m,1-offset);
+  const dias=[];for(let i=0;i<42;i++){const d=new Date(inicio);d.setDate(inicio.getDate()+i);const iso=d.toISOString().slice(0,10);dias.push({d,iso,eventos:eventos.filter(e=>String(e.saidaPrevista).slice(0,10)===iso)});}
+  return <div className="agenda-cal">{['SEG','TER','QUA','QUI','SEX','SÁB','DOM'].map(x=><div className="agenda-semana" key={x}>{x}</div>)}{dias.map(({d,iso,eventos:ev})=><div className={'agenda-dia'+(d.getMonth()!==m?' off':'')} key={iso}><b>{d.getDate()}</b>{ev.slice(0,3).map(e=><button className="agenda-evento" key={e.id} onClick={()=>onAbrir(e)}><b>{String(e.saidaPrevista).slice(11,16)} · {e.placa||'Veículo'}</b><br/>{e.destino}</button>)}{ev.length>3&&<div className="muted">+{ev.length-3}</div>}</div>)}</div>
+}
+function FormAgendamento({base,item,onClose,onSalvo,toast,admin=false}){
+  const agora=new Date(),pad=n=>String(n).padStart(2,'0'),local=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const retorno=new Date(agora.getTime()+2*3600000);
+  const [form,setForm]=useState({veiculoId:item?.veiculoId||'',motorista:item?.motorista||'',origem:item?.origem||'Bocchi Logística',destino:item?.destino||'',saidaPrevista:item?.saidaPrevista?String(item.saidaPrevista).slice(0,16):local(agora),retornoPrevisto:item?.retornoPrevisto?String(item.retornoPrevisto).slice(0,16):local(retorno),possuiPassageiros:item?.possuiPassageiros||false,quantidadePassageiros:item?.quantidadePassageiros||0,observacao:item?.observacao||'',criadoManualmente:admin});
+  const [salvando,setSalvando]=useState(false);const salvar=async()=>{if(!form.veiculoId||!form.motorista.trim()||!form.destino.trim()){toast('Informe veículo, motorista e destino.');return}if(new Date(form.retornoPrevisto)<=new Date(form.saidaPrevista)){toast('O retorno deve ser posterior à saída.');return}setSalvando(true);try{if(item)await ApiService.alterarAgendamento(item.id,form);else await ApiService.criarAgendamento(form);toast(item?'Agendamento alterado.':'Agendamento criado.');await onSalvo();onClose()}catch(e){toast(e.message)}finally{setSalvando(false)}};
+  return <Modal titulo={item?'Alterar agendamento':'Novo agendamento'} onClose={onClose} large><div className="agenda-modal-grid"><div><label>Saída prevista</label><input type="datetime-local" value={form.saidaPrevista} onChange={e=>setForm({...form,saidaPrevista:e.target.value})}/></div><div><label>Retorno previsto</label><input type="datetime-local" value={form.retornoPrevisto} onChange={e=>setForm({...form,retornoPrevisto:e.target.value})}/></div><div><label>Veículo sem vínculo</label><select value={form.veiculoId} onChange={e=>setForm({...form,veiculoId:e.target.value})}><option value="">Selecionar...</option>{base.veiculos.map(v=><option key={v.id} value={v.id}>{v.placa} — {v.modelo}</option>)}</select></div><div><label>Motorista</label><input value={form.motorista} onChange={e=>setForm({...form,motorista:e.target.value})}/></div><div><label>Origem</label><input value={form.origem} onChange={e=>setForm({...form,origem:e.target.value})}/></div><div><label>Destino</label><input value={form.destino} onChange={e=>setForm({...form,destino:e.target.value})}/></div><div><label>Possui passageiros?</label><select value={form.possuiPassageiros?'sim':'nao'} onChange={e=>setForm({...form,possuiPassageiros:e.target.value==='sim',quantidadePassageiros:e.target.value==='sim'?form.quantidadePassageiros:0})}><option value="nao">Não</option><option value="sim">Sim</option></select></div>{form.possuiPassageiros&&<div><label>Quantidade</label><input type="number" min="1" value={form.quantidadePassageiros} onChange={e=>setForm({...form,quantidadePassageiros:Number(e.target.value)})}/></div>}<div style={{gridColumn:'1/-1'}}><label>Observação</label><textarea rows="3" value={form.observacao} onChange={e=>setForm({...form,observacao:e.target.value})}/></div></div><div className="agenda-acoes" style={{marginTop:14}}><button className="btn btn-g" onClick={onClose}>Voltar</button><button className="btn btn-p" disabled={salvando} onClick={salvar}>{salvando?'Salvando...':'Validar e salvar'}</button></div></Modal>
+}
+function DetalheAgendamento({item,admin,onClose,onAtualizar,toast}){
+  const [acao,setAcao]=useState(''),[km,setKm]=useState(''),[motivo,setMotivo]=useState(''),[obs,setObs]=useState(''),[problema,setProblema]=useState(false),[salvando,setSalvando]=useState(false);
+  const executar=async()=>{setSalvando(true);try{if(acao==='cancelar')await ApiService.cancelarAgendamento(item.id,motivo,obs);if(acao==='retirar')await ApiService.retirarAgendamento(item.id,{kmInicial:Number(km),possuiNC:problema,dataHora:new Date().toISOString()});if(acao==='finalizar')await ApiService.finalizarAgendamento(item.id,{kmFinal:Number(km),possuiProblema:problema,dataHora:new Date().toISOString()});if(acao==='corrigir')await ApiService.admCorrigirKmAgendamento(item.id,{kmInicial:Number(km),kmFinal:Number(obs||0),motivo});toast('Ação concluída.');await onAtualizar();onClose()}catch(e){toast(e.message)}finally{setSalvando(false)}};
+  const aguardando=['AGENDADO','AGUARDANDO_RETIRADA'].includes(item.status),emUso=['EM_USO','DEVOLUCAO_ATRASADA','PENDENTE_FINALIZACAO'].includes(item.status);
+  return <Modal titulo={`${item.origem} → ${item.destino}`} onClose={onClose}><div className="row"><AgendaStatus status={item.status}/><span className="muted">{item.codigo}</span></div><div className="divider"/>{[['Veículo',item.placa],['Motorista',item.motorista],['Previsto',fmtDataHora(item.saidaPrevista)+' até '+fmtDataHora(item.retornoPrevisto)],['Real',fmtDataHora(item.saidaReal)+' até '+fmtDataHora(item.retornoReal)],['KM',`${item.kmInicial||'—'} → ${item.kmFinal||'—'}`]].map(([l,v])=><div className="linha-item" key={l}><b>{l}</b><span>{v}</span></div>)}{!acao&&<div className="agenda-acoes" style={{marginTop:14}}>{aguardando&&<><button className="btn btn-d" onClick={()=>setAcao('cancelar')}>Cancelar</button><button className="btn btn-p" onClick={()=>setAcao('retirar')}>{admin?'Retirar manualmente':'Retirar veículo'}</button></>}{emUso&&<button className="btn btn-p" onClick={()=>setAcao('finalizar')}>{admin?'Finalizar manualmente':'Devolver veículo'}</button>}{admin&&item.status==='FINALIZADO'&&<button className="btn btn-s" onClick={()=>setAcao('corrigir')}>Corrigir KM</button>}</div>}{acao&&<div style={{marginTop:14}}>{acao==='cancelar'?<><label>Motivo obrigatório</label><select value={motivo} onChange={e=>setMotivo(e.target.value)}><option value="">Selecionar...</option>{['VIAGEM_CANCELADA','ALTERACAO_PROGRAMACAO','VEICULO_NAO_NECESSARIO','MOTORISTA_INDISPONIVEL','VEICULO_INDISPONIVEL','ERRO_AGENDAMENTO','DUPLICIDADE','OUTRO'].map(x=><option key={x}>{x}</option>)}</select><label style={{marginTop:8}}>Observação</label><textarea value={obs} onChange={e=>setObs(e.target.value)}/></>:<><label>{acao==='finalizar'?'KM final':'KM inicial'}</label><input type="number" value={km} onChange={e=>setKm(e.target.value)}/>{acao==='corrigir'&&<><label style={{marginTop:8}}>KM final correto</label><input type="number" value={obs} onChange={e=>setObs(e.target.value)}/><label style={{marginTop:8}}>Motivo</label><textarea value={motivo} onChange={e=>setMotivo(e.target.value)}/></>}{acao!=='corrigir'&&<div style={{marginTop:8}}><label>{acao==='retirar'?'Possui alguma NC?':'Houve problema?'}</label><select value={problema?'sim':'nao'} onChange={e=>setProblema(e.target.value==='sim')}><option value="nao">Não</option><option value="sim">Sim</option></select></div>}</>}<div className="agenda-acoes" style={{marginTop:12}}><button className="btn btn-g" onClick={()=>setAcao('')}>Voltar</button><button className="btn btn-p" disabled={salvando||acao==='cancelar'&&!motivo} onClick={executar}>Confirmar</button></div></div>}</Modal>
+}
+function TelaAgendamento({user,toast}){
+  const [base,setBase]=useState({veiculos:[],agendamentos:[],parametros:{}}),[carregando,setCarregando]=useState(true),[mes,setMes]=useState(new Date()),[form,setForm]=useState(false),[detalhe,setDetalhe]=useState(null),[visual,setVisual]=useState('todos');
+  const carregar=async()=>{setCarregando(true);try{const r=await ApiService.obterAgendamentos();setBase({veiculos:r.veiculos||[],agendamentos:r.agendamentos||[],parametros:r.parametros||{}})}catch(e){toast(e.message)}finally{setCarregando(false)}};useEffect(()=>{carregar()},[]);
+  const eventos=base.agendamentos.filter(a=>visual==='todos'||a.solicitanteId===String(user.id));
+  return <>{carregando?<div className="card muted">Carregando agenda...</div>:<><div className="agenda-top"><div className="agenda-filtros"><div><label>Veículo</label><select><option>Todos os veículos</option>{base.veiculos.map(v=><option key={v.id}>{v.placa} — {v.modelo}</option>)}</select></div><div><label>Visualizar</label><select value={visual} onChange={e=>setVisual(e.target.value)}><option value="todos">Todos os agendamentos</option><option value="meus">Meus agendamentos</option></select></div></div><div className="row" style={{marginTop:10}}><button className="btn btn-sm" style={{color:'#fff'}} onClick={()=>setMes(new Date(mes.getFullYear(),mes.getMonth()-1,1))}>‹</button><h2 className="grow">{mes.toLocaleDateString('pt-BR',{month:'short',year:'2-digit'})}</h2><button className="btn btn-sm" style={{color:'#fff'}} onClick={()=>setMes(new Date(mes.getFullYear(),mes.getMonth()+1,1))}>›</button><button className="btn btn-sm" style={{color:'#fff'}} onClick={()=>setMes(new Date())}>Hoje</button></div></div><CalendarioAgenda mes={mes} eventos={eventos} onAbrir={setDetalhe}/><button className="btn btn-p" style={{position:'fixed',right:22,bottom:86,width:58,height:58,borderRadius:'50%',fontSize:28,zIndex:25}} onClick={()=>setForm(true)}>+</button></>}{form&&<FormAgendamento base={base} onClose={()=>setForm(false)} onSalvo={carregar} toast={toast}/>} {detalhe&&<DetalheAgendamento item={detalhe} onClose={()=>setDetalhe(null)} onAtualizar={carregar} toast={toast}/>}</>
+}
+function AdmAgendamentos({user,toast}){
+  const podeAgenda=pode(user,'agendamentos.agenda'),podeMonitor=pode(user,'agendamentos.monitoramento'),podeRel=pode(user,'agendamentos.relatorio');
+  const [sub,setSub]=useState(podeAgenda?'agenda':podeMonitor?'monitor':'relatorio'),[base,setBase]=useState({veiculos:[],agendamentos:[],parametros:{}}),[carregando,setCarregando]=useState(true),[mes,setMes]=useState(new Date()),[detalhe,setDetalhe]=useState(null),[form,setForm]=useState(false),[fStatus,setFStatus]=useState('TODOS');
+  const carregar=async()=>{setCarregando(true);try{const r=await ApiService.admAgendamentos();setBase({veiculos:r.veiculos||[],agendamentos:r.agendamentos||[],parametros:r.parametros||{}})}catch(e){toast(e.message)}finally{setCarregando(false)}};useEffect(()=>{carregar()},[]);
+  const filtrados=base.agendamentos.filter(a=>fStatus==='TODOS'||a.status===fStatus);const exportar=()=>{const linhas=filtrados.map(a=>({Codigo:a.codigo,Placa:a.placa,Motorista:a.motorista,Origem:a.origem,Destino:a.destino,SaidaPrevista:a.saidaPrevista,RetornoPrevisto:a.retornoPrevisto,SaidaReal:a.saidaReal,RetornoReal:a.retornoReal,KmInicial:a.kmInicial,KmFinal:a.kmFinal,KmRodado:a.kmRodado,Status:AG_STATUS_LABEL[a.status]||a.status,MotivoCancelamento:a.motivoCancelamento}));const ws=XLSX.utils.json_to_sheet(linhas),wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Agendamentos');XLSX.writeFile(wb,'Relatorio_Agendamentos.xlsx')};
+  return <>{<div className="subtabs">{podeAgenda&&<button className={'subtab'+(sub==='agenda'?' on':'')} onClick={()=>setSub('agenda')}>Agenda geral</button>}{podeMonitor&&<button className={'subtab'+(sub==='monitor'?' on':'')} onClick={()=>setSub('monitor')}>Monitoramento e gestão</button>}{podeRel&&<button className={'subtab'+(sub==='relatorio'?' on':'')} onClick={()=>setSub('relatorio')}>Relatório</button>}</div>}{carregando?<div className="card muted">Carregando agendamentos...</div>:sub==='agenda'?<><div className="row"><div className="grow"><h2>Agenda geral</h2><div className="muted">Somente veículos Frota Leve sem vínculo vigente.</div></div><button className="btn btn-p" onClick={()=>setForm(true)}>+ Novo agendamento</button></div><div className="row card"><button className="btn btn-g btn-sm" onClick={()=>setMes(new Date(mes.getFullYear(),mes.getMonth()-1,1))}>‹</button><h2 className="grow">{mes.toLocaleDateString('pt-BR',{month:'long',year:'numeric'})}</h2><button className="btn btn-g btn-sm" onClick={()=>setMes(new Date(mes.getFullYear(),mes.getMonth()+1,1))}>›</button></div><CalendarioAgenda mes={mes} eventos={base.agendamentos} onAbrir={setDetalhe}/></>:sub==='monitor'?<><div className="agenda-kpis">{['AGUARDANDO_RETIRADA','EM_USO','DEVOLUCAO_ATRASADA','BLOQUEADO_NC'].map(s=><div className="agenda-kpi" key={s}><b>{base.agendamentos.filter(a=>a.status===s).length}</b><span>{AG_STATUS_LABEL[s]}</span></div>)}</div><div className="card">{base.agendamentos.filter(a=>!['FINALIZADO','CANCELADO'].includes(a.status)).map(a=><div className="agenda-lista-item row" key={a.id}><div className="grow"><b>{a.placa} · {a.origem} → {a.destino}</b><div className="muted">{a.motorista} · {fmtDataHora(a.saidaPrevista)}</div></div><AgendaStatus status={a.status}/><button className="btn btn-g btn-sm" onClick={()=>setDetalhe(a)}>Abrir</button></div>)}</div></>:<><div className="row"><div className="grow"><h2>Relatório de agendamentos</h2></div><button className="btn btn-p" onClick={exportar}>Exportar Excel</button></div><div className="card"><div className="form-grid"><div><label>Status</label><select value={fStatus} onChange={e=>setFStatus(e.target.value)}><option>TODOS</option>{Object.keys(AG_STATUS_LABEL).map(s=><option key={s}>{s}</option>)}</select></div></div><div style={{overflowX:'auto',marginTop:12}}><table><thead><tr><th>Código</th><th>Veículo</th><th>Motorista</th><th>Trajeto</th><th>Previsto</th><th>Real</th><th>KM</th><th>Status</th><th></th></tr></thead><tbody>{filtrados.map(a=><tr key={a.id}><td>{a.codigo}</td><td>{a.placa}</td><td>{a.motorista}</td><td>{a.origem} → {a.destino}</td><td>{fmtDataHora(a.saidaPrevista)}<br/>{fmtDataHora(a.retornoPrevisto)}</td><td>{fmtDataHora(a.saidaReal)}<br/>{fmtDataHora(a.retornoReal)}</td><td>{a.kmInicial||'—'} → {a.kmFinal||'—'}</td><td><AgendaStatus status={a.status}/></td><td><button className="btn btn-g btn-sm" onClick={()=>setDetalhe(a)}>Abrir</button></td></tr>)}</tbody></table></div></div></>}{form&&<FormAgendamento base={base} admin onClose={()=>setForm(false)} onSalvo={carregar} toast={toast}/>} {detalhe&&<DetalheAgendamento item={detalhe} admin onClose={()=>setDetalhe(null)} onAtualizar={carregar} toast={toast}/>}</>
+}
+
+
 /* ================= SHELL MOTORISTA ================= */
 function MotoristaApp({st, setSt, user, onSair, toast}){
   const dados = usarDadosMensais(st);
@@ -1946,6 +2001,7 @@ function MotoristaApp({st, setSt, user, onSair, toast}){
     user.perms.premiacao && {id:'prem', ic:'🏆', nome:'Premiação'},
     user.perms.checklist && {id:'check', ic:'📋', nome:'Check list'},
     user.perms.sinistros && {id:'sinistro', ic:'🚨', nome:'Sinistro'},
+    user.perms.agendamentos && {id:'agendamento', ic:'📅', nome:'Agendamento'},
   ].filter(Boolean);
   const [aba,setAba]=useState(abas.length?abas[0].id:'');
   const placa = Object.values(st.frota).find(f=>f.motorista===user.nome && f.frota!=='leve');
@@ -1984,6 +2040,7 @@ function MotoristaApp({st, setSt, user, onSair, toast}){
         {aba==='prem' && !carregandoPremiacao && <TelaPremiacao st={st} user={user} dados={dados}/>}
         {aba==='check' && <TelaChecklist st={st} setSt={setSt} user={user} toast={toast}/>}
         {aba==='sinistro' && <TelaSinistro user={user} toast={toast}/>}
+        {aba==='agendamento' && <TelaAgendamento user={user} toast={toast}/>}
         <div className="card" style={{padding:12, marginTop:2}}>
           <div className="row">
             <div className="grow">
@@ -3614,6 +3671,12 @@ const AREAS_E_SUBTELAS = {
     ['SINISTROS_GESTAO','Gestão e tratamento de sinistros'],
     ['SINISTROS_CONFIGURACOES','Configurações de sinistros']
   ],
+  AGENDAMENTOS: [
+    ['AGENDAMENTOS_AGENDA_GERAL','Agenda geral'],
+    ['AGENDAMENTOS_MONITORAMENTO','Monitoramento e gestão'],
+    ['AGENDAMENTOS_RELATORIO','Relatório de agendamentos'],
+    ['AGENDAMENTOS_PARAMETROS','Parâmetros']
+  ],
   CADASTROS: [
     ['CADASTRO_USUARIOS','Usuários'],
     ['CADASTRO_TIPOS_VEICULO','Tipos de veículo'],
@@ -3622,7 +3685,7 @@ const AREAS_E_SUBTELAS = {
     ['CADASTRO_PERFIS','Perfis']
   ]
 };
-const ROTULOS_AREAS={PAINEL:'Painel',IMPORTACAO:'Importação',CONTESTACOES:'Contestações',RH_FECHAMENTO:'RH / Fechamento',PREMIACAO:'Premiação',CHECKLIST:'Check list',SINISTROS:'Sinistros',CADASTROS:'Cadastros'};
+const ROTULOS_AREAS={PAINEL:'Painel',IMPORTACAO:'Importação',CONTESTACOES:'Contestações',RH_FECHAMENTO:'RH / Fechamento',PREMIACAO:'Premiação',CHECKLIST:'Check list',SINISTROS:'Sinistros',AGENDAMENTOS:'Agendamentos',CADASTROS:'Cadastros'};
 const normalizarCodigoAcesso=codigo=>String(codigo||'')
   .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
   .trim().toUpperCase().replace(/[^A-Z0-9]+/g,'_')
@@ -3683,6 +3746,7 @@ function AdmCadastros({st, setSt, toast, user}){
       acessoPremiacao:modulosPermitidos&&edit.acessoPremiacao===true,
       acessoChecklist:modulosPermitidos&&edit.acessoChecklist===true,
       acessoSinistros:modulosPermitidos&&edit.acessoSinistros===true,
+      acessoAgendamentos:modulosPermitidos&&edit.acessoAgendamentos===true,
       acessoHistorico:modulosPermitidos&&edit.acessoChecklist===true
     };
     setSalvandoUsuario(true);
@@ -3825,7 +3889,7 @@ function AdmCadastros({st, setSt, toast, user}){
       {carregandoCad&&<div className="card"><div className="muted">Carregando cadastros do SharePoint...</div></div>}
 
       {sub==='usuarios' && podeSub('cadastro.usuarios') && !carregandoCad && !erroCad && <React.Fragment>
-        <div><button className="btn btn-p" onClick={()=>{setSenhaVisivel(false);const p=cad.perfis.find(x=>x.titulo==='MOTORISTA');setEdit({nome:'',usuarioId:proximoUsuarioId(),login:'',telefone:'',perfil:p?.titulo||'',perfilAcessoId:p?.itemId||'',tipoFrotaAcesso:'FROTA PESADA',ativo:true,novaSenha:'',acessoCargas:false,acessoPremiacao:false,acessoChecklist:false,acessoSinistros:false,acessoHistorico:false})}}>+ Novo usuário</button></div>
+        <div><button className="btn btn-p" onClick={()=>{setSenhaVisivel(false);const p=cad.perfis.find(x=>x.titulo==='MOTORISTA');setEdit({nome:'',usuarioId:proximoUsuarioId(),login:'',telefone:'',perfil:p?.titulo||'',perfilAcessoId:p?.itemId||'',tipoFrotaAcesso:'FROTA PESADA',ativo:true,novaSenha:'',acessoCargas:false,acessoPremiacao:false,acessoChecklist:false,acessoSinistros:false,acessoAgendamentos:false,acessoHistorico:false})}}>+ Novo usuário</button></div>
         <div className="filtros-cadastro">
           <div><label>Filtrar por nome</label><input value={fUsuario.nome} onChange={e=>setFUsuario({...fUsuario,nome:e.target.value})} placeholder="Digite o nome"/></div>
           <div><label>Perfil</label><select value={fUsuario.perfil} onChange={e=>setFUsuario({...fUsuario,perfil:e.target.value})}><option value="">Todos os perfis</option>{[...new Set(cad.usuarios.map(u=>u.perfil).filter(Boolean))].sort(compararTexto).map(p=><option key={p}>{p}</option>)}</select></div>
@@ -3910,7 +3974,7 @@ function AdmCadastros({st, setSt, toast, user}){
               <div><label>Telefone</label><input value={edit.telefone||''} onChange={e=>setEdit({...edit,telefone:e.target.value})}/></div>
             </div>
             <div><label>Perfil</label>
-              <select value={edit.perfilAcessoId||''} onChange={e=>{const p=cad.perfis.find(x=>String(x.itemId)===String(e.target.value));const permite=p?.permiteModulosApp===true;setEdit({...edit,perfilAcessoId:e.target.value,perfil:p?.titulo||edit.perfil,...(!permite?{acessoCargas:false,acessoPremiacao:false,acessoChecklist:false,acessoSinistros:false,acessoHistorico:false}:{})})}}>
+              <select value={edit.perfilAcessoId||''} onChange={e=>{const p=cad.perfis.find(x=>String(x.itemId)===String(e.target.value));const permite=p?.permiteModulosApp===true;setEdit({...edit,perfilAcessoId:e.target.value,perfil:p?.titulo||edit.perfil,...(!permite?{acessoCargas:false,acessoPremiacao:false,acessoChecklist:false,acessoSinistros:false,acessoAgendamentos:false,acessoHistorico:false}:{})})}}>
                 <option value="">Selecionar perfil...</option>
                 {cad.perfis.filter(p=>p.ativo||p.itemId===edit.perfilAcessoId).map(p=><option key={p.itemId} value={p.itemId}>{p.titulo}</option>)}
               </select>
@@ -3926,7 +3990,8 @@ function AdmCadastros({st, setSt, toast, user}){
                     ['acessoCargas','Cargas'],
                     ['acessoPremiacao','Premiação'],
                     ['acessoChecklist','Check list'],
-                    ['acessoSinistros','Sinistros']
+                    ['acessoSinistros','Sinistros'],
+                    ['acessoAgendamentos','Agendamento']
                   ].map(([campo,rotulo])=>
                     <button type="button" key={campo} className={'perfil-subtela'+(edit[campo]?' on':'')} onClick={()=>setEdit({...edit,[campo]:!edit[campo]})}>
                       <span className="perfil-subtela-check">{edit[campo]?'✓':''}</span>
@@ -4175,6 +4240,7 @@ function AdmApp({st, setSt, user, onSair, toast}){
     pode(user,'importar.criar')&&['importar','Importar'],
     pode(user,'contestacoes.visualizar')&&['contest','Contestações'],
     (pode(user,'sinistros.visualizar')||pode(user,'sinistros.configuracoes'))&&['sinistros','Sinistros'],
+    (pode(user,'agendamentos.agenda')||pode(user,'agendamentos.monitoramento')||pode(user,'agendamentos.relatorio'))&&['agendamentos','Agendamentos'],
     (pode(user,'checklist.aprovacao')||pode(user,'checklist.perguntas')||pode(user,'checklist.relatorio'))&&['check','Check list'],
     (pode(user,'premiacao.visualizar')||pode(user,'metas.visualizar')||pode(user,'descontos.visualizar'))&&['prem','Premiação'],
     (pode(user,'cadastro.usuarios')||pode(user,'cadastro.tipos_veiculo')||pode(user,'cadastro.veiculos')||pode(user,'cadastro.vinculos')||pode(user,'cadastro.perfis'))&&['cad','Cadastros']
@@ -4219,6 +4285,7 @@ function AdmApp({st, setSt, user, onSair, toast}){
         {aba==='painel' && <AdmPainel st={st} dados={dados} user={user} onNavegar={navegarPara}/>}
         {aba==='importar' && <AdmImportar st={st} setSt={setSt} toast={toast}/>}
         {aba==='contest' && <AdmContestacoes st={st} setSt={setSt} toast={toast} foco={destino?.id==='contest'?destino:null}/>}
+        {aba==='agendamentos' && <AdmAgendamentos user={user} toast={toast}/>}
         {aba==='sinistros' && <AdmSinistros toast={toast} user={user} foco={destino?.id==='sinistros'?destino:null}/>}
         {aba==='check' && <AdmChecklist st={st} setSt={setSt} toast={toast} user={user} foco={destino?.id==='check'?destino:null}/>}
         {aba==='prem' && <AdmPremiacao st={st} setSt={setSt} toast={toast} user={user}/>}
@@ -4244,6 +4311,9 @@ function App(){
     'contestacoes.visualizar',
     'sinistros.visualizar',
     'sinistros.configuracoes',
+    'agendamentos.agenda',
+    'agendamentos.monitoramento',
+    'agendamentos.relatorio',
     'checklist.aprovacao',
     'checklist.perguntas',
     'checklist.relatorio',
