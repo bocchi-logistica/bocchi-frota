@@ -2115,7 +2115,10 @@ function PainelRH({st,dados,user}){
     if(CONFIG.MODO_DEMONSTRACAO) return;
     let ativo=true;
     setCarregandoRH(true); setErroRH('');
-    ApiService.obterApuracoesSalvas()
+    // Ao entrar ou trocar de quadrimestre, carrega somente o que já foi salvo.
+    // A conferência completa das cargas fica restrita à atualização solicitada
+    // pelo usuário, evitando consultas pesadas e repetidas ao Graph.
+    ApiService.obterApuracoesSalvas('','',{somenteSalvas:true})
       .then(r=>{
         if(!ativo)return;
         const porMotorista={};
