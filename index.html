@@ -585,8 +585,10 @@ const ApiService = {
   admObterConfiguracoesSinistros(){ return this._req('GET','/admin/sinistros/configuracoes'); },
   admSalvarConfiguracoesSinistros(dados){ return this._req('PATCH','/admin/sinistros/configuracoes',dados); },
   obterPremiacao(){ return this._req('GET','/premiacao/me'); },
-  obterPremiacaoMotorista(nome){
-    return this._req('GET','/premiacao/me?motoristaNome='+encodeURIComponent(nome));
+  obterPremiacaoMotorista(nome,competencias=[]){
+    const q=new URLSearchParams({motoristaNome:nome});
+    if(Array.isArray(competencias)&&competencias.length)q.set('competencias',competencias.join(','));
+    return this._req('GET','/premiacao/me?'+q.toString());
   },
   obterApuracoesSalvas(competencia='',motoristaId='',opcoes={}){
     const q=new URLSearchParams();
@@ -652,8 +654,9 @@ const aguardar = ms => new Promise(resolve => setTimeout(resolve, ms));
 function erroTemporarioGraph(error){
   const status=Number(error?.status||0);
   const texto=String(error?.message||'')+' '+JSON.stringify(error?.detalhe||{});
-  return [408,425,429,500,502,503,504].includes(status) &&
-    (status!==500 || /429|throttl|temporari|limite|muitas tentativas/i.test(texto));
+  const falhaRede=/failed to fetch|network|fetch|aborterror|timeout|tempo limite/i.test(texto);
+  return falhaRede || ([408,425,429,500,502,503,504].includes(status) &&
+    (status!==500 || /429|throttl|temporari|limite|muitas tentativas/i.test(texto)));
 }
 async function executarComRetentativaGraph(operacao,maxTentativas=4){
   let ultimoErro;
@@ -2021,9 +2024,14 @@ const FilaApuracaoRH=(()=>{
       estado={...estado,atual:i+1,motorista:u.nome};publicar();
       try{
         await executarComRetentativaGraph(async()=>{
-          const r=await ApiService.obterPremiacaoMotorista(u.nome);
+          const r=await ApiService.obterPremiacaoMotorista(u.nome,competencias);
           const conjunto=new Set(competencias);
           const apuracoes=(r.apuracoes||[]).filter(a=>conjunto.has(String(a.competencia||'')));
+          if(apuracoes.length!==competencias.length){
+            const recebidas=new Set(apuracoes.map(a=>String(a.competencia||'')));
+            const faltantes=competencias.filter(c=>!recebidas.has(c));
+            throw new Error('A API não calculou as competências: '+faltantes.join(', '));
+          }
           await ApiService.salvarApuracoes(idUsuario(u),apuracoes,'RH_QUADRIMESTRE');
         });
         estado={...estado,concluidos:estado.concluidos+1};publicar();
