@@ -245,7 +245,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 90000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '2.5.1-agendamentos'
+  VERSAO: '2.5.2-agendamentos'
 };
 
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
@@ -646,7 +646,9 @@ const ApiService = {
     return this._req('GET','/admin/checklists'+q);
   },
   admDetalhe(protocolo){ return this._req('GET','/admin/checklists/'+encodeURIComponent(protocolo)); },
-  admStatus(protocolo, status, motivo){ return this._req('PATCH','/admin/checklists/'+encodeURIComponent(protocolo)+'/status',{status, motivo}); },
+  admStatus(protocolo, status, motivo, opcoes={}){ return this._req('PATCH','/admin/checklists/'+encodeURIComponent(protocolo)+'/status',{status, motivo, bloquearVeiculo:opcoes.bloquearVeiculo===true, motivoBloqueio:opcoes.motivoBloqueio||''}); },
+  admVeiculosBloqueados(){ return this._req('GET','/admin/veiculos/bloqueados'); },
+  admLiberarVeiculo(itemId,observacao=''){ return this._req('PATCH','/admin/veiculos/'+encodeURIComponent(itemId)+'/liberar',{observacao}); },
   admObservacao(protocolo, observacao){
     return this._req('POST','/admin/checklists/' + encodeURIComponent(protocolo) + '/observacao',{observacao});
 },
@@ -1344,6 +1346,9 @@ function TelaChecklist({st, setSt, user, toast, inicioAgendamento, onInicioConsu
   const [perguntasAtivas,setPerguntasAtivas]=useState([]);
   const [carregandoPerguntas,setCarregandoPerguntas]=useState(false);
   const [erroPerguntas,setErroPerguntas]=useState('');
+  const [modoOcorrenciaAgendamento,setModoOcorrenciaAgendamento]=useState(false);
+  const [grupoOcorrencia,setGrupoOcorrencia]=useState('');
+  const [ultimoChecklistValido,setUltimoChecklistValido]=useState(null);
 
   useEffect(()=>{
     if(CONFIG.MODO_DEMONSTRACAO) return;
@@ -1442,11 +1447,16 @@ function TelaChecklist({st, setSt, user, toast, inicioAgendamento, onInicioConsu
     if(!inicioAgendamento?.placa||preenchendo||carregandoVeiculos||carregandoPerguntas||erroVeiculos||erroPerguntas) return;
     if(String(veiculo||'').toUpperCase()!==String(inicioAgendamento.placa).toUpperCase()) return;
     if(!perguntasAtivas.length) return;
-    abrirFormulario();
+    const limite=new Date();limite.setDate(limite.getDate()-6);limite.setHours(0,0,0,0);
+    const recente=[...meus].filter(c=>String(c.placa||'').toUpperCase()===String(veiculo||'').toUpperCase()&&c.status!=='reprovado'&&new Date(String(c.data||'')+'T00:00:00')>=limite).sort((a,b)=>String(b.data||'').localeCompare(String(a.data||'')))[0]||null;
+    if(recente){
+      setUltimoChecklistValido(recente);setModoOcorrenciaAgendamento(true);setGrupoOcorrencia('');setResps({});setExtras(x=>({...x,km:String(inicioAgendamento.km||x.km||'')}));setPreenchendo(true);setUltimoEnvio(null);
+    }else{setModoOcorrenciaAgendamento(false);abrirFormulario();}
     onInicioConsumido&&onInicioConsumido();
   },[inicioAgendamento,veiculo,perguntasAtivas,carregandoVeiculos,carregandoPerguntas,erroVeiculos,erroPerguntas,preenchendo]);
 
   const grupos = [...new Set(perguntasAtivas.map(p=>p.grupo))];
+  const perguntasExibidas=modoOcorrenciaAgendamento?(grupoOcorrencia?perguntasAtivas.filter(p=>p.grupo===grupoOcorrencia):[]):perguntasAtivas;
   const chaveRascunho = 'ck_'+user.login+'_'+HOJE;
 
   // Histórico e indicadores respeitam o mês/status escolhidos pelo motorista.
@@ -1509,7 +1519,7 @@ function TelaChecklist({st, setSt, user, toast, inicioAgendamento, onInicioConsu
     setPreenchendo(true); setUltimoEnvio(null);
   };
   const cancelar = ()=>{
-    setPreenchendo(false); setResps({}); setExtras({km:'',combustivel:''});
+    setPreenchendo(false); setResps({}); setExtras({km:'',combustivel:''}); setModoOcorrenciaAgendamento(false); setGrupoOcorrencia(''); setUltimoChecklistValido(null);
     IDB.apagarRascunho(chaveRascunho).catch(()=>{}); setTemRascunho(false);
   };
 
@@ -1543,16 +1553,21 @@ function TelaChecklist({st, setSt, user, toast, inicioAgendamento, onInicioConsu
       toast('Selecione um veículo antes de enviar.'); return;
     }
     // Quilometragem obrigatória e válida para qualquer frota
-    const km = parseInt(extras.km, 10);
-    if (!extras.km || isNaN(km) || km<=0){ toast('Informe a quilometragem atual do veículo (somente números).'); return; }
+    const km = parseInt(extras.km||localStorage.getItem('km_'+veiculo)||'0', 10);
+    if ((!modoOcorrenciaAgendamento&&!extras.km) || isNaN(km) || km<=0){ toast('Informe a quilometragem atual do veículo (somente números).'); return; }
     if (km > 3000000){ toast('Quilometragem fora do limite razoável. Confira o valor.'); return; }
     const ultimoKm = parseInt(localStorage.getItem('km_'+veiculo)||'0',10);
     if (ultimoKm && km < ultimoKm && !window.confirm('Atenção: a quilometragem informada ('+km+') é MENOR que a última registrada para esta placa ('+ultimoKm+'). Deseja continuar mesmo assim?')) return;
-    for(const p of perguntasAtivas){
+    for(const p of perguntasExibidas){
       const r = resps[p.id];
       if(p.obrigatoria && (!r || !r.resp)){ toast('Responda: "'+p.texto.slice(0,40)+'..."'); return; }
       if(r && r.resp==='NC' && !r.obs){ toast('Descreva o problema do item não conforme: '+p.texto.slice(0,35)+'...'); return; }
       if(r && r.resp==='NC' && p.fotoNC && !r.foto){ toast('Anexe a foto da não conformidade: '+p.texto.slice(0,35)+'...'); return; }
+    }
+    if(modoOcorrenciaAgendamento){
+      if(!grupoOcorrencia){toast('Selecione o grupo onde foi identificada a não conformidade.');return;}
+      const respostasNC=perguntasExibidas.filter(p=>resps[p.id]?.resp==='NC');
+      if(!respostasNC.length){toast('Marque ao menos uma pergunta como Não conforme no grupo selecionado.');return;}
     }
     if(!window.confirm('Confirma o envio do checklist da placa '+veiculo+'?')) return;
 
@@ -1567,16 +1582,16 @@ function TelaChecklist({st, setSt, user, toast, inicioAgendamento, onInicioConsu
         veiculo: {placa:veiculo, tipo: vSel ? vSel.tipo : ''},
         quilometragem: km,
         combustivel: frotaSel==='leve' ? (extras.combustivel||'') : '',
-        tipoChecklist: frotaSel==='leve' ? 'LEVE' : 'PESADA',
+        tipoChecklist: modoOcorrenciaAgendamento ? 'LEVE_NC_AGENDAMENTO' : (frotaSel==='leve' ? 'LEVE' : 'PESADA'),
         versaoFormulario: CONFIG.VERSAO,
         localizacao: loc,
-        respostas: perguntasAtivas.map(p=>{
+        respostas: perguntasExibidas.map(p=>{
           const r = resps[p.id]||{};
           return {idPergunta:p.id, grupo:p.grupo, pergunta:p.texto,
                   resposta:r.resp||'NA', observacao:r.obs||'', possuiFoto:!!r.foto,
                   fotos: r.foto ? [{nome:p.id+'-01.jpg', tipo:'image/jpeg', conteudoBase64:r.foto}] : []};
         }),
-        quantidadeNC: perguntasAtivas.filter(p=>resps[p.id] && resps[p.id].resp==='NC').length,
+        quantidadeNC: perguntasExibidas.filter(p=>resps[p.id] && resps[p.id].resp==='NC').length,
         statusChecklist: 'PENDENTE'
       };
 
@@ -1589,7 +1604,7 @@ function TelaChecklist({st, setSt, user, toast, inicioAgendamento, onInicioConsu
       if (CONFIG.MODO_DEMONSTRACAO){
         const registroLocal = {id:'demo'+Date.now(), idLocal, motorista:user.nome, placa:veiculo, frota:frotaSel, data:HOJE, status:'pendente', motivoReprova:'',
           km: String(km), combustivel: extras.combustivel||'',
-          respostas: perguntasAtivas.map(p=>({pid:p.id, resp:(resps[p.id]&&resps[p.id].resp)||'NA', obs:(resps[p.id]&&resps[p.id].obs)||'', foto:(resps[p.id]&&resps[p.id].foto)||null}))};
+          respostas: perguntasExibidas.map(p=>({pid:p.id, resp:(resps[p.id]&&resps[p.id].resp)||'NA', obs:(resps[p.id]&&resps[p.id].obs)||'', foto:(resps[p.id]&&resps[p.id].foto)||null}))};
         setSt(s=>({...s, checklists:[...s.checklists, registroLocal]}));
       }
 
@@ -1606,7 +1621,7 @@ function TelaChecklist({st, setSt, user, toast, inicioAgendamento, onInicioConsu
         toast('Não foi possível concluir o envio agora. Seus dados continuam salvos neste aparelho.');
       }
       await IDB.apagarRascunho(chaveRascunho); setTemRascunho(false);
-      setPreenchendo(false); setResps({}); setExtras({km:'',combustivel:''});
+      setPreenchendo(false); setResps({}); setExtras({km:'',combustivel:''}); setModoOcorrenciaAgendamento(false); setGrupoOcorrencia(''); setUltimoChecklistValido(null);
       atualizarFila();
     } finally {
       setEnviando(false);
@@ -1680,6 +1695,12 @@ function TelaChecklist({st, setSt, user, toast, inicioAgendamento, onInicioConsu
         </div>}
 
       {preenchendo && <React.Fragment>
+        {modoOcorrenciaAgendamento&&<div className="card" style={{borderLeft:'4px solid var(--colheita)'}}>
+          <h3>Registrar não conformidade do agendamento</h3>
+          <div className="muted" style={{margin:'4px 0 10px'}}>O checklist periódico desta placa já foi realizado. Registre somente o grupo e o item com problema.</div>
+          {ultimoChecklistValido&&<button className="btn btn-g btn-sm" onClick={()=>setVer(ultimoChecklistValido)}>Visualizar último checklist realizado</button>}
+          <div style={{marginTop:12}}><label>Grupo com problema</label><select value={grupoOcorrencia} onChange={e=>{setGrupoOcorrencia(e.target.value);setResps({});}}><option value="">Selecionar...</option>{(modoOcorrenciaAgendamento?(grupoOcorrencia?[grupoOcorrencia]:[]):grupos).map(g=><option key={g} value={g}>{g}</option>)}</select></div>
+        </div>}
         <div className="card">
           <label>Veículo</label>
           <select value={veiculo} onChange={e=>{setVeiculo(e.target.value); setResps({});}}>
@@ -1687,7 +1708,7 @@ function TelaChecklist({st, setSt, user, toast, inicioAgendamento, onInicioConsu
           </select>
           <div className="form-grid" style={{marginTop:12}}>
             <div><label>KM atual *</label><input type="number" inputMode="numeric" value={extras.km} onChange={e=>setExtras({...extras, km:e.target.value})} placeholder="Ex.: 158420"/></div>
-            {frotaSel==='leve' &&
+            {frotaSel==='leve' && !modoOcorrenciaAgendamento &&
               <div><label>Nível de combustível</label>
                 <select value={extras.combustivel} onChange={e=>setExtras({...extras, combustivel:e.target.value})}>
                   <option value="">Selecionar...</option>
@@ -1699,7 +1720,7 @@ function TelaChecklist({st, setSt, user, toast, inicioAgendamento, onInicioConsu
         {grupos.map(g=>
           <React.Fragment key={g}>
             <h3 style={{margin:'6px 2px 0'}}>{g}</h3>
-            {perguntasAtivas.filter(p=>p.grupo===g).map(p=>{
+            {perguntasExibidas.filter(p=>p.grupo===g).map(p=>{
               const r = resps[p.id]||{};
               return (
                 <div className="card perg" key={p.id}>
@@ -1964,7 +1985,7 @@ function FormAgendamento({base,item,onClose,onSalvo,toast,admin=false}){
 }
 function DetalheAgendamento({item,admin,onClose,onAtualizar,toast,onAbrirChecklist}){
   const [acao,setAcao]=useState(''),[km,setKm]=useState(''),[motivo,setMotivo]=useState(''),[obs,setObs]=useState(''),[problema,setProblema]=useState(false),[salvando,setSalvando]=useState(false);
-  const executar=async()=>{setSalvando(true);try{let resposta=null;if(acao==='cancelar')resposta=await ApiService.cancelarAgendamento(item.id,motivo,obs);if(acao==='retirar')resposta=await ApiService.retirarAgendamento(item.id,{kmInicial:Number(km),possuiNC:problema,dataHora:new Date().toISOString()});if(acao==='finalizar')resposta=await ApiService.finalizarAgendamento(item.id,{kmFinal:Number(km),possuiProblema:problema,dataHora:new Date().toISOString()});if(acao==='corrigir')resposta=await ApiService.admCorrigirKmAgendamento(item.id,{kmInicial:Number(km),kmFinal:Number(obs||0),motivo});toast(resposta?.mensagem||'Ação concluída.');await onAtualizar();onClose();if(resposta?.abrirChecklist&&onAbrirChecklist)onAbrirChecklist({placa:resposta.placa||item.placa,agendamentoId:item.id,etapa:acao})}catch(e){toast(e.message)}finally{setSalvando(false)}};
+  const executar=async()=>{setSalvando(true);try{let resposta=null;if(acao==='cancelar')resposta=await ApiService.cancelarAgendamento(item.id,motivo,obs);if(acao==='retirar')resposta=await ApiService.retirarAgendamento(item.id,{kmInicial:Number(km),possuiNC:problema,dataHora:new Date().toISOString()});if(acao==='finalizar')resposta=await ApiService.finalizarAgendamento(item.id,{kmFinal:Number(km),possuiProblema:problema,dataHora:new Date().toISOString()});if(acao==='corrigir')resposta=await ApiService.admCorrigirKmAgendamento(item.id,{kmInicial:Number(km),kmFinal:Number(obs||0),motivo});toast(resposta?.mensagem||'Ação concluída.');await onAtualizar();onClose();if(resposta?.abrirChecklist&&onAbrirChecklist)onAbrirChecklist({placa:resposta.placa||item.placa,agendamentoId:item.id,etapa:acao,km:Number(resposta.km||km||0)})}catch(e){toast(e.message)}finally{setSalvando(false)}};
   const aguardando=['AGENDADO','AGUARDANDO_RETIRADA'].includes(item.status),emUso=['EM_USO','DEVOLUCAO_ATRASADA','PENDENTE_FINALIZACAO'].includes(item.status);
   return <Modal titulo={`${item.origem} → ${item.destino}`} onClose={onClose}><div className="row"><AgendaStatus status={item.status}/><span className="muted">{item.codigo}</span></div><div className="divider"/>{[['Veículo',item.placa],['Motorista',item.motorista],['Previsto',fmtDataHora(item.saidaPrevista)+' até '+fmtDataHora(item.retornoPrevisto)],['Real',fmtDataHora(item.saidaReal)+' até '+fmtDataHora(item.retornoReal)],['KM',`${item.kmInicial||'—'} → ${item.kmFinal||'—'}`]].map(([l,v])=><div className="linha-item" key={l}><b>{l}</b><span>{v}</span></div>)}{!acao&&<div className="agenda-acoes" style={{marginTop:14}}>{aguardando&&<><button className="btn btn-d" onClick={()=>setAcao('cancelar')}>Cancelar</button><button className="btn btn-p" onClick={()=>setAcao('retirar')}>{admin?'Retirar manualmente':'Retirar veículo'}</button></>}{emUso&&<button className="btn btn-p" onClick={()=>setAcao('finalizar')}>{admin?'Finalizar manualmente':'Devolver veículo'}</button>}{admin&&item.status==='FINALIZADO'&&<button className="btn btn-s" onClick={()=>setAcao('corrigir')}>Corrigir KM</button>}</div>}{acao&&<div style={{marginTop:14}}>{acao==='cancelar'?<><label>Motivo obrigatório</label><select value={motivo} onChange={e=>setMotivo(e.target.value)}><option value="">Selecionar...</option>{['VIAGEM_CANCELADA','ALTERACAO_PROGRAMACAO','VEICULO_NAO_NECESSARIO','MOTORISTA_INDISPONIVEL','VEICULO_INDISPONIVEL','ERRO_AGENDAMENTO','DUPLICIDADE','OUTRO'].map(x=><option key={x}>{x}</option>)}</select><label style={{marginTop:8}}>Observação</label><textarea value={obs} onChange={e=>setObs(e.target.value)}/></>:<><label>{acao==='finalizar'?'KM final':'KM inicial'}</label><input type="number" value={km} onChange={e=>setKm(e.target.value)}/>{acao==='corrigir'&&<><label style={{marginTop:8}}>KM final correto</label><input type="number" value={obs} onChange={e=>setObs(e.target.value)}/><label style={{marginTop:8}}>Motivo</label><textarea value={motivo} onChange={e=>setMotivo(e.target.value)}/></>}{acao!=='corrigir'&&<div style={{marginTop:8}}><label>{acao==='retirar'?'Possui alguma NC?':'Houve problema?'}</label><select value={problema?'sim':'nao'} onChange={e=>setProblema(e.target.value==='sim')}><option value="nao">Não</option><option value="sim">Sim</option></select></div>}</>}<div className="agenda-acoes" style={{marginTop:12}}><button className="btn btn-g" onClick={()=>setAcao('')}>Voltar</button><button className="btn btn-p" disabled={salvando||acao==='cancelar'&&!motivo} onClick={executar}>Confirmar</button></div></div>}</Modal>
 }
@@ -1986,7 +2007,7 @@ function AdmAgendamentos({user,toast}){
   const SimNao=({campo})=><select value={paramForm[campo]?'sim':'nao'} onChange={e=>alterarParam(campo,e.target.value==='sim')}><option value="sim">Sim</option><option value="nao">Não</option></select>;
   return <>
     <div className="subtabs">{podeAgenda&&<button className={'subtab'+(sub==='agenda'?' on':'')} onClick={()=>setSub('agenda')}>Agenda geral</button>}{podeMonitor&&<button className={'subtab'+(sub==='monitor'?' on':'')} onClick={()=>setSub('monitor')}>Monitoramento e gestão</button>}{podeRel&&<button className={'subtab'+(sub==='relatorio'?' on':'')} onClick={()=>setSub('relatorio')}>Relatório</button>}{podeParam&&<button className={'subtab'+(sub==='parametros'?' on':'')} onClick={()=>setSub('parametros')}>Parâmetros</button>}</div>
-    {carregando?<div className="card muted">Carregando agendamentos...</div>:sub==='agenda'?<><div className="row"><div className="grow"><h2>Agenda geral</h2><div className="muted">Somente veículos ativos da Frota Leve marcados como uso compartilhado.</div>{base.veiculos.length===0&&<div className="aviso-box" style={{marginTop:8}}>Nenhuma placa disponível. Cadastro: {base.diagnosticoVeiculos.totalCadastro||0}; ativos: {base.diagnosticoVeiculos.totalAtivos||0}; Frota Leve: {base.diagnosticoVeiculos.totalFrotaLeve||0}; compartilhados: {base.diagnosticoVeiculos.totalCompartilhados||0}. Regra: {base.diagnosticoVeiculos.regra||'ATIVO + FROTA LEVE + USO COMPARTILHADO'}.</div>}</div><button className="btn btn-p" onClick={()=>setForm(true)}>+ Novo agendamento</button></div><div className="row card"><button className="btn btn-g btn-sm" onClick={()=>setMes(new Date(mes.getFullYear(),mes.getMonth()-1,1))}>‹</button><h2 className="grow">{mes.toLocaleDateString('pt-BR',{month:'long',year:'numeric'})}</h2><button className="btn btn-g btn-sm" onClick={()=>setMes(new Date(mes.getFullYear(),mes.getMonth()+1,1))}>›</button></div><CalendarioAgenda mes={mes} eventos={base.agendamentos} onAbrir={setDetalhe}/></>:sub==='monitor'?<><div className="agenda-kpis">{['AGUARDANDO_RETIRADA','EM_USO','DEVOLUCAO_ATRASADA','BLOQUEADO_NC'].map(s=><div className="agenda-kpi" key={s}><b>{base.agendamentos.filter(a=>a.status===s).length}</b><span>{AG_STATUS_LABEL[s]}</span></div>)}</div><div className="card">{base.agendamentos.filter(a=>!['FINALIZADO','CANCELADO'].includes(a.status)).map(a=><div className="agenda-lista-item row" key={a.id}><div className="grow"><b>{a.placa} · {a.origem} → {a.destino}</b><div className="muted">{a.motorista} · {fmtDataHora(a.saidaPrevista)}</div></div><AgendaStatus status={a.status}/><button className="btn btn-g btn-sm" onClick={()=>setDetalhe(a)}>Abrir</button></div>)}</div></>:sub==='relatorio'?<><div className="row"><div className="grow"><h2>Relatório de agendamentos</h2></div><button className="btn btn-p" onClick={exportar}>Exportar Excel</button></div><div className="card"><div className="form-grid"><div><label>Status</label><select value={fStatus} onChange={e=>setFStatus(e.target.value)}><option>TODOS</option>{Object.keys(AG_STATUS_LABEL).map(s=><option key={s}>{s}</option>)}</select></div></div><div style={{overflowX:'auto',marginTop:12}}><table><thead><tr><th>Código</th><th>Veículo</th><th>Motorista</th><th>Trajeto</th><th>Previsto</th><th>Real</th><th>KM</th><th>Status</th><th></th></tr></thead><tbody>{filtrados.map(a=><tr key={a.id}><td>{a.codigo}</td><td>{a.placa}</td><td>{a.motorista}</td><td>{a.origem} → {a.destino}</td><td>{fmtDataHora(a.saidaPrevista)}<br/>{fmtDataHora(a.retornoPrevisto)}</td><td>{fmtDataHora(a.saidaReal)}<br/>{fmtDataHora(a.retornoReal)}</td><td>{a.kmInicial||'—'} → {a.kmFinal||'—'}</td><td><AgendaStatus status={a.status}/></td><td><button className="btn btn-g btn-sm" onClick={()=>setDetalhe(a)}>Abrir</button></td></tr>)}</tbody></table></div></div></>:<><div className="row"><div className="grow"><h2>Parâmetros de agendamentos</h2><div className="muted">Configurações lidas da lista Agendamentos_Parametros.</div></div><button className="btn btn-p" disabled={salvandoParam} onClick={salvarParametros}>{salvandoParam?'Salvando...':'Salvar parâmetros'}</button></div><div className="card"><div className="form-grid"><div><label>Dias permitidos para frente</label><input type="number" value={paramForm.diasPermitidosFrente??''} onChange={e=>alterarParam('diasPermitidosFrente',Number(e.target.value))}/></div><div><label>Antecedência mínima (horas)</label><input type="number" value={paramForm.antecedenciaMinimaHoras??''} onChange={e=>alterarParam('antecedenciaMinimaHoras',Number(e.target.value))}/></div><div><label>Duração máxima (horas)</label><input type="number" value={paramForm.duracaoMaximaHoras??''} onChange={e=>alterarParam('duracaoMaximaHoras',Number(e.target.value))}/></div><div><label>Intervalo entre reservas (minutos)</label><input type="number" value={paramForm.intervaloReservasMinutos??''} onChange={e=>alterarParam('intervaloReservasMinutos',Number(e.target.value))}/></div><div><label>Hora inicial permitida</label><input type="time" value={paramForm.horaInicialPermitida||'00:00'} onChange={e=>alterarParam('horaInicialPermitida',e.target.value)}/></div><div><label>Hora final permitida</label><input type="time" value={paramForm.horaFinalPermitida||'23:59'} onChange={e=>alterarParam('horaFinalPermitida',e.target.value)}/></div><div><label>Permite sábado</label><SimNao campo="permiteSabado"/></div><div><label>Permite domingo</label><SimNao campo="permiteDomingo"/></div><div><label>Permite feriado</label><SimNao campo="permiteFeriado"/></div><div><label>Confirmação automática</label><SimNao campo="confirmacaoAutomatica"/></div><div><label>Periodicidade do checklist</label><select value={paramForm.checklistPeriodicidade||'SEMANAL'} onChange={e=>alterarParam('checklistPeriodicidade',e.target.value)}><option>DIARIO</option><option>SEMANAL</option><option>A_CADA_RETIRADA</option></select></div><div><label>Abre checklist na NC</label><SimNao campo="abreChecklistNaNC"/></div><div><label>Resposta impeditiva bloqueia</label><SimNao campo="respostaImpeditivaBloqueia"/></div><div><label>Código checklist Frota Leve</label><input value={paramForm.codigoChecklistFrotaLeve||''} onChange={e=>alterarParam('codigoChecklistFrotaLeve',e.target.value)}/></div><div><label>Janela para retirada (minutos)</label><input type="number" value={paramForm.janelaRetiradaMinutos??''} onChange={e=>alterarParam('janelaRetiradaMinutos',Number(e.target.value))}/></div><div><label>Tolerância devolução (minutos)</label><input type="number" value={paramForm.toleranciaDevolucaoMinutos??''} onChange={e=>alterarParam('toleranciaDevolucaoMinutos',Number(e.target.value))}/></div><div><label>Permite finalizar antes</label><SimNao campo="permiteFinalizarAnterior"/></div><div><label>Libera no retorno real</label><SimNao campo="liberaNoRetornoReal"/></div></div></div></>}
+    {carregando?<div className="card muted">Carregando agendamentos...</div>:sub==='agenda'?<><div className="row"><div className="grow"><h2>Agenda geral</h2><div className="muted">Somente veículos ativos da Frota Leve marcados como uso compartilhado.</div>{base.veiculos.length===0&&<div className="aviso-box" style={{marginTop:8}}>Nenhuma placa disponível. Cadastro: {base.diagnosticoVeiculos.totalCadastro||0}; ativos: {base.diagnosticoVeiculos.totalAtivos||0}; Frota Leve: {base.diagnosticoVeiculos.totalFrotaLeve||0}; compartilhados: {base.diagnosticoVeiculos.totalCompartilhados||0}. Regra: {base.diagnosticoVeiculos.regra||'ATIVO + FROTA LEVE + USO COMPARTILHADO'}.</div>}</div><button className="btn btn-p" onClick={()=>setForm(true)}>+ Novo agendamento</button></div><div className="row card"><button className="btn btn-g btn-sm" onClick={()=>setMes(new Date(mes.getFullYear(),mes.getMonth()-1,1))}>‹</button><h2 className="grow">{mes.toLocaleDateString('pt-BR',{month:'long',year:'numeric'})}</h2><button className="btn btn-g btn-sm" onClick={()=>setMes(new Date(mes.getFullYear(),mes.getMonth()+1,1))}>›</button></div><CalendarioAgenda mes={mes} eventos={base.agendamentos} onAbrir={setDetalhe}/></>:sub==='monitor'?<><div className="agenda-kpis">{['AGUARDANDO_RETIRADA','EM_USO','DEVOLUCAO_ATRASADA','PENDENTE_FINALIZACAO'].map(s=><div className="agenda-kpi" key={s}><b>{base.agendamentos.filter(a=>a.status===s).length}</b><span>{AG_STATUS_LABEL[s]}</span></div>)}</div><div className="card">{base.agendamentos.filter(a=>!['FINALIZADO','CANCELADO'].includes(a.status)).map(a=><div className="agenda-lista-item row" key={a.id}><div className="grow"><b>{a.placa} · {a.origem} → {a.destino}</b><div className="muted">{a.motorista} · {fmtDataHora(a.saidaPrevista)}</div></div><AgendaStatus status={a.status}/><button className="btn btn-g btn-sm" onClick={()=>setDetalhe(a)}>Abrir</button></div>)}</div></>:sub==='relatorio'?<><div className="row"><div className="grow"><h2>Relatório de agendamentos</h2></div><button className="btn btn-p" onClick={exportar}>Exportar Excel</button></div><div className="card"><div className="form-grid"><div><label>Status</label><select value={fStatus} onChange={e=>setFStatus(e.target.value)}><option>TODOS</option>{Object.keys(AG_STATUS_LABEL).map(s=><option key={s}>{s}</option>)}</select></div></div><div style={{overflowX:'auto',marginTop:12}}><table><thead><tr><th>Código</th><th>Veículo</th><th>Motorista</th><th>Trajeto</th><th>Previsto</th><th>Real</th><th>KM</th><th>Status</th><th></th></tr></thead><tbody>{filtrados.map(a=><tr key={a.id}><td>{a.codigo}</td><td>{a.placa}</td><td>{a.motorista}</td><td>{a.origem} → {a.destino}</td><td>{fmtDataHora(a.saidaPrevista)}<br/>{fmtDataHora(a.retornoPrevisto)}</td><td>{fmtDataHora(a.saidaReal)}<br/>{fmtDataHora(a.retornoReal)}</td><td>{a.kmInicial||'—'} → {a.kmFinal||'—'}</td><td><AgendaStatus status={a.status}/></td><td><button className="btn btn-g btn-sm" onClick={()=>setDetalhe(a)}>Abrir</button></td></tr>)}</tbody></table></div></div></>:<><div className="row"><div className="grow"><h2>Parâmetros de agendamentos</h2><div className="muted">Configurações lidas da lista Agendamentos_Parametros.</div></div><button className="btn btn-p" disabled={salvandoParam} onClick={salvarParametros}>{salvandoParam?'Salvando...':'Salvar parâmetros'}</button></div><div className="card"><div className="form-grid"><div><label>Dias permitidos para frente</label><input type="number" value={paramForm.diasPermitidosFrente??''} onChange={e=>alterarParam('diasPermitidosFrente',Number(e.target.value))}/></div><div><label>Antecedência mínima (horas)</label><input type="number" value={paramForm.antecedenciaMinimaHoras??''} onChange={e=>alterarParam('antecedenciaMinimaHoras',Number(e.target.value))}/></div><div><label>Duração máxima (horas)</label><input type="number" value={paramForm.duracaoMaximaHoras??''} onChange={e=>alterarParam('duracaoMaximaHoras',Number(e.target.value))}/></div><div><label>Intervalo entre reservas (minutos)</label><input type="number" value={paramForm.intervaloReservasMinutos??''} onChange={e=>alterarParam('intervaloReservasMinutos',Number(e.target.value))}/></div><div><label>Hora inicial permitida</label><input type="time" value={paramForm.horaInicialPermitida||'00:00'} onChange={e=>alterarParam('horaInicialPermitida',e.target.value)}/></div><div><label>Hora final permitida</label><input type="time" value={paramForm.horaFinalPermitida||'23:59'} onChange={e=>alterarParam('horaFinalPermitida',e.target.value)}/></div><div><label>Permite sábado</label><SimNao campo="permiteSabado"/></div><div><label>Permite domingo</label><SimNao campo="permiteDomingo"/></div><div><label>Permite feriado</label><SimNao campo="permiteFeriado"/></div><div><label>Confirmação automática</label><SimNao campo="confirmacaoAutomatica"/></div><div><label>Periodicidade do checklist</label><select value={paramForm.checklistPeriodicidade||'SEMANAL'} onChange={e=>alterarParam('checklistPeriodicidade',e.target.value)}><option>DIARIO</option><option>SEMANAL</option><option>A_CADA_RETIRADA</option></select></div><div><label>Abre checklist na NC</label><SimNao campo="abreChecklistNaNC"/></div><div><label>Resposta impeditiva bloqueia</label><SimNao campo="respostaImpeditivaBloqueia"/></div><div><label>Código checklist Frota Leve</label><input value={paramForm.codigoChecklistFrotaLeve||''} onChange={e=>alterarParam('codigoChecklistFrotaLeve',e.target.value)}/></div><div><label>Janela para retirada (minutos)</label><input type="number" value={paramForm.janelaRetiradaMinutos??''} onChange={e=>alterarParam('janelaRetiradaMinutos',Number(e.target.value))}/></div><div><label>Tolerância devolução (minutos)</label><input type="number" value={paramForm.toleranciaDevolucaoMinutos??''} onChange={e=>alterarParam('toleranciaDevolucaoMinutos',Number(e.target.value))}/></div><div><label>Permite finalizar antes</label><SimNao campo="permiteFinalizarAnterior"/></div><div><label>Libera no retorno real</label><SimNao campo="liberaNoRetornoReal"/></div></div></div></>}
     {form&&<FormAgendamento base={base} admin onClose={()=>setForm(false)} onSalvo={carregar} toast={toast}/>} {detalhe&&<DetalheAgendamento item={detalhe} admin onClose={()=>setDetalhe(null)} onAtualizar={carregar} toast={toast}/>} 
   </>
 }
@@ -3183,6 +3204,12 @@ function AdmChecklist({st, setSt, toast, user, foco}){
   const [ver,setVer]=useState(null);
   const [reprovando,setReprovando]=useState(null);
   const [motivoRep,setMotivoRep]=useState('');
+  const [bloquearAoAprovar,setBloquearAoAprovar]=useState(false);
+  const [motivoBloqueio,setMotivoBloqueio]=useState('');
+  const [veiculosBloqueados,setVeiculosBloqueados]=useState([]);
+  const [carregandoBloqueados,setCarregandoBloqueados]=useState(false);
+  const [liberandoVeiculo,setLiberandoVeiculo]=useState(null);
+  const [observacaoLiberacao,setObservacaoLiberacao]=useState('');
   const perguntaVazia={texto:'', grupo:'Anomalias estéticas', frota:'pesada', frequencia:'Diária', ordem:10, obrigatoria:true, fotoNC:false, ativa:true};
   const [novaPerg,setNovaPerg]=useState(perguntaVazia);
   const [editandoPergunta,setEditandoPergunta]=useState(null);
@@ -3225,23 +3252,33 @@ function AdmChecklist({st, setSt, toast, user, foco}){
     }
   };
 
-  useEffect(()=>{ carregarCatalogo(); sincronizar(); },[]);
+  const carregarBloqueados=async()=>{
+    setCarregandoBloqueados(true);
+    try{const r=await ApiService.admVeiculosBloqueados();setVeiculosBloqueados(r.veiculos||[]);}
+    catch(e){toast('Erro ao carregar veículos bloqueados: '+e.message);}
+    finally{setCarregandoBloqueados(false);}
+  };
+
+  useEffect(()=>{ carregarCatalogo(); sincronizar(); carregarBloqueados(); },[]);
 
   const pendentesTodos = st.checklists.filter(c=>c.status==='pendente');
   const pendentes = pendentesTodos.filter(c=>!fMesAprovacao||String(c.data||'').slice(0,7)===fMesAprovacao);
-  const decidir=async(ck, status, motivo)=>{
-    /* ALTERAÇÃO V6: em produção a decisão também é gravada no SharePoint via API */
+  const decidir=async(ck, status, motivo, opcoes={})=>{
+    if(status==='aprovado'&&opcoes.bloquearVeiculo===true&&!String(opcoes.motivoBloqueio||'').trim()){toast('Informe o motivo do bloqueio do veículo.');return;}
     if (!CONFIG.MODO_DEMONSTRACAO && ck.id && !String(ck.id).startsWith('DEMO-')){
       try{
-        await ApiService.admStatus(ck.id, status==='aprovado'?'APROVADO':'REPROVADO', motivo||'');
-      }catch(e){
-        toast('Não foi possível gravar a decisão no SharePoint: '+e.message);
-        return;
-      }
+        await ApiService.admStatus(ck.id,status==='aprovado'?'APROVADO':'REPROVADO',motivo||'',opcoes);
+      }catch(e){toast('Não foi possível gravar a decisão no SharePoint: '+e.message);return;}
     }
-    setSt(s=>({...s, checklists:s.checklists.map(x=>x.id===ck.id?{...x, status, motivoReprova:motivo||''}:x)}));
-    setVer(null); setReprovando(null); setMotivoRep('');
-    toast(status==='aprovado'?'Check list aprovado.':'Check list reprovado — o motorista deverá refazer.');
+    setSt(s=>({...s,checklists:s.checklists.map(x=>x.id===ck.id?{...x,status,motivoReprova:motivo||''}:x)}));
+    setVer(null);setReprovando(null);setMotivoRep('');setBloquearAoAprovar(false);setMotivoBloqueio('');
+    if(opcoes.bloquearVeiculo===true)await carregarBloqueados();
+    toast(status==='aprovado'?(opcoes.bloquearVeiculo?'Check list aprovado e veículo bloqueado.':'Check list aprovado.'):'Check list reprovado — o motorista deverá refazer.');
+  };
+  const liberarVeiculo=async()=>{
+    if(!liberandoVeiculo)return;
+    try{await ApiService.admLiberarVeiculo(liberandoVeiculo.itemId,observacaoLiberacao);toast('Veículo liberado com sucesso.');setLiberandoVeiculo(null);setObservacaoLiberacao('');await carregarBloqueados();}
+    catch(e){toast('Erro ao liberar veículo: '+e.message);}
   };
   const salvarPergunta = async()=>{
   if(!novaPerg.texto.trim()){
@@ -3287,6 +3324,7 @@ function AdmChecklist({st, setSt, toast, user, foco}){
         <button className="btn btn-s btn-sm" disabled={sincronizando} onClick={sincronizar}>{sincronizando?'Sincronizando...':'Sincronizar com servidor'}</button>
         <div className="subtabs">
           {pode(user,'checklist.aprovacao')&&<button className={'subtab'+(sub==='aprovar'?' on':'')} onClick={()=>setSub('aprovar')}>Aprovar ({pendentes.length})</button>}
+          {pode(user,'checklist.aprovacao')&&<button className={'subtab'+(sub==='bloqueados'?' on':'')} onClick={()=>{setSub('bloqueados');carregarBloqueados();}}>Veículos bloqueados ({veiculosBloqueados.length})</button>}
           {pode(user,'checklist.perguntas')&&<button className={'subtab'+(sub==='perguntas'?' on':'')} onClick={()=>setSub('perguntas')}>Perguntas</button>}
           {pode(user,'checklist.relatorio')&&<button className={'subtab'+(sub==='relatorio'?' on':'')} onClick={()=>setSub('relatorio')}>Relatório</button>}
         </div>
@@ -3308,6 +3346,14 @@ function AdmChecklist({st, setSt, toast, user, foco}){
             <div className="grow"><b>{primeiroNome(ck.motorista)}</b><div className="muted">{dataBR(ck.data)} · {ck.placa} · {ck.respostas.filter(r=>r.resp==='NC').length} não conformidade(s)</div></div>
             <button className="btn btn-s btn-sm" onClick={()=>setVer(ck)}>Analisar</button>
           </div>)}
+      </React.Fragment>}
+
+      {sub==='bloqueados' && pode(user,'checklist.aprovacao') && <React.Fragment>
+        <div className="card">
+          <div className="row"><div className="grow"><h3>Veículos bloqueados temporariamente</h3><div className="muted">Bloqueios definidos após análise de checklist, sinistro ou decisão operacional.</div></div><button className="btn btn-s btn-sm" onClick={carregarBloqueados}>{carregandoBloqueados?'Atualizando...':'Atualizar'}</button></div>
+        </div>
+        {!carregandoBloqueados&&veiculosBloqueados.length===0&&<div className="card muted">Nenhum veículo bloqueado no momento.</div>}
+        {veiculosBloqueados.map(v=><div className="card row" key={v.itemId}><div className="grow"><b>{v.placa}</b><div className="muted">{v.motivo||'Motivo não informado'}{v.bloqueadoEm?' · '+fmtDataHora(v.bloqueadoEm):''}</div></div><button className="btn btn-p btn-sm" onClick={()=>{setLiberandoVeiculo(v);setObservacaoLiberacao('');}}>Liberar veículo</button></div>)}
       </React.Fragment>}
 
       {sub==='perguntas' && pode(user,'checklist.perguntas') && <React.Fragment>
@@ -3404,9 +3450,16 @@ function AdmChecklist({st, setSt, toast, user, foco}){
       {ver && !reprovando &&
         <ChecklistDetalhe ck={ver} perguntas={st.perguntas} onClose={()=>setVer(null)}
           acoes={ver.status==='pendente' &&
-            <div className="row">
-              <button className="btn btn-d grow" onClick={()=>setReprovando(ver)}>Reprovar</button>
-              <button className="btn btn-p grow" onClick={()=>decidir(ver,'aprovado')}>Aprovar</button>
+            <div>
+              <div className="card" style={{boxShadow:'none',border:'1px solid var(--linha)',marginBottom:10}}>
+                <label>Bloquear o veículo após aprovar?</label>
+                <select value={bloquearAoAprovar?'s':'n'} onChange={e=>setBloquearAoAprovar(e.target.value==='s')}><option value="n">Não</option><option value="s">Sim</option></select>
+                {bloquearAoAprovar&&<div style={{marginTop:10}}><label>Motivo do bloqueio</label><textarea rows="2" value={motivoBloqueio} onChange={e=>setMotivoBloqueio(e.target.value)} placeholder="Ex.: pneu com avaria impeditiva; aguardar manutenção."/></div>}
+              </div>
+              <div className="row">
+                <button className="btn btn-d grow" onClick={()=>setReprovando(ver)}>Reprovar</button>
+                <button className="btn btn-p grow" onClick={()=>decidir(ver,'aprovado','',{bloquearVeiculo:bloquearAoAprovar,motivoBloqueio})}>Aprovar</button>
+              </div>
             </div>}/>}
       {reprovando &&
         <Modal titulo="Reprovar check list" onClose={()=>setReprovando(null)}>
@@ -3414,6 +3467,11 @@ function AdmChecklist({st, setSt, toast, user, foco}){
           <textarea rows="3" value={motivoRep} onChange={e=>setMotivoRep(e.target.value)} placeholder="Ex.: foto do vazamento não permite identificar o local; refazer com foto mais próxima."/>
           <button className="btn btn-d" style={{width:'100%', marginTop:12}} onClick={()=>{ if(!motivoRep.trim()){toast('Informe o motivo da reprovação.'); return;} decidir(reprovando,'reprovado',motivoRep.trim()); }}>Confirmar reprovação</button>
         </Modal>}
+      {liberandoVeiculo&&<Modal titulo={'Liberar veículo '+liberandoVeiculo.placa} onClose={()=>setLiberandoVeiculo(null)}>
+        <div className="aviso-box">Motivo atual: {liberandoVeiculo.motivo||'Não informado'}</div>
+        <label>Observação da liberação</label><textarea rows="3" value={observacaoLiberacao} onChange={e=>setObservacaoLiberacao(e.target.value)} placeholder="Ex.: manutenção concluída e veículo conferido."/>
+        <button className="btn btn-p" style={{width:'100%',marginTop:12}} onClick={liberarVeiculo}>Confirmar liberação</button>
+      </Modal>}
     </React.Fragment>
   );
 }
