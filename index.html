@@ -1603,7 +1603,9 @@ function TelaChecklist({st, setSt, user, toast, inicioAgendamento, onInicioConsu
     if (ultimoKm && km < ultimoKm && !window.confirm('Atenção: a quilometragem informada ('+km+') é MENOR que a última registrada para esta placa ('+ultimoKm+'). Deseja continuar mesmo assim?')) return;
     for(const p of perguntasExibidas){
       const r = resps[p.id];
-      if(p.obrigatoria && (!r || !r.resp)){ toast('Responda: "'+p.texto.slice(0,40)+'..."'); return; }
+      // No checklist periódico completo, mantém a obrigatoriedade normal.
+      // No modo NC do agendamento, o motorista responde somente o(s) item(ns) com problema.
+      if(!modoOcorrenciaAgendamento && p.obrigatoria && (!r || !r.resp)){ toast('Responda: "'+p.texto.slice(0,40)+'..."'); return; }
       if(r && r.resp==='NC' && !r.obs){ toast('Descreva o problema do item não conforme: '+p.texto.slice(0,35)+'...'); return; }
       if(r && r.resp==='NC' && p.fotoNC && !r.foto){ toast('Anexe a foto da não conformidade: '+p.texto.slice(0,35)+'...'); return; }
     }
@@ -1628,7 +1630,7 @@ function TelaChecklist({st, setSt, user, toast, inicioAgendamento, onInicioConsu
         tipoChecklist: modoOcorrenciaAgendamento ? 'LEVE_NC_AGENDAMENTO' : (frotaSel==='leve' ? 'LEVE' : 'PESADA'),
         versaoFormulario: CONFIG.VERSAO,
         localizacao: loc,
-        respostas: perguntasExibidas.map(p=>{
+        respostas: (modoOcorrenciaAgendamento?perguntasExibidas.filter(p=>resps[p.id]?.resp):perguntasExibidas).map(p=>{
           const r = resps[p.id]||{};
           return {idPergunta:p.id, grupo:p.grupo, pergunta:p.texto,
                   resposta:r.resp||'NA', observacao:r.obs||'', possuiFoto:!!r.foto,
@@ -1773,7 +1775,7 @@ function TelaChecklist({st, setSt, user, toast, inicioAgendamento, onInicioConsu
               const r = resps[p.id]||{};
               return (
                 <div className="card perg" key={p.id}>
-                  <div className="txt">{p.texto} {p.obrigatoria && <span style={{color:'var(--erro)'}}>*</span>}</div>
+                  <div className="txt">{p.texto} {!modoOcorrenciaAgendamento && p.obrigatoria && <span style={{color:'var(--erro)'}}>*</span>}</div>
                   <div className="resp-btns">
                     <button className={'resp-btn c'+(r.resp==='C'?' on':'')} onClick={()=>setResp(p.id,'resp','C')}>Conforme</button>
                     <button className={'resp-btn nc'+(r.resp==='NC'?' on':'')} onClick={()=>setResp(p.id,'resp','NC')}>Não conforme</button>
@@ -2040,8 +2042,8 @@ function CalendarioAgenda({mes,eventos,onAbrir}){
 function FormAgendamento({base,item,onClose,onSalvo,toast,admin=false}){
   const agora=new Date(),pad=n=>String(n).padStart(2,'0'),local=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   const retorno=new Date(agora.getTime()+2*3600000);
-  const [form,setForm]=useState({veiculoId:item?.veiculoId||'',motorista:item?.motorista||'',origem:item?.origem||'Bocchi Logística',destino:item?.destino||'',saidaPrevista:item?.saidaPrevista?String(item.saidaPrevista).slice(0,16):local(agora),retornoPrevisto:item?.retornoPrevisto?String(item.retornoPrevisto).slice(0,16):local(retorno),possuiPassageiros:item?.possuiPassageiros||false,quantidadePassageiros:item?.quantidadePassageiros||0,observacao:item?.observacao||'',criadoManualmente:admin});
-  const [salvando,setSalvando]=useState(false);const salvar=async()=>{if(!form.veiculoId||!form.motorista.trim()||!form.destino.trim()){toast('Informe veículo, motorista e destino.');return}if(new Date(form.retornoPrevisto)<=new Date(form.saidaPrevista)){toast('O retorno deve ser posterior à saída.');return}setSalvando(true);try{if(item)await ApiService.alterarAgendamento(item.id,form);else await ApiService.criarAgendamento(form);toast(item?'Agendamento alterado.':'Agendamento criado.');await onSalvo();onClose()}catch(e){toast(e.message)}finally{setSalvando(false)}};
+  const [form,setForm]=useState({veiculoId:item?.veiculoId||'',motorista:item?.motorista||'',origem:item?.origem||'',destino:item?.destino||'',saidaPrevista:item?.saidaPrevista?String(item.saidaPrevista).slice(0,16):local(agora),retornoPrevisto:item?.retornoPrevisto?String(item.retornoPrevisto).slice(0,16):local(retorno),possuiPassageiros:item?.possuiPassageiros||false,quantidadePassageiros:item?.quantidadePassageiros||0,observacao:item?.observacao||'',criadoManualmente:admin});
+  const [salvando,setSalvando]=useState(false);const salvar=async()=>{if(!form.veiculoId||!form.motorista.trim()||!form.origem.trim()||!form.destino.trim()){toast('Informe veículo, motorista, origem e destino.');return}if(new Date(form.retornoPrevisto)<=new Date(form.saidaPrevista)){toast('O retorno deve ser posterior à saída.');return}setSalvando(true);try{if(item)await ApiService.alterarAgendamento(item.id,form);else await ApiService.criarAgendamento(form);toast(item?'Agendamento alterado.':'Agendamento criado.');await onSalvo();onClose()}catch(e){toast(e.message)}finally{setSalvando(false)}};
   return <Modal titulo={item?'Alterar agendamento':'Novo agendamento'} onClose={onClose} large><div className="agenda-modal-grid"><div><label>Saída prevista</label><input type="datetime-local" value={form.saidaPrevista} onChange={e=>setForm({...form,saidaPrevista:e.target.value})}/></div><div><label>Retorno previsto</label><input type="datetime-local" value={form.retornoPrevisto} onChange={e=>setForm({...form,retornoPrevisto:e.target.value})}/></div><div><label>Veículo compartilhado</label><select value={form.veiculoId} onChange={e=>setForm({...form,veiculoId:e.target.value})}><option value="">Selecionar...</option>{base.veiculos.map(v=><option key={v.id} value={v.id}>{v.placa} — {v.modelo||v.tipoModelo||'Sem modelo'}</option>)}</select></div><div><label>Motorista</label><input value={form.motorista} onChange={e=>setForm({...form,motorista:e.target.value})}/></div><div><label>Origem</label><input value={form.origem} onChange={e=>setForm({...form,origem:e.target.value})}/></div><div><label>Destino</label><input value={form.destino} onChange={e=>setForm({...form,destino:e.target.value})}/></div><div><label>Possui passageiros?</label><select value={form.possuiPassageiros?'sim':'nao'} onChange={e=>setForm({...form,possuiPassageiros:e.target.value==='sim',quantidadePassageiros:e.target.value==='sim'?form.quantidadePassageiros:0})}><option value="nao">Não</option><option value="sim">Sim</option></select></div>{form.possuiPassageiros&&<div><label>Quantidade</label><input type="number" min="1" value={form.quantidadePassageiros} onChange={e=>setForm({...form,quantidadePassageiros:Number(e.target.value)})}/></div>}<div style={{gridColumn:'1/-1'}}><label>Observação</label><textarea rows="3" value={form.observacao} onChange={e=>setForm({...form,observacao:e.target.value})}/></div></div><div className="agenda-acoes" style={{marginTop:14}}><button className="btn btn-g" onClick={onClose}>Voltar</button><button className="btn btn-p" disabled={salvando} onClick={salvar}>{salvando?'Salvando...':'Validar e salvar'}</button></div></Modal>
 }
 function DetalheAgendamento({item,admin,onClose,onAtualizar,toast,onAbrirChecklist}){
@@ -2067,11 +2069,7 @@ function TelaAgendamento({user,toast,onAbrirChecklist}){
   const agendadosFuturos=agendados.filter(a=>new Date(a.retornoPrevisto||a.saidaPrevista||0)>=agora);
   const dentroJanela=agendadosFuturos.filter(a=>agora>=new Date(new Date(a.saidaPrevista).getTime()-janelaRetirada*60000));
   const pendenciaAnterior=ativos.filter(a=>['AGENDADO','AGUARDANDO_RETIRADA'].includes(a.status)&&new Date(a.retornoPrevisto||0)<agora).sort((a,b)=>new Date(a.retornoPrevisto||0)-new Date(b.retornoPrevisto||0));
-  let proxima=null;
-  if(filtroRapido==='emuso')proxima=emUso[0]||null;
-  else if(filtroRapido==='pendencia')proxima=pendencias[0]||null;
-  else if(filtroRapido==='anterior')proxima=pendenciaAnterior[0]||null;
-  else proxima=pendencias[0]||emUso[0]||dentroJanela[0]||agendadosFuturos[0]||null;
+  const proxima=pendencias[0]||emUso[0]||dentroJanela[0]||agendadosFuturos[0]||pendenciaAnterior[0]||null;
   const configAcao=proxima?(
     proxima.status==='PENDENTE_FINALIZACAO'?{titulo:'Finalizar pendência',sub:'A devolução possui uma pendência e precisa ser concluída.',botao:'Concluir devolução'}:
     ['EM_USO','DEVOLUCAO_ATRASADA'].includes(proxima.status)?{titulo:'Devolver veículo',sub:proxima.status==='DEVOLUCAO_ATRASADA'?'O horário previsto de retorno já passou.':'A utilização está aberta e precisa ser encerrada ao retornar.',botao:'Devolver veículo'}:
@@ -2096,12 +2094,6 @@ function TelaAgendamento({user,toast,onAbrirChecklist}){
         <button className="btn btn-sm" style={{color:'#fff',border:'1px solid rgba(255,255,255,.35)'}} onClick={irHoje}>Hoje</button>
         <div className="agenda-view-toggle"><button className={modoVisao==='mes'?'on':''} onClick={()=>setModoVisao('mes')}>Mês</button><button className={modoVisao==='dia'?'on':''} onClick={()=>setModoVisao('dia')}>Dia</button></div>
       </div>
-    </div>
-    <div className="agenda-atalhos">
-      <button className={'agenda-atalho'+(filtroRapido==='proximo'?' on':'')} onClick={()=>setFiltroRapido('proximo')}>Próximo agendamento</button>
-      <button className={'agenda-atalho'+(filtroRapido==='emuso'?' on':'')} onClick={()=>setFiltroRapido('emuso')}>Em uso{emUso.length?` (${emUso.length})`:''}</button>
-      <button className={'agenda-atalho'+(filtroRapido==='pendencia'?' on':'')} onClick={()=>setFiltroRapido('pendencia')}>Minha pendência{pendencias.length?` (${pendencias.length})`:''}</button>
-      <button className={'agenda-atalho'+(filtroRapido==='anterior'?' on':'')} onClick={()=>setFiltroRapido('anterior')}>Pendência anterior{pendenciaAnterior.length?` (${pendenciaAnterior.length})`:''}</button>
     </div>
     {configAcao?<div className="agenda-proxima card">
       <div className="kicker"><span>●</span> Próxima ação</div><div className="titulo">{configAcao.titulo}</div><div className="muted" style={{fontSize:14}}>{configAcao.sub}</div>
