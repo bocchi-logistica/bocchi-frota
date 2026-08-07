@@ -245,7 +245,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 90000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '2.5.5-agendamentos'
+  VERSAO: '2.5.6-agendamentos'
 };
 
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
@@ -660,6 +660,7 @@ obterPerguntas(tipoFrota='TODAS', opcoes={}){
     const q = new URLSearchParams({tipoFrota:tipo});
     if(opcoes.placa) q.set('placa',opcoes.placa);
     if(opcoes.incluirInativas) q.set('incluirInativas','1');
+    if(opcoes.ignorarFrequencia) q.set('ignorarFrequencia','1');
     return this._req('GET','/perguntas?'+q.toString());
   },
 
@@ -1422,7 +1423,7 @@ function TelaChecklist({st, setSt, user, toast, inicioAgendamento, onInicioConsu
       setPerguntasAtivas([]);
       try{
         const tipo = frotaSel==='leve' ? 'LEVE' : 'PESADA';
-        const r = await ApiService.obterPerguntas(tipo,{placa:veiculo});
+        const r = await ApiService.obterPerguntas(tipo,{placa:veiculo,ignorarFrequencia:!!inicioAgendamento?.agendamentoId});
         if(!ativo) return;
         const lista = (r.perguntas || []).map(p=>({
           id:String(p.id),
@@ -1752,7 +1753,7 @@ function TelaChecklist({st, setSt, user, toast, inicioAgendamento, onInicioConsu
           </div>
         </div>
         <div className="aviso-box">Marque cada item. Em <b>não conforme (NC)</b>, descreva o problema e anexe foto quando o item pedir. Seu preenchimento é salvo automaticamente neste aparelho.</div>
-        {grupos.map(g=>
+        {(modoOcorrenciaAgendamento?(grupoOcorrencia?[grupoOcorrencia]:[]):grupos).map(g=>
           <React.Fragment key={g}>
             <h3 style={{margin:'6px 2px 0'}}>{g}</h3>
             {perguntasExibidas.filter(p=>p.grupo===g).map(p=>{
