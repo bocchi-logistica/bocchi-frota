@@ -2048,6 +2048,7 @@ function FormAgendamento({base,item,onClose,onSalvo,toast,admin=false}){
 }
 function DetalheAgendamento({item,admin,onClose,onAtualizar,toast,onAbrirChecklist}){
   const [acao,setAcao]=useState(''),[km,setKm]=useState(''),[motivo,setMotivo]=useState(''),[obs,setObs]=useState(''),[problema,setProblema]=useState(false),[salvando,setSalvando]=useState(false),[avisoRetirada,setAvisoRetirada]=useState(false);
+  const kmReferencia=Number(item.kmMinimoRetirada||0);
   const executar=async()=>{if(acao==='retirar'&&kmReferencia&&Number(km)<kmReferencia){toast(`KM inicial não pode ser menor que o último KM final registrado da placa (${kmReferencia}).`);return}setSalvando(true);try{let resposta=null;if(acao==='cancelar')resposta=await ApiService.cancelarAgendamento(item.id,motivo,obs);if(acao==='retirar')resposta=await ApiService.retirarAgendamento(item.id,{kmInicial:Number(km),possuiNC:problema,dataHora:new Date().toISOString()});if(acao==='finalizar')resposta=await ApiService.finalizarAgendamento(item.id,{kmFinal:Number(km),possuiProblema:problema,dataHora:new Date().toISOString()});if(acao==='corrigir')resposta=await ApiService.admCorrigirKmAgendamento(item.id,{kmInicial:Number(km),kmFinal:Number(obs||0),motivo});toast(resposta?.mensagem||'Ação concluída.');await onAtualizar();onClose();if(resposta?.abrirChecklist&&onAbrirChecklist)onAbrirChecklist({placa:resposta.placa||item.placa,agendamentoId:resposta.agendamentoId||item.id,etapa:resposta.etapa||acao,km:Number(resposta.km||km||0),modoChecklist:resposta.modoChecklist||'',ultimoChecklist:resposta.ultimoChecklist||null})}catch(e){toast(e.message)}finally{setSalvando(false)}};
   if(avisoRetirada&&!admin)return <Modal titulo="Orientações antes da retirada" onClose={()=>setAvisoRetirada(false)}>
     <div style={{display:'flex',flexDirection:'column',gap:12}}>
@@ -2074,7 +2075,6 @@ function DetalheAgendamento({item,admin,onClose,onAtualizar,toast,onAbrirCheckli
     </div>
   </Modal>;
   const aguardando=['AGENDADO','AGUARDANDO_RETIRADA'].includes(item.status),emUso=['EM_USO','DEVOLUCAO_ATRASADA','PENDENTE_FINALIZACAO'].includes(item.status);
-  const kmReferencia=Number(item.kmMinimoRetirada||0);
   const linhasDetalhe=aguardando
     ?[['Veículo',item.placa],['Motorista',item.motorista],['Previsto',fmtDataHora(item.saidaPrevista)+' até '+fmtDataHora(item.retornoPrevisto)],['Real',fmtDataHora(item.saidaReal)+' até '+fmtDataHora(item.retornoReal)],['Último KM registrado',kmReferencia||'—']]
     :[['Veículo',item.placa],['Motorista',item.motorista],['Previsto',fmtDataHora(item.saidaPrevista)+' até '+fmtDataHora(item.retornoPrevisto)],['Real',fmtDataHora(item.saidaReal)+' até '+fmtDataHora(item.retornoReal)],['KM',`${item.kmInicial||'—'} → ${item.kmFinal||'—'}`]];
