@@ -325,7 +325,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 90000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '2.7.4'
+  VERSAO: '2.7.5'
 };
 
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
@@ -2173,10 +2173,17 @@ function TelaAgendamento({user,toast,onAbrirChecklist}){
   const emUso=ativos.filter(a=>['EM_USO','DEVOLUCAO_ATRASADA'].includes(a.status)).sort((a,b)=>new Date(a.retornoPrevisto||0)-new Date(b.retornoPrevisto||0));
   const pendencias=ativos.filter(a=>a.status==='PENDENTE_FINALIZACAO').sort((a,b)=>new Date(a.retornoPrevisto||0)-new Date(b.retornoPrevisto||0));
   const agendados=ativos.filter(a=>['AGENDADO','AGUARDANDO_RETIRADA'].includes(a.status)).sort((a,b)=>new Date(a.saidaPrevista||0)-new Date(b.saidaPrevista||0));
-  const agendadosFuturos=agendados.filter(a=>new Date(a.retornoPrevisto||a.saidaPrevista||0)>=agora);
-  const dentroJanela=agendadosFuturos.filter(a=>agora>=new Date(new Date(a.saidaPrevista).getTime()-janelaRetirada*60000));
-  const pendenciaAnterior=ativos.filter(a=>['AGENDADO','AGUARDANDO_RETIRADA'].includes(a.status)&&new Date(a.retornoPrevisto||0)<agora).sort((a,b)=>new Date(a.retornoPrevisto||0)-new Date(b.retornoPrevisto||0));
-  const proxima=pendencias[0]||emUso[0]||dentroJanela[0]||agendadosFuturos[0]||pendenciaAnterior[0]||null;
+  // Prioridade operacional: qualquer agendamento cuja janela de retirada já abriu
+  // vem antes de um agendamento futuro, mesmo que RetornoPrevisto esteja vazio.
+  const liberadosRetirada=agendados.filter(a=>{
+    const inicio=new Date(a.saidaPrevista||0);
+    return Number.isFinite(inicio.getTime())&&agora>=new Date(inicio.getTime()-janelaRetirada*60000);
+  });
+  const agendadosFuturos=agendados.filter(a=>{
+    const inicio=new Date(a.saidaPrevista||0);
+    return Number.isFinite(inicio.getTime())&&inicio>agora;
+  });
+  const proxima=pendencias[0]||emUso[0]||liberadosRetirada[0]||agendadosFuturos[0]||null;
   const configAcao=proxima?(
     proxima.status==='PENDENTE_FINALIZACAO'?{titulo:'Finalizar pendência',sub:'A devolução possui uma pendência e precisa ser concluída.',botao:'Concluir devolução'}:
     ['EM_USO','DEVOLUCAO_ATRASADA'].includes(proxima.status)?{titulo:'Devolver veículo',sub:proxima.status==='DEVOLUCAO_ATRASADA'?'O horário previsto de retorno já passou.':'A utilização está aberta e precisa ser encerrada ao retornar.',botao:'Devolver veículo'}:
