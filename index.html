@@ -325,7 +325,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 90000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '2.7.6'
+  VERSAO: '2.7.7'
 };
 
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
@@ -1980,11 +1980,24 @@ function TelaSinistro({user,toast}){
 
       let lista=[];
       if(rv.status==='fulfilled') lista=(rv.value.veiculos||[]).filter(v=>v.placa);
-      const ag=ra.status==='fulfilled'?(ra.value?.agendamento||null):null;
+
+      // Sinistro em veículo compartilhado só pode usar a placa que está
+      // efetivamente retirada/em uso. Agendamento apenas previsto não aparece.
+      const agBruto=ra.status==='fulfilled'?(ra.value?.agendamento||null):null;
+      const statusAg=String(agBruto?.status||'').trim().toUpperCase();
+      const ag=['EM_USO','DEVOLUCAO_ATRASADA','PENDENTE_FINALIZACAO'].includes(statusAg)?agBruto:null;
       setAgendamentoAtual(ag);
 
-      // Compatibilidade: se o veículo agendado ainda não vier no /veiculos,
-      // mantém a placa disponível e a classifica como Frota Leve compartilhada.
+      // /veiculos continua genérico para os demais módulos. Aqui no Sinistro
+      // preservamos todos os veículos por vínculo e, entre os compartilhados,
+      // mostramos exclusivamente a placa do agendamento atualmente em uso.
+      lista=lista.filter(v=>
+        v.usoCompartilhado!==true ||
+        Boolean(ag?.placa&&normalizar(v.placa)===normalizar(ag.placa))
+      );
+
+      // Compatibilidade: se a placa retirada ainda não vier no /veiculos,
+      // inclui somente essa placa atual, nunca as demais compartilhadas.
       if(ag?.placa&&!lista.some(v=>normalizar(v.placa)===normalizar(ag.placa))){
         lista=[...lista,{itemId:ag.veiculoId||'',placa:ag.placa,tipoFrota:'FROTA LEVE',tipoModelo:ag.tipoModelo||'',modelo:ag.modelo||'',usoCompartilhado:true,principal:false}];
       }
@@ -1992,7 +2005,9 @@ function TelaSinistro({user,toast}){
 
       const principal=lista.find(v=>v.principal&&v.usoCompartilhado!==true);
       const agendado=ag?.placa?lista.find(v=>normalizar(v.placa)===normalizar(ag.placa)):null;
-      const preferido=principal||agendado||lista[0]||null;
+      // Se há veículo compartilhado em uso, ele é a primeira opção porque é
+      // o veículo que o usuário está conduzindo naquele momento.
+      const preferido=agendado||principal||lista[0]||null;
       setForm(f=>({...f,placa:lista.some(v=>v.placa===f.placa)?f.placa:(preferido?.placa||'')}));
 
       if(rh.status==='fulfilled')setHistorico(rh.value.sinistros||[]);
