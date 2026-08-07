@@ -245,7 +245,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 90000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '2.5.3-agendamentos'
+  VERSAO: '2.5.4-agendamentos'
 };
 
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
@@ -600,6 +600,7 @@ const ApiService = {
   retirarAgendamento(id,d){return this._req('POST','/agendamentos/'+encodeURIComponent(id)+'/retirar',d);},
   finalizarAgendamento(id,d){return this._req('POST','/agendamentos/'+encodeURIComponent(id)+'/finalizar',d);},
   contextoChecklistAgendamento(placa){return this._req('GET','/agendamentos/checklist-contexto?placa='+encodeURIComponent(placa));},
+  contextoAgendamentoAtual(){return this._req('GET','/agendamentos/contexto-atual');},
   admAgendamentos(de='',ate=''){const q=new URLSearchParams();if(de)q.set('de',de);if(ate)q.set('ate',ate);return this._req('GET','/admin/agendamentos'+(q.toString()?'?'+q.toString():''));},
   admCorrigirKmAgendamento(id,d){return this._req('POST','/admin/agendamentos/'+encodeURIComponent(id)+'/corrigir-km',d);},
   salvarParametrosAgendamento(d){return this._req('PATCH','/admin/agendamentos/parametros',d);},
@@ -1357,13 +1358,24 @@ function TelaChecklist({st, setSt, user, toast, inicioAgendamento, onInicioConsu
     setCarregandoVeiculos(true); setErroVeiculos('');
     ApiService.obterVeiculos().then(r=>{
       if(!ativo) return;
-      const lista=r.veiculos||[];
-      setVeiculosPermitidos(lista);
-      setVeiculo(atual=>lista.some(v=>v.placa===atual)?atual:(lista[0]?.placa||''));
+      const recebidos=r.veiculos||[];
+      if(inicioAgendamento?.placa){
+        const placaAlvo=String(inicioAgendamento.placa||'').trim().toUpperCase();
+        const cadastrado=recebidos.find(v=>String(v.placa||'').trim().toUpperCase()===placaAlvo);
+        const unico=cadastrado||{placa:placaAlvo,tipoFrota:'FROTA LEVE',frota:'FROTA LEVE',tipoModelo:'CARRO',tipo:'CARRO',usoCompartilhado:true,ativo:true};
+        setVeiculosPermitidos([unico]);
+        setVeiculo(unico.placa);
+      }else{
+        // No checklist aberto manualmente, veículos compartilhados de agendamento não podem ser escolhidos.
+        // Permanecem somente veículos efetivamente vinculados ao usuário (ex.: Frota Pesada).
+        const vinculados=recebidos.filter(v=>v.usoCompartilhado!==true);
+        setVeiculosPermitidos(vinculados);
+        setVeiculo(atual=>vinculados.some(v=>v.placa===atual)?atual:(vinculados[0]?.placa||''));
+      }
     }).catch(e=>{if(ativo){setVeiculosPermitidos([]);setVeiculo('');setErroVeiculos(e.message||'Não foi possível carregar os veículos.');}})
       .finally(()=>{if(ativo)setCarregandoVeiculos(false);});
     return ()=>{ativo=false;};
-  },[user.id,user.login]);
+  },[user.id,user.login,inicioAgendamento?.placa]);
 
   const normalizarStatusChecklist = valor=>{
     const s = String(valor||'pendente').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
@@ -1436,12 +1448,10 @@ function TelaChecklist({st, setSt, user, toast, inicioAgendamento, onInicioConsu
   },[frotaSel,veiculo]);
 
   useEffect(()=>{
-    if(!inicioAgendamento?.placa) return;
+    if(!inicioAgendamento?.placa||carregandoVeiculos) return;
     const placaAlvo=String(inicioAgendamento.placa).toUpperCase();
-    if(carregandoVeiculos) return;
     const encontrado=veiculosPermitidos.find(v=>String(v.placa||'').toUpperCase()===placaAlvo);
-    if(encontrado && veiculo!==encontrado.placa){ setVeiculo(encontrado.placa); return; }
-    if(!encontrado){ toast('O agendamento foi atualizado, mas a placa '+placaAlvo+' não está disponível no módulo de checklist.'); onInicioConsumido&&onInicioConsumido(); }
+    if(encontrado && veiculo!==encontrado.placa) setVeiculo(encontrado.placa);
   },[inicioAgendamento,carregandoVeiculos,veiculosPermitidos,veiculo]);
 
   useEffect(()=>{
@@ -1468,9 +1478,7 @@ function TelaChecklist({st, setSt, user, toast, inicioAgendamento, onInicioConsu
         setUltimoEnvio(null);
       }catch(e){
         if(ativo)toast('Não foi possível preparar o checklist do agendamento: '+(e.message||e));
-      }finally{
-        if(ativo&&onInicioConsumido)onInicioConsumido();
-      }
+      }finally{}
     };
     preparar();
     return()=>{ativo=false};
@@ -1541,6 +1549,7 @@ function TelaChecklist({st, setSt, user, toast, inicioAgendamento, onInicioConsu
   const cancelar = ()=>{
     setPreenchendo(false); setResps({}); setExtras({km:'',combustivel:''}); setModoOcorrenciaAgendamento(false); setGrupoOcorrencia(''); setUltimoChecklistValido(null);
     IDB.apagarRascunho(chaveRascunho).catch(()=>{}); setTemRascunho(false);
+    if(inicioAgendamento?.agendamentoId&&onInicioConsumido) onInicioConsumido();
   };
 
   const setResp=(pid, campo, v)=> setResps(r=>({...r, [pid]:{...(r[pid]||{}), [campo]:v}}));
@@ -1704,9 +1713,9 @@ function TelaChecklist({st, setSt, user, toast, inicioAgendamento, onInicioConsu
         <div className="aviso-box">Não há inspeções pendentes para este veículo neste período.</div>}
       {!preenchendo && carregandoVeiculos && <div className="aviso-box">Carregando veículo vinculado...</div>}
       {!preenchendo && erroVeiculos && <div className="erro-box">Falha ao carregar veículos: {erroVeiculos}</div>}
-      {!preenchendo && !carregandoVeiculos && !erroVeiculos && veiculosPermitidos.length===0 && <div className="aviso-box">Nenhum veículo ativo está compartilhado ou vinculado ao seu usuário.</div>}
+      {!preenchendo && !carregandoVeiculos && !erroVeiculos && veiculosPermitidos.length===0 && !inicioAgendamento?.placa && <div className="card muted" style={{textAlign:'center',padding:'24px 16px'}}>Nenhum checklist pendente no momento.</div>}
 
-      {!preenchendo && !deHoje &&
+      {!preenchendo && veiculosPermitidos.length>0 && !deHoje &&
         <div className="card" style={{textAlign:'center', padding:'26px 16px'}}>
           <div style={{fontSize:34}}>📋</div>
           <h3 style={{margin:'6px 0 2px'}}>{reprovadoHoje ? 'Check list reprovado — refazer' : 'Check list de hoje pendente'}</h3>
@@ -1714,7 +1723,7 @@ function TelaChecklist({st, setSt, user, toast, inicioAgendamento, onInicioConsu
           <div className="muted" style={{marginBottom:14}}>Inspeção pendente — {dataBR(HOJE)}</div>
           <button className="btn btn-p" disabled={carregandoVeiculos||!!erroVeiculos||!veiculo} onClick={abrirFormulario}>{reprovadoHoje?'Refazer check list':(temRascunho?'Continuar rascunho':'Preencher agora')}</button>
         </div>}
-      {deHoje &&
+      {veiculosPermitidos.length>0 && deHoje &&
         <div className="card row">
           <div className="grow"><b>Check list de hoje enviado</b><div className="muted">{dataBR(HOJE)} · {deHoje.placa}</div></div>
           <StatusTag s={deHoje.status}/>
@@ -1729,10 +1738,9 @@ function TelaChecklist({st, setSt, user, toast, inicioAgendamento, onInicioConsu
         </div>}
         <div className="card">
           <label>Veículo</label>
-          <select value={veiculo} disabled={!!inicioAgendamento?.placa} onChange={e=>{setVeiculo(e.target.value); setResps({});}}>
-            {(inicioAgendamento?.placa?veiculosPermitidos.filter(f=>String(f.placa||'').toUpperCase()===String(inicioAgendamento.placa||'').toUpperCase()):veiculosPermitidos).map(f=><option key={f.placa} value={f.placa}>{f.placa} — {f.tipoModelo||f.tipo} ({normalizarTexto(f.tipoFrota||f.frota).includes('leve')?'frota leve':'frota pesada'})</option>)}
-          </select>
-          {inicioAgendamento?.placa&&<div className="muted" style={{marginTop:6}}>Veículo definido pelo agendamento. Não é possível trocar a placa nesta etapa.</div>}
+          {inicioAgendamento?.placa ? <><input value={veiculo} readOnly/><div className="muted" style={{marginTop:6}}>Placa definida automaticamente pelo agendamento.</div></> : <select value={veiculo} onChange={e=>{setVeiculo(e.target.value); setResps({});}}>
+            {veiculosPermitidos.map(f=><option key={f.placa} value={f.placa}>{f.placa} — {f.tipoModelo||f.tipo} ({normalizarTexto(f.tipoFrota||f.frota).includes('leve')?'frota leve':'frota pesada'})</option>)}
+          </select>}
           <div className="form-grid" style={{marginTop:12}}>
             <div><label>KM atual *</label><input type="number" inputMode="numeric" value={extras.km} onChange={e=>setExtras({...extras, km:e.target.value})} placeholder="Ex.: 158420"/></div>
             {frotaSel==='leve' && !modoOcorrenciaAgendamento &&
@@ -1859,6 +1867,7 @@ function ChecklistDetalhe({ck, perguntas, onClose, acoes, permitirImpressao=true
 /* ================= MOTORISTA: SINISTRO ================= */
 function TelaSinistro({user,toast}){
   const [veiculos,setVeiculos]=useState([]);
+  const [agendamentoAtual,setAgendamentoAtual]=useState(null);
   const [historico,setHistorico]=useState([]);
   const [carregando,setCarregando]=useState(true);
   const [enviando,setEnviando]=useState(false);
@@ -1873,11 +1882,21 @@ function TelaSinistro({user,toast}){
   const carregar=async()=>{
     setCarregando(true);
     try{
-      const [rv,rh,rc]=await Promise.allSettled([ApiService.obterVeiculos(),ApiService.obterMeusSinistros(),ApiService.obterContatoSinistros()]);
+      const buscaVeiculo=user?.perms?.agendamentos?ApiService.contextoAgendamentoAtual():ApiService.obterVeiculos();
+      const [rv,rh,rc]=await Promise.allSettled([buscaVeiculo,ApiService.obterMeusSinistros(),ApiService.obterContatoSinistros()]);
       if(rv.status==='fulfilled'){
-        const lista=rv.value.veiculos||[];
-        setVeiculos(lista);
-        setForm(f=>({...f,placa:f.placa||lista[0]?.placa||''}));
+        if(user?.perms?.agendamentos){
+          const ag=rv.value?.agendamento||null;
+          setAgendamentoAtual(ag);
+          const lista=ag?.placa?[{placa:ag.placa,modelo:ag.modelo||'',itemId:ag.veiculoId||''}]:[];
+          setVeiculos(lista);
+          setForm(f=>({...f,placa:ag?.placa||''}));
+        }else{
+          const lista=(rv.value.veiculos||[]).filter(v=>v.usoCompartilhado!==true);
+          setAgendamentoAtual(null);
+          setVeiculos(lista);
+          setForm(f=>({...f,placa:lista.some(v=>v.placa===f.placa)?f.placa:(lista[0]?.placa||'')}));
+        }
       }
       if(rh.status==='fulfilled')setHistorico(rh.value.sinistros||[]);
       if(rc.status==='fulfilled'&&rc.value?.contato){
@@ -1951,10 +1970,11 @@ function TelaSinistro({user,toast}){
       </div>
       <div className="muted" style={{marginTop:8}}>Se a polícia atender o local, informe o número do B.O. Caso não haja atendimento presencial, envie os dados e evidências normalmente para que a logística avalie a abertura do B.O. online.</div>
     </div>
+    {user?.perms?.agendamentos&&!carregando&&!agendamentoAtual&&<div className="aviso-box">Nenhum veículo está agendado/em uso para você neste período. O sinistro só pode ser registrado para a placa do agendamento atual.</div>}
     <div className="card">
       <h3 style={{marginBottom:12}}>Dados do ocorrido</h3>
       <div className="form-grid">
-        <div><label>Placa *</label><select value={form.placa} onChange={e=>setForm({...form,placa:e.target.value})}><option value="">Selecionar...</option>{veiculos.map(v=><option key={v.itemId||v.placa}>{v.placa}</option>)}</select></div>
+        <div><label>Placa *</label>{user?.perms?.agendamentos?<input value={form.placa} readOnly placeholder="Nenhum veículo agendado neste período"/>:<select value={form.placa} onChange={e=>setForm({...form,placa:e.target.value})}><option value="">Selecionar...</option>{veiculos.map(v=><option key={v.itemId||v.placa}>{v.placa}</option>)}</select>}{user?.perms?.agendamentos&&agendamentoAtual&&<div className="muted" style={{marginTop:5}}>Placa definida pelo agendamento atual: {agendamentoAtual.codigo||''}.</div>}</div>
         <div><label>Motorista *</label><input value={form.motoristaNome} onChange={e=>setForm({...form,motoristaNome:e.target.value})}/></div>
         <div><label>Telefone</label><input value={form.motoristaTelefone} onChange={e=>setForm({...form,motoristaTelefone:e.target.value})} placeholder="(54) 99999-9999"/></div>
         <div><label>Data e hora *</label><input type="datetime-local" value={form.dataHoraOcorrido} onChange={e=>setForm({...form,dataHoraOcorrido:e.target.value})}/></div>
@@ -1972,7 +1992,7 @@ function TelaSinistro({user,toast}){
       <div style={{marginTop:12}}><label>Anexos</label><input type="file" multiple accept="image/*,.pdf,.doc,.docx,video/*" onChange={e=>lerArquivos(e.target.files||[])}/><div className="muted">Até 12 arquivos, 4 MB por arquivo e 18 MB no total.</div>
         {arquivos.map((a,i)=><div className="sinistro-arquivo" key={a.nome+i}><span>📎</span><span className="grow">{a.nome}</span><button className="btn btn-g btn-sm" onClick={()=>setArquivos(v=>v.filter((_,j)=>j!==i))}>Remover</button></div>)}
       </div>
-      <button className="btn btn-d" style={{width:'100%',marginTop:14}} disabled={enviando||carregando} onClick={enviar}>{enviando?'Enviando e notificando...':'Enviar sinistro'}</button>
+      <button className="btn btn-d" style={{width:'100%',marginTop:14}} disabled={enviando||carregando||(user?.perms?.agendamentos&&!agendamentoAtual)} onClick={enviar}>{enviando?'Enviando e notificando...':'Enviar sinistro'}</button>
     </div>
     {historico.length>0&&<div className="card"><h3 style={{marginBottom:10}}>Meus registros</h3>{historico.map(s=><div className="linha-item" key={s.id}><span><b>{s.numeroSinistro}</b><span className="muted" style={{display:'block'}}>{dataBR(String(s.dataHoraOcorrido||'').slice(0,10))} · {s.placa} · {s.tipoSinistro||'Sinistro'}</span></span><StatusTag s={s.statusSinistro}/></div>)}</div>}
   </React.Fragment>;
@@ -2012,7 +2032,7 @@ function FormAgendamento({base,item,onClose,onSalvo,toast,admin=false}){
 }
 function DetalheAgendamento({item,admin,onClose,onAtualizar,toast,onAbrirChecklist}){
   const [acao,setAcao]=useState(''),[km,setKm]=useState(''),[motivo,setMotivo]=useState(''),[obs,setObs]=useState(''),[problema,setProblema]=useState(false),[salvando,setSalvando]=useState(false);
-  const executar=async()=>{setSalvando(true);try{let resposta=null;if(acao==='cancelar')resposta=await ApiService.cancelarAgendamento(item.id,motivo,obs);if(acao==='retirar')resposta=await ApiService.retirarAgendamento(item.id,{kmInicial:Number(km),possuiNC:problema,dataHora:new Date().toISOString()});if(acao==='finalizar')resposta=await ApiService.finalizarAgendamento(item.id,{kmFinal:Number(km),possuiProblema:problema,dataHora:new Date().toISOString()});if(acao==='corrigir')resposta=await ApiService.admCorrigirKmAgendamento(item.id,{kmInicial:Number(km),kmFinal:Number(obs||0),motivo});toast(resposta?.mensagem||'Ação concluída.');await onAtualizar();onClose();if(resposta?.abrirChecklist&&onAbrirChecklist)onAbrirChecklist({placa:resposta.placa||item.placa,agendamentoId:item.id,etapa:acao,km:Number(resposta.km||km||0)})}catch(e){toast(e.message)}finally{setSalvando(false)}};
+  const executar=async()=>{setSalvando(true);try{let resposta=null;if(acao==='cancelar')resposta=await ApiService.cancelarAgendamento(item.id,motivo,obs);if(acao==='retirar')resposta=await ApiService.retirarAgendamento(item.id,{kmInicial:Number(km),possuiNC:problema,dataHora:new Date().toISOString()});if(acao==='finalizar')resposta=await ApiService.finalizarAgendamento(item.id,{kmFinal:Number(km),possuiProblema:problema,dataHora:new Date().toISOString()});if(acao==='corrigir')resposta=await ApiService.admCorrigirKmAgendamento(item.id,{kmInicial:Number(km),kmFinal:Number(obs||0),motivo});toast(resposta?.mensagem||'Ação concluída.');await onAtualizar();onClose();if(resposta?.abrirChecklist&&onAbrirChecklist)onAbrirChecklist({placa:resposta.placa||item.placa,agendamentoId:resposta.agendamentoId||item.id,etapa:resposta.etapa||acao,km:Number(resposta.km||km||0),modoChecklist:resposta.modoChecklist||'',ultimoChecklist:resposta.ultimoChecklist||null})}catch(e){toast(e.message)}finally{setSalvando(false)}};
   const aguardando=['AGENDADO','AGUARDANDO_RETIRADA'].includes(item.status),emUso=['EM_USO','DEVOLUCAO_ATRASADA','PENDENTE_FINALIZACAO'].includes(item.status);
   return <Modal titulo={`${item.origem} → ${item.destino}`} onClose={onClose}><div className="row"><AgendaStatus status={item.status}/><span className="muted">{item.codigo}</span></div><div className="divider"/>{[['Veículo',item.placa],['Motorista',item.motorista],['Previsto',fmtDataHora(item.saidaPrevista)+' até '+fmtDataHora(item.retornoPrevisto)],['Real',fmtDataHora(item.saidaReal)+' até '+fmtDataHora(item.retornoReal)],['KM',`${item.kmInicial||'—'} → ${item.kmFinal||'—'}`]].map(([l,v])=><div className="linha-item" key={l}><b>{l}</b><span>{v}</span></div>)}{!acao&&<div className="agenda-acoes" style={{marginTop:14}}>{aguardando&&<><button className="btn btn-d" onClick={()=>setAcao('cancelar')}>Cancelar</button><button className="btn btn-p" onClick={()=>setAcao('retirar')}>{admin?'Retirar manualmente':'Retirar veículo'}</button></>}{emUso&&<button className="btn btn-p" onClick={()=>setAcao('finalizar')}>{admin?'Finalizar manualmente':'Devolver veículo'}</button>}{admin&&item.status==='FINALIZADO'&&<button className="btn btn-s" onClick={()=>setAcao('corrigir')}>Corrigir KM</button>}</div>}{acao&&<div style={{marginTop:14}}>{acao==='cancelar'?<><label>Motivo obrigatório</label><select value={motivo} onChange={e=>setMotivo(e.target.value)}><option value="">Selecionar...</option>{['VIAGEM_CANCELADA','ALTERACAO_PROGRAMACAO','VEICULO_NAO_NECESSARIO','MOTORISTA_INDISPONIVEL','VEICULO_INDISPONIVEL','ERRO_AGENDAMENTO','DUPLICIDADE','OUTRO'].map(x=><option key={x}>{x}</option>)}</select><label style={{marginTop:8}}>Observação</label><textarea value={obs} onChange={e=>setObs(e.target.value)}/></>:<><label>{acao==='finalizar'?'KM final':'KM inicial'}</label><input type="number" value={km} onChange={e=>setKm(e.target.value)}/>{acao==='corrigir'&&<><label style={{marginTop:8}}>KM final correto</label><input type="number" value={obs} onChange={e=>setObs(e.target.value)}/><label style={{marginTop:8}}>Motivo</label><textarea value={motivo} onChange={e=>setMotivo(e.target.value)}/></>}{acao!=='corrigir'&&<div style={{marginTop:8}}><label>{acao==='retirar'?'Possui alguma NC?':'Houve problema?'}</label><select value={problema?'sim':'nao'} onChange={e=>setProblema(e.target.value==='sim')}><option value="nao">Não</option><option value="sim">Sim</option></select></div>}</>}<div className="agenda-acoes" style={{marginTop:12}}><button className="btn btn-g" onClick={()=>setAcao('')}>Voltar</button><button className="btn btn-p" disabled={salvando||acao==='cancelar'&&!motivo} onClick={executar}>Confirmar</button></div></div>}</Modal>
 }
@@ -2020,7 +2040,7 @@ function TelaAgendamento({user,toast,onAbrirChecklist}){
   const [base,setBase]=useState({veiculos:[],agendamentos:[],parametros:{}}),[carregando,setCarregando]=useState(true),[mes,setMes]=useState(new Date()),[form,setForm]=useState(false),[detalhe,setDetalhe]=useState(null),[visual,setVisual]=useState('todos');
   const carregar=async()=>{setCarregando(true);try{const r=await ApiService.obterAgendamentos();setBase({veiculos:r.veiculos||[],agendamentos:r.agendamentos||[],parametros:r.parametros||{}})}catch(e){toast(e.message)}finally{setCarregando(false)}};useEffect(()=>{carregar()},[]);
   const eventos=base.agendamentos.filter(a=>visual==='todos'||a.solicitanteId===String(user.id));
-  return <>{carregando?<div className="card muted">Carregando agenda...</div>:<><div className="agenda-top"><div className="agenda-filtros"><div><label>Veículo</label><select><option>Todos os veículos</option>{base.veiculos.map(v=><option key={v.id}>{v.placa} — {v.modelo||v.tipoModelo||'Sem modelo'}</option>)}</select></div><div><label>Visualizar</label><select value={visual} onChange={e=>setVisual(e.target.value)}><option value="todos">Todos os agendamentos</option><option value="meus">Meus agendamentos</option></select></div></div><div className="row" style={{marginTop:10}}><button className="btn btn-sm" style={{color:'#fff'}} onClick={()=>setMes(new Date(mes.getFullYear(),mes.getMonth()-1,1))}>‹</button><h2 className="grow">{mes.toLocaleDateString('pt-BR',{month:'short',year:'2-digit'})}</h2><button className="btn btn-sm" style={{color:'#fff'}} onClick={()=>setMes(new Date(mes.getFullYear(),mes.getMonth()+1,1))}>›</button><button className="btn btn-sm" style={{color:'#fff'}} onClick={()=>setMes(new Date())}>Hoje</button></div></div><CalendarioAgenda mes={mes} eventos={eventos} onAbrir={setDetalhe}/><button className="btn btn-p" style={{position:'fixed',right:22,bottom:86,width:58,height:58,borderRadius:'50%',fontSize:28,zIndex:25}} onClick={()=>setForm(true)}>+</button></>}{form&&<FormAgendamento base={base} onClose={()=>setForm(false)} onSalvo={carregar} toast={toast}/>} {detalhe&&<DetalheAgendamento item={detalhe} onClose={()=>setDetalhe(null)} onAtualizar={carregar} toast={toast}/>}</>
+  return <>{carregando?<div className="card muted">Carregando agenda...</div>:<><div className="agenda-top"><div className="agenda-filtros"><div><label>Veículo</label><select><option>Todos os veículos</option>{base.veiculos.map(v=><option key={v.id}>{v.placa} — {v.modelo||v.tipoModelo||'Sem modelo'}</option>)}</select></div><div><label>Visualizar</label><select value={visual} onChange={e=>setVisual(e.target.value)}><option value="todos">Todos os agendamentos</option><option value="meus">Meus agendamentos</option></select></div></div><div className="row" style={{marginTop:10}}><button className="btn btn-sm" style={{color:'#fff'}} onClick={()=>setMes(new Date(mes.getFullYear(),mes.getMonth()-1,1))}>‹</button><h2 className="grow">{mes.toLocaleDateString('pt-BR',{month:'short',year:'2-digit'})}</h2><button className="btn btn-sm" style={{color:'#fff'}} onClick={()=>setMes(new Date(mes.getFullYear(),mes.getMonth()+1,1))}>›</button><button className="btn btn-sm" style={{color:'#fff'}} onClick={()=>setMes(new Date())}>Hoje</button></div></div><CalendarioAgenda mes={mes} eventos={eventos} onAbrir={setDetalhe}/><button className="btn btn-p" style={{position:'fixed',right:22,bottom:86,width:58,height:58,borderRadius:'50%',fontSize:28,zIndex:25}} onClick={()=>setForm(true)}>+</button></>}{form&&<FormAgendamento base={base} onClose={()=>setForm(false)} onSalvo={carregar} toast={toast}/>} {detalhe&&<DetalheAgendamento item={detalhe} onClose={()=>setDetalhe(null)} onAtualizar={carregar} toast={toast} onAbrirChecklist={onAbrirChecklist}/>}</>
 }
 function AdmAgendamentos({user,toast}){
   const podeAgenda=pode(user,'agendamentos.agenda'),podeMonitor=pode(user,'agendamentos.monitoramento'),podeRel=pode(user,'agendamentos.relatorio'),podeParam=pode(user,'agendamentos.parametros');
@@ -2130,9 +2150,9 @@ function MotoristaApp({st, setSt, user, onSair, toast}){
         {aba==='cargas' && !carregandoCargas && <TelaCargas st={st} setSt={setSt} user={user} dados={dados} toast={toast}/>}
         {aba==='prem' && carregandoPremiacao && <div className="card muted">Carregando metas, apuração e descontos do SharePoint...</div>}
         {aba==='prem' && !carregandoPremiacao && <TelaPremiacao st={st} user={user} dados={dados}/>}
-        {aba==='check' && <TelaChecklist st={st} setSt={setSt} user={user} toast={toast}/>}
+        {aba==='check' && <TelaChecklist st={st} setSt={setSt} user={user} toast={toast} inicioAgendamento={inicioChecklistAgendamento} onInicioConsumido={()=>{setInicioChecklistAgendamento(null);setAba('agendamento')}} onConcluidoAgendamento={()=>{setInicioChecklistAgendamento(null);setAba('agendamento')}}/>}
         {aba==='sinistro' && <TelaSinistro user={user} toast={toast}/>}
-        {aba==='agendamento' && <TelaAgendamento user={user} toast={toast}/>}
+        {aba==='agendamento' && <TelaAgendamento user={user} toast={toast} onAbrirChecklist={abrirChecklistDoAgendamento}/>}
         <div className="card" style={{padding:12, marginTop:2}}>
           <div className="row">
             <div className="grow">
