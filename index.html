@@ -187,7 +187,46 @@ th.td-num{text-align:right}
 .agenda-proxima-info b{display:block;font-size:11px;text-transform:uppercase;color:var(--cinza);margin-bottom:3px}
 .agenda-dia-lista{display:flex;flex-direction:column;gap:8px}
 .agenda-dia-card{padding:13px 14px;border-left:5px solid var(--folha);background:#fff;border-radius:12px;box-shadow:var(--sombra);text-align:left;width:100%}
-@media(max-width:620px){.agenda-top{padding:12px 10px}.agenda-top-nav{gap:5px}.agenda-top-mes{font-size:22px}.agenda-view-toggle{margin-left:0}.agenda-view-toggle button{padding:7px 10px}.agenda-cal{font-size:11px}.agenda-dia{min-height:75px;padding:3px}.agenda-evento{font-size:8.5px;padding:4px}.agenda-modal-grid{grid-template-columns:1fr}.agenda-proxima-grid{grid-template-columns:1fr 1fr}.agenda-proxima .titulo{font-size:24px}.agenda-view-toggle button{padding:7px 10px}}@media(max-width:390px){.agenda-proxima-grid{grid-template-columns:1fr}}
+
+@media(min-width:900px){
+  .mshell.mshell-agendamento{max-width:780px}
+  .mshell.mshell-agendamento .mtabs{max-width:780px}
+  .mshell.mshell-agendamento .agenda-dia{min-height:100px}
+  .mshell.mshell-agendamento .agenda-evento{
+    font-size:10px;
+    line-height:1.2;
+    padding:5px 6px;
+  }
+  .mshell.mshell-agendamento .agenda-evento b{
+    display:block;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+}
+
+@media(max-width:620px){
+  .agenda-top{padding:12px 10px}
+  .agenda-top-nav{display:grid;grid-template-columns:44px minmax(0,1fr) 44px;gap:7px 8px;align-items:center}
+  .agenda-top-nav>button:nth-child(1){grid-column:1;grid-row:1;width:100%;padding-left:0;padding-right:0}
+  .agenda-top-mes{grid-column:2;grid-row:1;font-size:20px;min-width:0;text-align:center;overflow:hidden;text-overflow:ellipsis}
+  .agenda-top-nav>button:nth-child(3){grid-column:3;grid-row:1;width:100%;padding-left:0;padding-right:0}
+  .agenda-top-spacer{display:none}
+  .agenda-top-nav>button:nth-child(5){grid-column:1;grid-row:2;width:100%;padding:8px 4px}
+  .agenda-view-toggle{grid-column:2/4;grid-row:2;margin-left:0;width:100%;display:grid;grid-template-columns:1fr 1fr;gap:5px}
+  .agenda-view-toggle button{width:100%;padding:8px 6px}
+  .agenda-cal{font-size:11px}
+  .agenda-dia{min-height:75px;padding:3px}
+  .agenda-evento{font-size:8.5px;padding:4px}
+  .agenda-modal-grid{grid-template-columns:1fr}
+  .agenda-proxima-grid{grid-template-columns:1fr 1fr}
+  .agenda-proxima .titulo{font-size:24px}
+}
+@media(max-width:390px){
+  .agenda-proxima-grid{grid-template-columns:1fr}
+  .agenda-filtros{grid-template-columns:1fr 1fr;gap:7px}
+  .agenda-filtros select{font-size:14px;padding-left:10px;padding-right:26px}
+}
 
 /* ---------- MODAL / TOAST ---------- */
 .overlay{position:fixed; inset:0; background:rgba(20,30,24,.55); display:flex; align-items:flex-end; justify-content:center; z-index:100; padding:0}
@@ -223,7 +262,7 @@ th.td-num{text-align:right}
   .perfil-subtelas-grid{grid-template-columns:1fr}
   .perfil-area-cabecalho{padding:13px 12px}
 }
-.toast{position:fixed; bottom:88px; left:50%; transform:translateX(-50%); background:var(--tinta); color:#fff; padding:11px 18px; border-radius:99px; font-weight:600; font-size:13.5px; z-index:200; box-shadow:var(--sombra); white-space:nowrap; max-width:92vw; overflow:hidden; text-overflow:ellipsis}
+.toast{position:fixed;bottom:88px;left:50%;transform:translateX(-50%);background:var(--tinta);color:#fff;padding:11px 18px;border-radius:14px;font-weight:600;font-size:13.5px;line-height:1.35;z-index:200;box-shadow:var(--sombra);width:max-content;max-width:calc(100vw - 32px);white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere;text-align:center}
 .aviso-box{background:var(--aviso); border-radius:10px; padding:10px 12px; font-size:12.5px; color:#6B5200}
 .erro-box{background:var(--erro-claro); border-radius:10px; padding:10px 12px; font-size:13px; color:var(--erro)}
 @media(prefers-reduced-motion:reduce){*{transition:none!important; animation:none!important}}
@@ -2115,6 +2154,19 @@ function TelaAgendamento({user,toast,onAbrirChecklist}){
   const isoDia=d=>{const z=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`};
   const eventosDia=eventos.filter(a=>String(a.saidaPrevista||'').slice(0,10)===isoDia(diaSelecionado));
   const moverDia=delta=>{const d=new Date(diaSelecionado);d.setDate(d.getDate()+delta);setDiaSelecionado(d);setMes(d)};
+  const mesmaPlacaLocal=(a,b)=>{
+    if(a?.veiculoId&&b?.veiculoId&&String(a.veiculoId)===String(b.veiculoId))return true;
+    const pa=String(a?.placa||'').replace(/[^A-Z0-9]/gi,'').toUpperCase();
+    const pb=String(b?.placa||'').replace(/[^A-Z0-9]/gi,'').toUpperCase();
+    return Boolean(pa&&pb&&pa===pb);
+  };
+  const detalheAtual=detalhe?(()=>{
+    const refs=base.agendamentos
+      .filter(a=>String(a.id)!==String(detalhe.id)&&Number(a.kmFinal)>0&&(a.status==='FINALIZADO'||a.retornoReal)&&mesmaPlacaLocal(a,detalhe))
+      .map(a=>Number(a.kmFinal)||0);
+    const local=refs.length?Math.max(...refs):0;
+    return {...detalhe,kmMinimoRetirada:Math.max(Number(detalhe.kmMinimoRetirada||0),local)};
+  })():null;
   return <>{carregando?<div className="card muted">Carregando agenda...</div>:<>
     <div className="agenda-top">
       <div className="agenda-filtros">
@@ -2123,7 +2175,7 @@ function TelaAgendamento({user,toast,onAbrirChecklist}){
       </div>
       <div className="agenda-top-nav">
         <button className="btn btn-sm" style={{color:'#fff'}} onClick={()=>{if(modoVisao==='dia')moverDia(-1);else setMes(new Date(mes.getFullYear(),mes.getMonth()-1,1))}}>‹</button>
-        <div className="agenda-top-mes">{modoVisao==='dia'?diaSelecionado.toLocaleDateString('pt-BR',{day:'2-digit',month:'short',year:'2-digit'}):mes.toLocaleDateString('pt-BR',{month:'short',year:'2-digit'})}</div>
+        <div className="agenda-top-mes">{modoVisao==='dia'?diaSelecionado.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit'}):(()=>{const m=mes.toLocaleDateString('pt-BR',{month:'short'}).replace('.','');return m.charAt(0).toUpperCase()+m.slice(1)+'/'+String(mes.getFullYear()).slice(-2)})()}</div>
         <button className="btn btn-sm" style={{color:'#fff'}} onClick={()=>{if(modoVisao==='dia')moverDia(1);else setMes(new Date(mes.getFullYear(),mes.getMonth()+1,1))}}>›</button>
         <div className="agenda-top-spacer"/>
         <button className="btn btn-sm" style={{color:'#fff',border:'1px solid rgba(255,255,255,.35)'}} onClick={irHoje}>Hoje</button>
@@ -2140,7 +2192,7 @@ function TelaAgendamento({user,toast,onAbrirChecklist}){
       {eventosDia.length?eventosDia.sort((a,b)=>new Date(a.saidaPrevista)-new Date(b.saidaPrevista)).map(e=>{const c=corAgendaVeiculo(e.placa);return <button key={e.id} className="agenda-dia-card" style={{borderLeftColor:c.b}} onClick={()=>setDetalhe(e)}><div className="row"><div className="grow"><b>{String(e.saidaPrevista||'').slice(11,16)} · {e.placa}</b><div className="muted">{e.origem} → {e.destino}</div></div><AgendaStatus status={e.status}/></div></button>}):<div className="card muted">Nenhum agendamento neste dia.</div>}
     </div>}
     <button className="btn btn-p" style={{position:'fixed',right:22,bottom:86,width:58,height:58,borderRadius:'50%',fontSize:28,zIndex:25}} onClick={()=>setForm(true)}>+</button>
-  </>}{form&&<FormAgendamento base={base} onClose={()=>setForm(false)} onSalvo={carregar} toast={toast}/>} {detalhe&&<DetalheAgendamento item={detalhe} onClose={()=>setDetalhe(null)} onAtualizar={carregar} toast={toast} onAbrirChecklist={onAbrirChecklist}/>}</>
+  </>}{form&&<FormAgendamento base={base} onClose={()=>setForm(false)} onSalvo={carregar} toast={toast}/>} {detalheAtual&&<DetalheAgendamento item={detalheAtual} onClose={()=>setDetalhe(null)} onAtualizar={carregar} toast={toast} onAbrirChecklist={onAbrirChecklist}/>}</>
 }
 function AdmAgendamentos({user,toast}){
   const podeAgenda=pode(user,'agendamentos.agenda'),podeMonitor=pode(user,'agendamentos.monitoramento'),podeRel=pode(user,'agendamentos.relatorio'),podeParam=pode(user,'agendamentos.parametros');
@@ -2246,7 +2298,7 @@ function MotoristaApp({st, setSt, user, onSair, toast}){
     }
   };
   return (
-    <div className="mshell">
+    <div className={'mshell'+(aba==='agendamento'?' mshell-agendamento':'')}>
       <div className="mtop row">
         <div className="grow">
           <div className="nome">{primeiroNome(user.nome)}</div>
@@ -4563,7 +4615,7 @@ function App(){
   const [user,setUser]=useState(null);
   const [toastMsg,setToastMsg]=useState('');
   const tRef = useRef(null);
-  const toast=(m)=>{ setToastMsg(m); clearTimeout(tRef.current); tRef.current=setTimeout(()=>setToastMsg(''),3200); };
+  const toast=(m)=>{ setToastMsg(m); clearTimeout(tRef.current); const tempo=Math.max(3800,Math.min(6500,String(m||'').length*45)); tRef.current=setTimeout(()=>setToastMsg(''),tempo); };
   const userAtual = user ? st.usuarios.find(u=>u.id===user.id) || user : null;
   const ehMotorista = temPerfil(userAtual,'MOTORISTA');
   const acessoGestao = [
