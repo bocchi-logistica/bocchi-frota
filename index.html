@@ -325,7 +325,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 90000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '2.7.5'
+  VERSAO: '2.7.6'
 };
 
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
@@ -611,6 +611,7 @@ const ApiService = {
   subtelasAcesso: Array.isArray(r.motorista.subtelasAcesso) ? r.motorista.subtelasAcesso : [],
   acessosPerfilDefinidos: Array.isArray(r.motorista.areasAcesso) && Array.isArray(r.motorista.subtelasAcesso),
   nivelAcesso: r.motorista.nivelAcesso || 'SOMENTE_VISUALIZAR',
+  tipoFrotaAcesso: r.motorista.tipoFrotaAcesso || '',
   veiculoPadrao: r.motorista.veiculoPadrao || '',
   acessos: r.motorista.acessos || {},
   perms: r.motorista.perms || {
@@ -1078,6 +1079,7 @@ function Login({st, onLogin}){
   subtelasAcesso: Array.isArray(r.motorista.subtelasAcesso) ? r.motorista.subtelasAcesso : [],
   acessosPerfilDefinidos: r.motorista.acessosPerfilDefinidos === true,
   nivelAcesso: r.motorista.nivelAcesso || 'SOMENTE_VISUALIZAR',
+  tipoFrotaAcesso: r.motorista.tipoFrotaAcesso || '',
   perms: r.motorista.perms || {
     cargas: true,
     premiacao: true,
@@ -1958,29 +1960,41 @@ function TelaSinistro({user,toast}){
   const [form,setForm]=useState({
     placa:'',motoristaNome:user.nome||'',motoristaTelefone:'',dataHoraOcorrido:'',
     localOcorrido:'',municipio:'',uf:'RS',tipoSinistro:'Colisão',descricaoOcorrido:'',
-    possuiVitima:false,possuiTerceiro:false,veiculoImobilizado:false,necessitaGuincho:false,
+    possuiVitima:false,possuiTerceiro:false,veiculoImobilizado:false,
     autoridadeAcionada:false,numeroBoletim:'',responsabilidadeInicial:'Ainda não definida'
   });
   const [arquivos,setArquivos]=useState([]);
+
   const carregar=async()=>{
     setCarregando(true);
     try{
-      const buscaVeiculo=user?.perms?.agendamentos?ApiService.contextoAgendamentoAtual():ApiService.obterVeiculos();
-      const [rv,rh,rc]=await Promise.allSettled([buscaVeiculo,ApiService.obterMeusSinistros(),ApiService.obterContatoSinistros()]);
-      if(rv.status==='fulfilled'){
-        if(user?.perms?.agendamentos){
-          const ag=rv.value?.agendamento||null;
-          setAgendamentoAtual(ag);
-          const lista=ag?.placa?[{placa:ag.placa,modelo:ag.modelo||'',itemId:ag.veiculoId||''}]:[];
-          setVeiculos(lista);
-          setForm(f=>({...f,placa:ag?.placa||''}));
-        }else{
-          const lista=(rv.value.veiculos||[]).filter(v=>v.usoCompartilhado!==true);
-          setAgendamentoAtual(null);
-          setVeiculos(lista);
-          setForm(f=>({...f,placa:lista.some(v=>v.placa===f.placa)?f.placa:(lista[0]?.placa||'')}));
-        }
+      const buscaAgendamento=user?.perms?.agendamentos
+        ? ApiService.contextoAgendamentoAtual()
+        : Promise.resolve({agendamento:null});
+      const [rv,rh,rc,ra]=await Promise.allSettled([
+        ApiService.obterVeiculos(),
+        ApiService.obterMeusSinistros(),
+        ApiService.obterContatoSinistros(),
+        buscaAgendamento
+      ]);
+
+      let lista=[];
+      if(rv.status==='fulfilled') lista=(rv.value.veiculos||[]).filter(v=>v.placa);
+      const ag=ra.status==='fulfilled'?(ra.value?.agendamento||null):null;
+      setAgendamentoAtual(ag);
+
+      // Compatibilidade: se o veículo agendado ainda não vier no /veiculos,
+      // mantém a placa disponível e a classifica como Frota Leve compartilhada.
+      if(ag?.placa&&!lista.some(v=>normalizar(v.placa)===normalizar(ag.placa))){
+        lista=[...lista,{itemId:ag.veiculoId||'',placa:ag.placa,tipoFrota:'FROTA LEVE',tipoModelo:ag.tipoModelo||'',modelo:ag.modelo||'',usoCompartilhado:true,principal:false}];
       }
+      setVeiculos(lista);
+
+      const principal=lista.find(v=>v.principal&&v.usoCompartilhado!==true);
+      const agendado=ag?.placa?lista.find(v=>normalizar(v.placa)===normalizar(ag.placa)):null;
+      const preferido=principal||agendado||lista[0]||null;
+      setForm(f=>({...f,placa:lista.some(v=>v.placa===f.placa)?f.placa:(preferido?.placa||'')}));
+
       if(rh.status==='fulfilled')setHistorico(rh.value.sinistros||[]);
       if(rc.status==='fulfilled'&&rc.value?.contato){
         setContatoEmergencia({nome:rc.value.contato.nome||'Logística',telefone:rc.value.contato.telefone||''});
@@ -1988,6 +2002,13 @@ function TelaSinistro({user,toast}){
     }finally{setCarregando(false);}
   };
   useEffect(()=>{carregar();},[]);
+
+  const veiculoSelecionado=veiculos.find(v=>normalizar(v.placa)===normalizar(form.placa))||null;
+  const ehFrotaPesada=Boolean(veiculoSelecionado&&normalizar(veiculoSelecionado.tipoFrota).includes('pesada'));
+  const exigeAgendamento=Boolean(veiculoSelecionado&&!ehFrotaPesada&&veiculoSelecionado.usoCompartilhado===true);
+  const agendamentoDaPlaca=Boolean(agendamentoAtual&&normalizar(agendamentoAtual.placa)===normalizar(form.placa));
+  const bloqueioAgendamento=Boolean(exigeAgendamento&&(!user?.perms?.agendamentos||!agendamentoDaPlaca));
+
   const lerArquivos=async lista=>{
     const permitidos=[...lista].slice(0,12);
     const total=permitidos.reduce((s,f)=>s+f.size,0);
@@ -2002,6 +2023,7 @@ function TelaSinistro({user,toast}){
     }
     setArquivos(convertidos);
   };
+
   const enviar=async()=>{
     const obrigatorios=[
       [form.placa,'Selecione a placa.'],[form.motoristaNome,'Informe o nome do motorista.'],
@@ -2010,20 +2032,27 @@ function TelaSinistro({user,toast}){
     ];
     const falta=obrigatorios.find(([v])=>!String(v||'').trim());
     if(falta){toast(falta[1]);return;}
+    if(bloqueioAgendamento){
+      toast('Esta placa é Frota Leve compartilhada e precisa estar no seu agendamento atual.');
+      return;
+    }
     if(form.possuiVitima&&!window.confirm('Você informou que há vítima. Confirma o envio imediato deste registro?'))return;
     if(!window.confirm('Confirma o envio do sinistro da placa '+form.placa+'? A logística será notificada.'))return;
     setEnviando(true);
     try{
       const r=await ApiService.criarSinistro({...form,arquivos});
-      toast('Sinistro enviado. Protocolo: '+r.numeroSinistro+(r.emailEnviado?' · E-mail disparado.':' · Atenção: e-mail não confirmado.'));
+      const avisoEmail=r.emailEnviado?' · E-mail disparado.':' · Atenção: e-mail não confirmado.';
+      const avisoCampo=Array.isArray(r.avisosCampos)&&r.avisosCampos.length?' · Registro salvo com aviso técnico.':'';
+      toast('Sinistro enviado. Protocolo: '+r.numeroSinistro+avisoEmail+avisoCampo);
       setArquivos([]);
       setForm(f=>({...f,dataHoraOcorrido:'',localOcorrido:'',municipio:'',tipoSinistro:'Colisão',descricaoOcorrido:'',
-        possuiVitima:false,possuiTerceiro:false,veiculoImobilizado:false,necessitaGuincho:false,
+        possuiVitima:false,possuiTerceiro:false,veiculoImobilizado:false,
         autoridadeAcionada:false,numeroBoletim:'',responsabilidadeInicial:'Ainda não definida'}));
       await carregar();
     }catch(e){toast('Não foi possível enviar o sinistro: '+e.message);}
     finally{setEnviando(false);}
   };
+
   return <React.Fragment>
     <div className="card sinistro-hero">
       <div className="row"><div style={{fontSize:34}}>🚨</div><div className="grow"><h2>Comunicar sinistro</h2><div className="muted">Registre imediatamente o ocorrido. O envio gera protocolo, histórico e alerta para a equipe administrativa.</div></div></div>
@@ -2040,7 +2069,7 @@ function TelaSinistro({user,toast}){
       <h3 style={{marginBottom:10}}>Como proceder</h3>
       <div className="sinistro-passos">
         <div className="sinistro-passo">Proteja as pessoas e sinalize o local.</div>
-        <div className="sinistro-passo">Acione a autoridade ou o serviço de emergência quando necessário. Para guincho, comunique a logística e aguarde autorização.</div>
+        <div className="sinistro-passo">Acione a autoridade ou o serviço de emergência quando necessário. Se o veículo precisar de remoção, comunique a logística e aguarde autorização para o guincho.</div>
         <div className="sinistro-passo">Fotografe o local, os veículos, placas, avarias e o painel ligado.</div>
         <div className="sinistro-passo">Colete os dados e documentos do terceiro, quando houver.</div>
         <div className="sinistro-passo">Preencha e envie este registro para a logística.</div>
@@ -2051,13 +2080,24 @@ function TelaSinistro({user,toast}){
       <div className="sinistro-docs">
         {['Número do B.O., quando emitido pela autoridade','Documento do terceiro','RG e CNH do terceiro','Foto frontal e traseira com placa','Foto do painel ligado','Fotos das avarias','Fotos do local'].map(x=><div className="sinistro-doc" key={x}>✓ {x}</div>)}
       </div>
-      <div className="muted" style={{marginTop:8}}>Se a polícia atender o local, informe o número do B.O. Caso não haja atendimento presencial, envie os dados e evidências normalmente para que a logística avalie a abertura do B.O. online.</div>
+      <div className="muted" style={{marginTop:8}}>Se a polícia atender o local, informe o número do B.O. Caso não haja atendimento presencial, envie os dados e evidências normalmente para que a logística avalie e providencie o registro online.</div>
     </div>
-    {user?.perms?.agendamentos&&!carregando&&!agendamentoAtual&&<div className="aviso-box">Nenhum veículo está agendado/em uso para você neste período. O sinistro só pode ser registrado para a placa do agendamento atual.</div>}
+
+    {bloqueioAgendamento&&<div className="aviso-box">A placa selecionada é Frota Leve compartilhada. Para este tipo de veículo, o sinistro só pode ser enviado quando a placa estiver no seu agendamento atual.</div>}
+
     <div className="card">
       <h3 style={{marginBottom:12}}>Dados do ocorrido</h3>
       <div className="form-grid">
-        <div><label>Placa *</label>{user?.perms?.agendamentos?<input value={form.placa} readOnly placeholder="Nenhum veículo agendado neste período"/>:<select value={form.placa} onChange={e=>setForm({...form,placa:e.target.value})}><option value="">Selecionar...</option>{veiculos.map(v=><option key={v.itemId||v.placa}>{v.placa}</option>)}</select>}{user?.perms?.agendamentos&&agendamentoAtual&&<div className="muted" style={{marginTop:5}}>Placa definida pelo agendamento atual: {agendamentoAtual.codigo||''}.</div>}</div>
+        <div>
+          <label>Placa *</label>
+          <select value={form.placa} onChange={e=>setForm({...form,placa:e.target.value})}>
+            <option value="">Selecionar...</option>
+            {veiculos.map(v=><option key={v.itemId||v.placa} value={v.placa}>{v.placa}{v.tipoFrota?' · '+v.tipoFrota:''}{v.usoCompartilhado?' · compartilhado':' · por vínculo'}</option>)}
+          </select>
+          {veiculoSelecionado&&ehFrotaPesada&&<div className="muted" style={{marginTop:5}}>Frota Pesada: não exige agendamento. A placa é validada pelo cadastro/vínculo.</div>}
+          {veiculoSelecionado&&!ehFrotaPesada&&veiculoSelecionado.usoCompartilhado!==true&&<div className="muted" style={{marginTop:5}}>Veículo por vínculo: não exige agendamento.</div>}
+          {exigeAgendamento&&agendamentoDaPlaca&&<div className="muted" style={{marginTop:5}}>Frota Leve compartilhada validada pelo agendamento atual {agendamentoAtual?.codigo||''}.</div>}
+        </div>
         <div><label>Motorista *</label><input value={form.motoristaNome} onChange={e=>setForm({...form,motoristaNome:e.target.value})}/></div>
         <div><label>Telefone</label><input value={form.motoristaTelefone} onChange={e=>setForm({...form,motoristaTelefone:e.target.value})} placeholder="(54) 99999-9999"/></div>
         <div><label>Data e hora *</label><input type="datetime-local" value={form.dataHoraOcorrido} onChange={e=>setForm({...form,dataHoraOcorrido:e.target.value})}/></div>
@@ -2068,14 +2108,15 @@ function TelaSinistro({user,toast}){
         <div><label>Responsabilidade inicial</label><select value={form.responsabilidadeInicial} onChange={e=>setForm({...form,responsabilidadeInicial:e.target.value})}>{['Ainda não definida','Possivelmente veículo Bocchi','Possivelmente terceiro','Responsabilidade compartilhada','Não se aplica'].map(x=><option key={x}>{x}</option>)}</select></div>
       </div>
       <div className="form-grid" style={{marginTop:12}}>
-        {[['possuiVitima','Possui vítima?'],['possuiTerceiro','Possui terceiro?'],['veiculoImobilizado','Veículo imobilizado?'],['necessitaGuincho','Necessita guincho?'],['autoridadeAcionada','Autoridade acionada?']].map(([k,l])=><div key={k}><label>{l}</label><select value={form[k]?'sim':'nao'} onChange={e=>setForm({...form,[k]:e.target.value==='sim'})}><option value="nao">Não</option><option value="sim">Sim</option></select></div>)}
-        <div><label>Número do B.O., se disponível</label><input value={form.numeroBoletim} onChange={e=>setForm({...form,numeroBoletim:e.target.value})} placeholder="Informe quando emitido pela autoridade"/><div className="muted" style={{marginTop:5}}>Sem B.O. no local? Envie o sinistro normalmente; a logística avaliará o registro online.</div></div>
+        {[['possuiVitima','Possui vítima?'],['possuiTerceiro','Possui terceiro?'],['veiculoImobilizado','Veículo imobilizado?']].map(([k,l])=><div key={k}><label>{l}</label><select value={form[k]?'sim':'nao'} onChange={e=>setForm({...form,[k]:e.target.value==='sim'})}><option value="nao">Não</option><option value="sim">Sim</option></select></div>)}
+        <div><label>Autoridade acionada?</label><select value={form.autoridadeAcionada?'sim':'nao'} onChange={e=>{const sim=e.target.value==='sim';setForm({...form,autoridadeAcionada:sim,numeroBoletim:sim?form.numeroBoletim:''});}}><option value="nao">Não</option><option value="sim">Sim</option></select></div>
+        {form.autoridadeAcionada?<div><label>Número do B.O., se disponível</label><input value={form.numeroBoletim} onChange={e=>setForm({...form,numeroBoletim:e.target.value})} placeholder="Informe o número fornecido pela autoridade"/><div className="muted" style={{marginTop:5}}>Se a autoridade ainda não informou o número, o sinistro pode ser enviado normalmente.</div></div>:<div className="aviso-box" style={{alignSelf:'end'}}>Sem atendimento policial no local: envie o sinistro e as evidências. A logística avaliará e providenciará o B.O. online quando aplicável.</div>}
       </div>
       <div style={{marginTop:12}}><label>Descrição do ocorrido *</label><textarea rows="5" value={form.descricaoOcorrido} onChange={e=>setForm({...form,descricaoOcorrido:e.target.value})} placeholder="Relate de forma objetiva o que ocorreu, sentido da via, condições e envolvidos."/></div>
       <div style={{marginTop:12}}><label>Anexos</label><input type="file" multiple accept="image/*,.pdf,.doc,.docx,video/*" onChange={e=>lerArquivos(e.target.files||[])}/><div className="muted">Até 12 arquivos, 4 MB por arquivo e 18 MB no total.</div>
         {arquivos.map((a,i)=><div className="sinistro-arquivo" key={a.nome+i}><span>📎</span><span className="grow">{a.nome}</span><button className="btn btn-g btn-sm" onClick={()=>setArquivos(v=>v.filter((_,j)=>j!==i))}>Remover</button></div>)}
       </div>
-      <button className="btn btn-d" style={{width:'100%',marginTop:14}} disabled={enviando||carregando||(user?.perms?.agendamentos&&!agendamentoAtual)} onClick={enviar}>{enviando?'Enviando e notificando...':'Enviar sinistro'}</button>
+      <button className="btn btn-d" style={{width:'100%',marginTop:14}} disabled={enviando||carregando||bloqueioAgendamento||!form.placa} onClick={enviar}>{enviando?'Enviando e notificando...':'Enviar sinistro'}</button>
     </div>
     {historico.length>0&&<div className="card"><h3 style={{marginBottom:10}}>Meus registros</h3>{historico.map(s=><div className="linha-item" key={s.id}><span><b>{s.numeroSinistro}</b><span className="muted" style={{display:'block'}}>{dataBR(String(s.dataHoraOcorrido||'').slice(0,10))} · {s.placa} · {s.tipoSinistro||'Sinistro'}</span></span><StatusTag s={s.statusSinistro}/></div>)}</div>}
   </React.Fragment>;
