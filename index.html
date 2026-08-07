@@ -178,6 +178,7 @@ th.td-num{text-align:right}
 .agenda-view-toggle{display:flex;gap:5px;align-items:center;margin-left:auto;background:rgba(255,255,255,.08);padding:4px;border-radius:11px}
 .agenda-view-toggle button{padding:8px 12px;border-radius:8px;color:#fff;font-weight:700}
 .agenda-view-toggle button.on{background:#fff;color:var(--mata)}
+.agenda-atalhos{display:flex;gap:8px;overflow-x:auto;padding:10px 2px 2px;margin-top:10px;scrollbar-width:none}.agenda-atalhos::-webkit-scrollbar{display:none}.agenda-atalho{white-space:nowrap;padding:9px 13px;border-radius:99px;background:#fff;border:1.5px solid var(--linha);font-weight:700;font-size:13px;color:var(--tinta)}.agenda-atalho.on{background:var(--mata);border-color:var(--mata);color:#fff}.agenda-top-nav{display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:nowrap}.agenda-top-mes{font-family:'Archivo';font-weight:800;font-size:24px;white-space:nowrap;min-width:max-content;flex:0 0 auto}.agenda-top-spacer{flex:1 1 auto;min-width:4px}
 .agenda-proxima{border-left:7px solid var(--folha);padding:18px 16px;margin:14px 0;background:#fff}
 .agenda-proxima .kicker{font-family:'Archivo';font-weight:800;font-size:13px;text-transform:uppercase;letter-spacing:.03em;color:var(--mata);display:flex;align-items:center;gap:7px}
 .agenda-proxima .titulo{font-family:'Archivo';font-weight:800;font-size:27px;margin:5px 0 4px;line-height:1.1}
@@ -186,7 +187,7 @@ th.td-num{text-align:right}
 .agenda-proxima-info b{display:block;font-size:11px;text-transform:uppercase;color:var(--cinza);margin-bottom:3px}
 .agenda-dia-lista{display:flex;flex-direction:column;gap:8px}
 .agenda-dia-card{padding:13px 14px;border-left:5px solid var(--folha);background:#fff;border-radius:12px;box-shadow:var(--sombra);text-align:left;width:100%}
-@media(max-width:620px){.agenda-cal{font-size:11px}.agenda-dia{min-height:75px;padding:3px}.agenda-evento{font-size:8.5px;padding:4px}.agenda-modal-grid{grid-template-columns:1fr}.agenda-proxima-grid{grid-template-columns:1fr 1fr}.agenda-proxima .titulo{font-size:24px}.agenda-view-toggle button{padding:7px 10px}}@media(max-width:390px){.agenda-proxima-grid{grid-template-columns:1fr}}
+@media(max-width:620px){.agenda-top{padding:12px 10px}.agenda-top-nav{gap:5px}.agenda-top-mes{font-size:22px}.agenda-view-toggle{margin-left:0}.agenda-view-toggle button{padding:7px 10px}.agenda-cal{font-size:11px}.agenda-dia{min-height:75px;padding:3px}.agenda-evento{font-size:8.5px;padding:4px}.agenda-modal-grid{grid-template-columns:1fr}.agenda-proxima-grid{grid-template-columns:1fr 1fr}.agenda-proxima .titulo{font-size:24px}.agenda-view-toggle button{padding:7px 10px}}@media(max-width:390px){.agenda-proxima-grid{grid-template-columns:1fr}}
 
 /* ---------- MODAL / TOAST ---------- */
 .overlay{position:fixed; inset:0; background:rgba(20,30,24,.55); display:flex; align-items:flex-end; justify-content:center; z-index:100; padding:0}
@@ -257,7 +258,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 90000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '2.5.7-agendamentos'
+  VERSAO: '2.5.8-agendamentos'
 };
 
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
@@ -2050,18 +2051,32 @@ function DetalheAgendamento({item,admin,onClose,onAtualizar,toast,onAbrirCheckli
   return <Modal titulo={`${item.origem} → ${item.destino}`} onClose={onClose}><div className="row"><AgendaStatus status={item.status}/><span className="muted">{item.codigo}</span></div><div className="divider"/>{[['Veículo',item.placa],['Motorista',item.motorista],['Previsto',fmtDataHora(item.saidaPrevista)+' até '+fmtDataHora(item.retornoPrevisto)],['Real',fmtDataHora(item.saidaReal)+' até '+fmtDataHora(item.retornoReal)],['KM',`${item.kmInicial||'—'} → ${item.kmFinal||'—'}`]].map(([l,v])=><div className="linha-item" key={l}><b>{l}</b><span>{v}</span></div>)}{!acao&&<div className="agenda-acoes" style={{marginTop:14}}>{aguardando&&<><button className="btn btn-d" onClick={()=>setAcao('cancelar')}>Cancelar</button><button className="btn btn-p" onClick={()=>setAcao('retirar')}>{admin?'Retirar manualmente':'Retirar veículo'}</button></>}{emUso&&<button className="btn btn-p" onClick={()=>setAcao('finalizar')}>{admin?'Finalizar manualmente':(item.status==='PENDENTE_FINALIZACAO'?'Concluir devolução':'Devolver veículo')}</button>}{admin&&item.status==='FINALIZADO'&&<button className="btn btn-s" onClick={()=>setAcao('corrigir')}>Corrigir KM</button>}</div>}{acao&&<div style={{marginTop:14}}>{acao==='cancelar'?<><label>Motivo obrigatório</label><select value={motivo} onChange={e=>setMotivo(e.target.value)}><option value="">Selecionar...</option>{['VIAGEM_CANCELADA','ALTERACAO_PROGRAMACAO','VEICULO_NAO_NECESSARIO','MOTORISTA_INDISPONIVEL','VEICULO_INDISPONIVEL','ERRO_AGENDAMENTO','DUPLICIDADE','OUTRO'].map(x=><option key={x}>{x}</option>)}</select><label style={{marginTop:8}}>Observação</label><textarea value={obs} onChange={e=>setObs(e.target.value)}/></>:<><label>{acao==='finalizar'?'KM final':'KM inicial'}</label><input type="number" value={km} onChange={e=>setKm(e.target.value)}/>{acao==='corrigir'&&<><label style={{marginTop:8}}>KM final correto</label><input type="number" value={obs} onChange={e=>setObs(e.target.value)}/><label style={{marginTop:8}}>Motivo</label><textarea value={motivo} onChange={e=>setMotivo(e.target.value)}/></>}{acao!=='corrigir'&&<div style={{marginTop:8}}><label>{acao==='retirar'?'Possui alguma NC?':'Houve problema?'}</label><select value={problema?'sim':'nao'} onChange={e=>setProblema(e.target.value==='sim')}><option value="nao">Não</option><option value="sim">Sim</option></select></div>}</>}<div className="agenda-acoes" style={{marginTop:12}}><button className="btn btn-g" onClick={()=>setAcao('')}>Voltar</button><button className="btn btn-p" disabled={salvando||acao==='cancelar'&&!motivo} onClick={executar}>Confirmar</button></div></div>}</Modal>
 }
 function TelaAgendamento({user,toast,onAbrirChecklist}){
-  const [base,setBase]=useState({veiculos:[],agendamentos:[],parametros:{}}),[carregando,setCarregando]=useState(true),[mes,setMes]=useState(new Date()),[form,setForm]=useState(false),[detalhe,setDetalhe]=useState(null),[visual,setVisual]=useState('todos'),[veiculoFiltro,setVeiculoFiltro]=useState(''),[modoVisao,setModoVisao]=useState('mes'),[diaSelecionado,setDiaSelecionado]=useState(new Date());
+  const [base,setBase]=useState({veiculos:[],agendamentos:[],parametros:{}}),[carregando,setCarregando]=useState(true),[mes,setMes]=useState(new Date()),[form,setForm]=useState(false),[detalhe,setDetalhe]=useState(null),[visual,setVisual]=useState('todos'),[veiculoFiltro,setVeiculoFiltro]=useState(''),[modoVisao,setModoVisao]=useState('mes'),[diaSelecionado,setDiaSelecionado]=useState(new Date()),[filtroRapido,setFiltroRapido]=useState('proximo');
   const carregar=async()=>{setCarregando(true);try{const r=await ApiService.obterAgendamentos();setBase({veiculos:r.veiculos||[],agendamentos:r.agendamentos||[],parametros:r.parametros||{}})}catch(e){toast(e.message)}finally{setCarregando(false)}};useEffect(()=>{carregar()},[]);
   const norm=v=>String(v||'').trim().toLocaleLowerCase('pt-BR');
-  const meus=base.agendamentos.filter(a=>String(a.solicitanteId||'')===String(user.id||'')||norm(a.motorista)===norm(user.nome));
+  // A API já devolve ao motorista apenas os agendamentos que ele pode visualizar/executar.
+  // Evita perder a próxima ação por divergência entre ID de usuário, login e nome exibido.
+  const meus=base.agendamentos.slice();
   const eventos=base.agendamentos.filter(a=>(visual==='todos'||meus.some(m=>String(m.id)===String(a.id)))&&(!veiculoFiltro||String(a.placa)===veiculoFiltro));
-  const prioridadeStatus=s=>s==='PENDENTE_FINALIZACAO'?0:['EM_USO','DEVOLUCAO_ATRASADA'].includes(s)?1:['AGENDADO','AGUARDANDO_RETIRADA'].includes(s)?2:9;
-  const candidatosAcao=meus.filter(a=>!['FINALIZADO','CANCELADO'].includes(a.status)).sort((a,b)=>{const p=prioridadeStatus(a.status)-prioridadeStatus(b.status);if(p)return p;return new Date(a.saidaPrevista||0)-new Date(b.saidaPrevista||0)});
-  const proxima=candidatosAcao[0]||null;
+  const agora=new Date();
+  const janelaRetirada=Number(base.parametros?.janelaRetiradaMinutos||30);
+  const ativos=meus.filter(a=>!['FINALIZADO','CANCELADO'].includes(a.status));
+  const emUso=ativos.filter(a=>['EM_USO','DEVOLUCAO_ATRASADA'].includes(a.status)).sort((a,b)=>new Date(a.retornoPrevisto||0)-new Date(b.retornoPrevisto||0));
+  const pendencias=ativos.filter(a=>a.status==='PENDENTE_FINALIZACAO').sort((a,b)=>new Date(a.retornoPrevisto||0)-new Date(b.retornoPrevisto||0));
+  const agendados=ativos.filter(a=>['AGENDADO','AGUARDANDO_RETIRADA'].includes(a.status)).sort((a,b)=>new Date(a.saidaPrevista||0)-new Date(b.saidaPrevista||0));
+  const agendadosFuturos=agendados.filter(a=>new Date(a.retornoPrevisto||a.saidaPrevista||0)>=agora);
+  const dentroJanela=agendadosFuturos.filter(a=>agora>=new Date(new Date(a.saidaPrevista).getTime()-janelaRetirada*60000));
+  const pendenciaAnterior=ativos.filter(a=>['AGENDADO','AGUARDANDO_RETIRADA'].includes(a.status)&&new Date(a.retornoPrevisto||0)<agora).sort((a,b)=>new Date(a.retornoPrevisto||0)-new Date(b.retornoPrevisto||0));
+  let proxima=null;
+  if(filtroRapido==='emuso')proxima=emUso[0]||null;
+  else if(filtroRapido==='pendencia')proxima=pendencias[0]||null;
+  else if(filtroRapido==='anterior')proxima=pendenciaAnterior[0]||null;
+  else proxima=pendencias[0]||emUso[0]||dentroJanela[0]||agendadosFuturos[0]||null;
   const configAcao=proxima?(
     proxima.status==='PENDENTE_FINALIZACAO'?{titulo:'Finalizar pendência',sub:'A devolução possui uma pendência e precisa ser concluída.',botao:'Concluir devolução'}:
     ['EM_USO','DEVOLUCAO_ATRASADA'].includes(proxima.status)?{titulo:'Devolver veículo',sub:proxima.status==='DEVOLUCAO_ATRASADA'?'O horário previsto de retorno já passou.':'A utilização está aberta e precisa ser encerrada ao retornar.',botao:'Devolver veículo'}:
-    {titulo:'Retirar veículo',sub:`Seu próximo agendamento é ${new Date(proxima.saidaPrevista).toLocaleDateString('pt-BR')===new Date().toLocaleDateString('pt-BR')?'hoje':'em '+new Date(proxima.saidaPrevista).toLocaleDateString('pt-BR')} às ${String(proxima.saidaPrevista||'').slice(11,16)}.`,botao:'Retirar veículo'}
+    ['AGENDADO','AGUARDANDO_RETIRADA'].includes(proxima.status)&&agora>=new Date(new Date(proxima.saidaPrevista).getTime()-janelaRetirada*60000)?{titulo:'Retirar veículo',sub:`Seu agendamento começa às ${String(proxima.saidaPrevista||'').slice(11,16)}.`,botao:'Retirar veículo'}:
+    {titulo:'Próximo agendamento',sub:`Previsto para ${new Date(proxima.saidaPrevista).toLocaleDateString('pt-BR')} às ${String(proxima.saidaPrevista||'').slice(11,16)}. A retirada será liberada dentro da janela configurada.`,botao:'Ver agendamento'}
   ):null;
   const irHoje=()=>{const h=new Date();setMes(h);setDiaSelecionado(h)};
   const isoDia=d=>{const z=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`};
@@ -2073,13 +2088,20 @@ function TelaAgendamento({user,toast,onAbrirChecklist}){
         <div><label>Veículo</label><select value={veiculoFiltro} onChange={e=>setVeiculoFiltro(e.target.value)}><option value="">Todos os veículos</option>{base.veiculos.map(v=><option key={v.id} value={v.placa}>{v.placa} — {v.modelo||v.tipoModelo||'Sem modelo'}</option>)}</select></div>
         <div><label>Visualizar</label><select value={visual} onChange={e=>setVisual(e.target.value)}><option value="todos">Todos os agendamentos</option><option value="meus">Meus agendamentos</option></select></div>
       </div>
-      <div className="row" style={{marginTop:10,flexWrap:'wrap'}}>
+      <div className="agenda-top-nav">
         <button className="btn btn-sm" style={{color:'#fff'}} onClick={()=>{if(modoVisao==='dia')moverDia(-1);else setMes(new Date(mes.getFullYear(),mes.getMonth()-1,1))}}>‹</button>
-        <h2 className="grow">{modoVisao==='dia'?diaSelecionado.toLocaleDateString('pt-BR',{day:'2-digit',month:'short',year:'2-digit'}):mes.toLocaleDateString('pt-BR',{month:'short',year:'2-digit'})}</h2>
+        <div className="agenda-top-mes">{modoVisao==='dia'?diaSelecionado.toLocaleDateString('pt-BR',{day:'2-digit',month:'short',year:'2-digit'}):mes.toLocaleDateString('pt-BR',{month:'short',year:'2-digit'})}</div>
         <button className="btn btn-sm" style={{color:'#fff'}} onClick={()=>{if(modoVisao==='dia')moverDia(1);else setMes(new Date(mes.getFullYear(),mes.getMonth()+1,1))}}>›</button>
+        <div className="agenda-top-spacer"/>
         <button className="btn btn-sm" style={{color:'#fff',border:'1px solid rgba(255,255,255,.35)'}} onClick={irHoje}>Hoje</button>
         <div className="agenda-view-toggle"><button className={modoVisao==='mes'?'on':''} onClick={()=>setModoVisao('mes')}>Mês</button><button className={modoVisao==='dia'?'on':''} onClick={()=>setModoVisao('dia')}>Dia</button></div>
       </div>
+    </div>
+    <div className="agenda-atalhos">
+      <button className={'agenda-atalho'+(filtroRapido==='proximo'?' on':'')} onClick={()=>setFiltroRapido('proximo')}>Próximo agendamento</button>
+      <button className={'agenda-atalho'+(filtroRapido==='emuso'?' on':'')} onClick={()=>setFiltroRapido('emuso')}>Em uso{emUso.length?` (${emUso.length})`:''}</button>
+      <button className={'agenda-atalho'+(filtroRapido==='pendencia'?' on':'')} onClick={()=>setFiltroRapido('pendencia')}>Minha pendência{pendencias.length?` (${pendencias.length})`:''}</button>
+      <button className={'agenda-atalho'+(filtroRapido==='anterior'?' on':'')} onClick={()=>setFiltroRapido('anterior')}>Pendência anterior{pendenciaAnterior.length?` (${pendenciaAnterior.length})`:''}</button>
     </div>
     {configAcao?<div className="agenda-proxima card">
       <div className="kicker"><span>●</span> Próxima ação</div><div className="titulo">{configAcao.titulo}</div><div className="muted" style={{fontSize:14}}>{configAcao.sub}</div>
