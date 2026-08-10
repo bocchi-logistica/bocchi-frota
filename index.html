@@ -174,7 +174,7 @@ th.td-num{text-align:right}
 
 
 /* ---------- AGENDAMENTOS ---------- */
-.agenda-top{background:var(--mata);color:#fff;border-radius:14px;padding:14px}.agenda-filtros{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px}.agenda-filtros label{color:#d8e5dc}.agenda-cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border:1px solid var(--linha);border-radius:14px;overflow:hidden;background:#fff}.agenda-dia{min-height:92px;border-right:1px solid var(--linha);border-bottom:1px solid var(--linha);padding:6px;min-width:0}.agenda-dia:nth-child(7n){border-right:none}.agenda-dia.off{background:#f3f3ef;color:#aaa}.agenda-semana{padding:8px 3px;text-align:center;font-size:11px;font-weight:800;color:var(--cinza);background:#f8f8f5}.agenda-evento{display:block;width:100%;margin-top:4px;padding:5px 6px;border-left:4px solid var(--folha);background:var(--folha-clara);border-radius:7px;text-align:left;font-size:10px;overflow:hidden}.agenda-acoes{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.agenda-status{font-size:11px;font-weight:800;padding:4px 8px;border-radius:99px;background:var(--folha-clara);color:var(--mata)}.agenda-status.CANCELADO,.agenda-status.DEVOLUCAO_ATRASADA{background:var(--erro-claro);color:var(--erro)}.agenda-status.AGUARDANDO_RETIRADA{background:var(--aviso);color:#765600}.agenda-lista-item{padding:12px;border-bottom:1px solid var(--linha)}.agenda-lista-item:last-child{border-bottom:none}.agenda-modal-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.agenda-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}.agenda-kpi{padding:12px;border-radius:12px;background:#f5f7f5}.agenda-kpi b{display:block;font-size:23px;color:var(--mata)}
+.agenda-top{background:var(--mata);color:#fff;border-radius:14px;padding:14px}.agenda-filtros{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px}.agenda-filtros label{color:#d8e5dc}.agenda-cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border:1px solid var(--linha);border-radius:14px;overflow:hidden;background:#fff}.agenda-dia{min-height:92px;border-right:1px solid var(--linha);border-bottom:1px solid var(--linha);padding:6px;min-width:0}.agenda-dia:nth-child(7n){border-right:none}.agenda-dia.selecionado{box-shadow:inset 0 0 0 2px var(--folha);background:#F3F9F5}.agenda-dia[role='button']{cursor:pointer}.agenda-dia.off{background:#f3f3ef;color:#aaa}.agenda-semana{padding:8px 3px;text-align:center;font-size:11px;font-weight:800;color:var(--cinza);background:#f8f8f5}.agenda-evento{display:block;width:100%;margin-top:4px;padding:5px 6px;border-left:4px solid var(--folha);background:var(--folha-clara);border-radius:7px;text-align:left;font-size:10px;overflow:hidden}.agenda-acoes{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.agenda-status{font-size:11px;font-weight:800;padding:4px 8px;border-radius:99px;background:var(--folha-clara);color:var(--mata)}.agenda-status.CANCELADO,.agenda-status.DEVOLUCAO_ATRASADA{background:var(--erro-claro);color:var(--erro)}.agenda-status.AGUARDANDO_RETIRADA{background:var(--aviso);color:#765600}.agenda-lista-item{padding:12px;border-bottom:1px solid var(--linha)}.agenda-lista-item:last-child{border-bottom:none}.agenda-modal-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.agenda-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}.agenda-kpi{padding:12px;border-radius:12px;background:#f5f7f5}.agenda-kpi b{display:block;font-size:23px;color:var(--mata)}
 .agenda-view-toggle{display:flex;gap:5px;align-items:center;margin-left:auto;background:rgba(255,255,255,.08);padding:4px;border-radius:11px}
 .agenda-view-toggle button{padding:8px 12px;border-radius:8px;color:#fff;font-weight:700}
 .agenda-view-toggle button.on{background:#fff;color:var(--mata)}
@@ -325,7 +325,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 90000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '2.7.8'
+  VERSAO: '2.7.9'
 };
 
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
@@ -2157,15 +2157,18 @@ function corAgendaVeiculo(placa){
   let hash=0;for(let i=0;i<chave.length;i++)hash=((hash*31)+chave.charCodeAt(i))>>>0;
   return AGENDA_CORES[hash%AGENDA_CORES.length];
 }
-function CalendarioAgenda({mes,eventos,onAbrir}){
+function CalendarioAgenda({mes,eventos,onAbrir,onSelecionarDia,diaSelecionado=null}){
   const ano=mes.getFullYear(),m=mes.getMonth(),primeiro=new Date(ano,m,1),offset=(primeiro.getDay()+6)%7,inicio=new Date(ano,m,1-offset);
-  const dias=[];for(let i=0;i<42;i++){const d=new Date(inicio);d.setDate(inicio.getDate()+i);const iso=d.toISOString().slice(0,10);dias.push({d,iso,eventos:eventos.filter(e=>String(e.saidaPrevista).slice(0,10)===iso)});}
-  return <div className="agenda-cal">{['SEG','TER','QUA','QUI','SEX','SÁB','DOM'].map(x=><div className="agenda-semana" key={x}>{x}</div>)}{dias.map(({d,iso,eventos:ev})=><div className={'agenda-dia'+(d.getMonth()!==m?' off':'')} key={iso}><b>{d.getDate()}</b>{ev.slice(0,3).map(e=>{const c=corAgendaVeiculo(e.placa);return <button className="agenda-evento" style={{borderLeftColor:c.b,background:c.f,color:c.t}} key={e.id} onClick={()=>onAbrir(e)}><b>{String(e.saidaPrevista).slice(11,16)} · {e.placa||'Veículo'}</b><br/>{e.destino}</button>})}{ev.length>3&&<div className="muted">+{ev.length-3}</div>}</div>)}</div>
+  const isoLocal=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const isoSelecionado=diaSelecionado?isoLocal(diaSelecionado):'';
+  const dias=[];for(let i=0;i<42;i++){const d=new Date(inicio);d.setDate(inicio.getDate()+i);const iso=isoLocal(d);dias.push({d,iso,eventos:eventos.filter(e=>String(e.saidaPrevista).slice(0,10)===iso)});}
+  return <div className="agenda-cal">{['SEG','TER','QUA','QUI','SEX','SÁB','DOM'].map(x=><div className="agenda-semana" key={x}>{x}</div>)}{dias.map(({d,iso,eventos:ev})=><div className={'agenda-dia'+(d.getMonth()!==m?' off':'')+(iso===isoSelecionado?' selecionado':'')} key={iso} role={onSelecionarDia?'button':undefined} onClick={()=>onSelecionarDia&&onSelecionarDia(new Date(d))}><b>{d.getDate()}</b>{ev.slice(0,3).map(e=>{const c=corAgendaVeiculo(e.placa);return <button className="agenda-evento" style={{borderLeftColor:c.b,background:c.f,color:c.t}} key={e.id} onClick={clique=>{clique.stopPropagation();onAbrir(e)}}><b>{String(e.saidaPrevista).slice(11,16)} · {e.placa||'Veículo'}</b><br/>{e.destino}</button>})}{ev.length>3&&<div className="muted">+{ev.length-3}</div>}</div>)}</div>
 }
-function FormAgendamento({base,item,onClose,onSalvo,toast,admin=false}){
+function FormAgendamento({base,item,onClose,onSalvo,toast,admin=false,dataInicial=null}){
   const agora=new Date(),pad=n=>String(n).padStart(2,'0'),local=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  const retorno=new Date(agora.getTime()+2*3600000);
-  const [form,setForm]=useState({veiculoId:item?.veiculoId||'',motorista:item?.motorista||'',origem:item?.origem||'',destino:item?.destino||'',saidaPrevista:item?.saidaPrevista?String(item.saidaPrevista).slice(0,16):local(agora),retornoPrevisto:item?.retornoPrevisto?String(item.retornoPrevisto).slice(0,16):local(retorno),possuiPassageiros:item?.possuiPassageiros||false,quantidadePassageiros:item?.quantidadePassageiros||0,observacao:item?.observacao||'',criadoManualmente:admin});
+  const dataBase=(!item&&dataInicial instanceof Date&&Number.isFinite(dataInicial.getTime()))?new Date(dataInicial.getFullYear(),dataInicial.getMonth(),dataInicial.getDate(),agora.getHours(),agora.getMinutes()):agora;
+  const retorno=new Date(dataBase.getTime()+2*3600000);
+  const [form,setForm]=useState({veiculoId:item?.veiculoId||'',motorista:item?.motorista||'',origem:item?.origem||'',destino:item?.destino||'',saidaPrevista:item?.saidaPrevista?String(item.saidaPrevista).slice(0,16):local(dataBase),retornoPrevisto:item?.retornoPrevisto?String(item.retornoPrevisto).slice(0,16):local(retorno),possuiPassageiros:item?.possuiPassageiros||false,quantidadePassageiros:item?.quantidadePassageiros||0,observacao:item?.observacao||'',criadoManualmente:admin});
   const [salvando,setSalvando]=useState(false);const salvar=async()=>{if(!form.veiculoId||!form.motorista.trim()||!form.origem.trim()||!form.destino.trim()){toast('Informe veículo, motorista, origem e destino.');return}if(new Date(form.retornoPrevisto)<=new Date(form.saidaPrevista)){toast('O retorno deve ser posterior à saída.');return}setSalvando(true);try{if(item)await ApiService.alterarAgendamento(item.id,form);else await ApiService.criarAgendamento(form);toast(item?'Agendamento alterado.':'Agendamento criado.');await onSalvo();onClose()}catch(e){toast(e.message)}finally{setSalvando(false)}};
   return <Modal titulo={item?'Alterar agendamento':'Novo agendamento'} onClose={onClose} large><div className="agenda-modal-grid"><div><label>Saída prevista</label><input type="datetime-local" value={form.saidaPrevista} onChange={e=>setForm({...form,saidaPrevista:e.target.value})}/></div><div><label>Retorno previsto</label><input type="datetime-local" value={form.retornoPrevisto} onChange={e=>setForm({...form,retornoPrevisto:e.target.value})}/></div><div><label>Veículo compartilhado</label><select value={form.veiculoId} onChange={e=>setForm({...form,veiculoId:e.target.value})}><option value="">Selecionar...</option>{base.veiculos.map(v=><option key={v.id} value={v.id}>{v.placa} — {v.modelo||v.tipoModelo||'Sem modelo'}</option>)}</select></div><div><label>Motorista</label><input value={form.motorista} onChange={e=>setForm({...form,motorista:e.target.value})}/></div><div><label>Origem</label><input value={form.origem} onChange={e=>setForm({...form,origem:e.target.value})}/></div><div><label>Destino</label><input value={form.destino} onChange={e=>setForm({...form,destino:e.target.value})}/></div><div><label>Possui passageiros?</label><select value={form.possuiPassageiros?'sim':'nao'} onChange={e=>setForm({...form,possuiPassageiros:e.target.value==='sim',quantidadePassageiros:e.target.value==='sim'?form.quantidadePassageiros:0})}><option value="nao">Não</option><option value="sim">Sim</option></select></div>{form.possuiPassageiros&&<div><label>Quantidade</label><input type="number" min="1" value={form.quantidadePassageiros} onChange={e=>setForm({...form,quantidadePassageiros:Number(e.target.value)})}/></div>}<div style={{gridColumn:'1/-1'}}><label>Observação</label><textarea rows="3" value={form.observacao} onChange={e=>setForm({...form,observacao:e.target.value})}/></div></div><div className="agenda-acoes" style={{marginTop:14}}><button className="btn btn-g" onClick={onClose}>Voltar</button><button className="btn btn-p" disabled={salvando} onClick={salvar}>{salvando?'Salvando...':'Validar e salvar'}</button></div></Modal>
 }
@@ -2283,17 +2286,17 @@ function TelaAgendamento({user,toast,onAbrirChecklist}){
       <div className="agenda-proxima-grid"><div className="agenda-proxima-info"><b>Veículo</b>{proxima.placa||'—'}</div><div className="agenda-proxima-info"><b>Trajeto</b>{proxima.origem} → {proxima.destino}</div><div className="agenda-proxima-info"><b>Horário</b>{String(proxima.saidaPrevista||'').slice(11,16)} às {String(proxima.retornoPrevisto||'').slice(11,16)}</div><div className="agenda-proxima-info"><b>Status</b>{AG_STATUS_LABEL[proxima.status]||proxima.status}</div></div>
       <button className="btn btn-p" style={{width:'100%',marginTop:13,fontSize:16}} onClick={()=>setDetalhe(proxima)}>{configAcao.botao}</button>
     </div>:<div className="card" style={{margin:'14px 0'}}><b>Nenhuma ação disponível agora</b><div className="muted">Você não possui retirada, devolução ou finalização pendente neste momento.</div></div>}
-    {modoVisao==='mes'?<CalendarioAgenda mes={mes} eventos={eventos} onAbrir={setDetalhe}/>:<div className="agenda-dia-lista">
+    {modoVisao==='mes'?<CalendarioAgenda mes={mes} eventos={eventos} onAbrir={setDetalhe} diaSelecionado={diaSelecionado} onSelecionarDia={d=>{setDiaSelecionado(d);setMes(d);setModoVisao('dia')}}/>:<div className="agenda-dia-lista">
       <div className="card row"><button className="btn btn-g btn-sm" onClick={()=>moverDia(-1)}>‹</button><b className="grow" style={{textAlign:'center'}}>{diaSelecionado.toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long'})}</b><button className="btn btn-g btn-sm" onClick={()=>moverDia(1)}>›</button></div>
       {eventosDia.length?eventosDia.sort((a,b)=>new Date(a.saidaPrevista)-new Date(b.saidaPrevista)).map(e=>{const c=corAgendaVeiculo(e.placa);return <button key={e.id} className="agenda-dia-card" style={{borderLeftColor:c.b}} onClick={()=>setDetalhe(e)}><div className="row"><div className="grow"><b>{String(e.saidaPrevista||'').slice(11,16)} · {e.placa}</b><div className="muted">{e.origem} → {e.destino}</div></div><AgendaStatus status={e.status}/></div></button>}):<div className="card muted">Nenhum agendamento neste dia.</div>}
     </div>}
     <button className="btn btn-p" style={{position:'fixed',right:22,bottom:86,width:58,height:58,borderRadius:'50%',fontSize:28,zIndex:25}} onClick={()=>setForm(true)}>+</button>
-  </>}{form&&<FormAgendamento base={base} onClose={()=>setForm(false)} onSalvo={carregar} toast={toast}/>} {detalheAtual&&<DetalheAgendamento item={detalheAtual} parametros={base.parametros} onClose={()=>setDetalhe(null)} onAtualizar={carregar} toast={toast} onAbrirChecklist={onAbrirChecklist}/>}</>
+  </>}{form&&<FormAgendamento base={base} dataInicial={diaSelecionado} onClose={()=>setForm(false)} onSalvo={carregar} toast={toast}/>} {detalheAtual&&<DetalheAgendamento item={detalheAtual} parametros={base.parametros} onClose={()=>setDetalhe(null)} onAtualizar={carregar} toast={toast} onAbrirChecklist={onAbrirChecklist}/>}</>
 }
 function AdmAgendamentos({user,toast}){
   const podeAgenda=pode(user,'agendamentos.agenda'),podeMonitor=pode(user,'agendamentos.monitoramento'),podeRel=pode(user,'agendamentos.relatorio'),podeParam=pode(user,'agendamentos.parametros');
   const inicial=podeAgenda?'agenda':podeMonitor?'monitor':podeRel?'relatorio':'parametros';
-  const [sub,setSub]=useState(inicial),[base,setBase]=useState({veiculos:[],agendamentos:[],parametros:{},diagnosticoVeiculos:{}}),[carregando,setCarregando]=useState(true),[mes,setMes]=useState(new Date()),[detalhe,setDetalhe]=useState(null),[form,setForm]=useState(false),[monitorFiltro,setMonitorFiltro]=useState('AGUARDANDO_RETIRADA'),[fStatus,setFStatus]=useState('TODOS'),[fPlacaRel,setFPlacaRel]=useState('TODAS'),[fDataIniRel,setFDataIniRel]=useState(''),[fDataFimRel,setFDataFimRel]=useState(''),[paramForm,setParamForm]=useState({}),[salvandoParam,setSalvandoParam]=useState(false);
+  const [sub,setSub]=useState(inicial),[base,setBase]=useState({veiculos:[],agendamentos:[],parametros:{},diagnosticoVeiculos:{}}),[carregando,setCarregando]=useState(true),[mes,setMes]=useState(new Date()),[detalhe,setDetalhe]=useState(null),[form,setForm]=useState(false),[monitorFiltro,setMonitorFiltro]=useState('AGUARDANDO_RETIRADA'),[fStatus,setFStatus]=useState('TODOS'),[fPlacaRel,setFPlacaRel]=useState('TODAS'),[fDataIniRel,setFDataIniRel]=useState(''),[fDataFimRel,setFDataFimRel]=useState(''),[paramForm,setParamForm]=useState({}),[salvandoParam,setSalvandoParam]=useState(false),[modoVisao,setModoVisao]=useState('mes'),[diaSelecionado,setDiaSelecionado]=useState(new Date());
   const carregar=async()=>{setCarregando(true);try{const r=await ApiService.admAgendamentos();const dados={veiculos:r.veiculos||[],agendamentos:r.agendamentos||[],parametros:r.parametros||{},diagnosticoVeiculos:r.diagnosticoVeiculos||{}};setBase(dados);setParamForm(dados.parametros)}catch(e){toast(e.message)}finally{setCarregando(false)}};useEffect(()=>{carregar()},[]);
   const placasRel=[...new Set(base.agendamentos.map(a=>a.placa).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
   const filtrados=base.agendamentos.filter(a=>{
@@ -2308,13 +2311,39 @@ function AdmAgendamentos({user,toast}){
   const alterarParam=(campo,valor)=>setParamForm(p=>({...p,[campo]:valor}));
   const salvarParametros=async()=>{setSalvandoParam(true);try{const r=await ApiService.salvarParametrosAgendamento(paramForm);toast(r.mensagem||'Parâmetros atualizados.');await carregar()}catch(e){toast(e.message)}finally{setSalvandoParam(false)}};
   const SimNao=({campo})=><select value={paramForm[campo]?'sim':'nao'} onChange={e=>alterarParam(campo,e.target.value==='sim')}><option value="sim">Sim</option><option value="nao">Não</option></select>;
+  const isoDiaAdm=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const eventosDiaAdm=base.agendamentos.filter(a=>String(a.saidaPrevista||'').slice(0,10)===isoDiaAdm(diaSelecionado)).sort((a,b)=>new Date(a.saidaPrevista)-new Date(b.saidaPrevista));
+  const moverDiaAdm=delta=>{const d=new Date(diaSelecionado);d.setDate(d.getDate()+delta);setDiaSelecionado(d);setMes(d)};
+  const irHojeAdm=()=>{const h=new Date();setMes(h);setDiaSelecionado(h)};
+  const selecionarDiaAdm=d=>{setDiaSelecionado(d);setMes(d);setModoVisao('dia')};
+  const ConteudoAgendaGeral=()=> <React.Fragment>
+    <div className="row" style={{flexWrap:'wrap'}}>
+      <div className="grow"><h2>Agenda geral</h2><div className="muted">Somente veículos ativos da Frota Leve marcados como uso compartilhado.</div>{base.veiculos.length===0&&<div className="aviso-box" style={{marginTop:8}}>Nenhuma placa disponível. Cadastro: {base.diagnosticoVeiculos.totalCadastro||0}; ativos: {base.diagnosticoVeiculos.totalAtivos||0}; Frota Leve: {base.diagnosticoVeiculos.totalFrotaLeve||0}; compartilhados: {base.diagnosticoVeiculos.totalCompartilhados||0}. Regra: {base.diagnosticoVeiculos.regra||'ATIVO + FROTA LEVE + USO COMPARTILHADO'}.</div>}</div>
+      <button className="btn btn-p" onClick={()=>setForm(true)}>+ Novo agendamento</button>
+    </div>
+    <div className="row card" style={{flexWrap:'wrap'}}>
+      <button className="btn btn-g btn-sm" onClick={()=>{if(modoVisao==='dia')moverDiaAdm(-1);else setMes(new Date(mes.getFullYear(),mes.getMonth()-1,1))}}>‹</button>
+      <h2 className="grow">{modoVisao==='dia'?diaSelecionado.toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'}):mes.toLocaleDateString('pt-BR',{month:'long',year:'numeric'})}</h2>
+      <button className="btn btn-g btn-sm" onClick={()=>{if(modoVisao==='dia')moverDiaAdm(1);else setMes(new Date(mes.getFullYear(),mes.getMonth()+1,1))}}>›</button>
+      <button className="btn btn-s btn-sm" onClick={irHojeAdm}>Hoje</button>
+      <div className="subtabs">
+        <button className={'subtab'+(modoVisao==='mes'?' on':'')} onClick={()=>setModoVisao('mes')}>Mês</button>
+        <button className={'subtab'+(modoVisao==='dia'?' on':'')} onClick={()=>setModoVisao('dia')}>Dia</button>
+      </div>
+    </div>
+    {modoVisao==='mes'
+      ?<CalendarioAgenda mes={mes} eventos={base.agendamentos} onAbrir={setDetalhe} diaSelecionado={diaSelecionado} onSelecionarDia={selecionarDiaAdm}/>
+      :<div className="agenda-dia-lista">
+        {eventosDiaAdm.length?eventosDiaAdm.map(e=>{const c=corAgendaVeiculo(e.placa);return <button key={e.id} className="agenda-dia-card" style={{borderLeftColor:c.b}} onClick={()=>setDetalhe(e)}><div className="row"><div className="grow"><b>{String(e.saidaPrevista||'').slice(11,16)} · {e.placa}</b><div className="muted">{e.motorista} · {e.origem} → {e.destino}</div></div><AgendaStatus status={e.status}/></div></button>}):<div className="card muted">Nenhum agendamento neste dia.</div>}
+      </div>}
+  </React.Fragment>;
   const monitorStatus=['AGUARDANDO_RETIRADA','EM_USO','DEVOLUCAO_ATRASADA','PENDENTE_FINALIZACAO','FINALIZADO'];
   const monitorMatch=(a,s)=>s==='AGUARDANDO_RETIRADA'?['AGENDADO','AGUARDANDO_RETIRADA'].includes(a.status):a.status===s;
   const monitorLista=base.agendamentos.filter(a=>monitorMatch(a,monitorFiltro));
   return <>
     <div className="subtabs">{podeAgenda&&<button className={'subtab'+(sub==='agenda'?' on':'')} onClick={()=>setSub('agenda')}>Agenda geral</button>}{podeMonitor&&<button className={'subtab'+(sub==='monitor'?' on':'')} onClick={()=>setSub('monitor')}>Monitoramento e gestão</button>}{podeRel&&<button className={'subtab'+(sub==='relatorio'?' on':'')} onClick={()=>setSub('relatorio')}>Relatório</button>}{podeParam&&<button className={'subtab'+(sub==='parametros'?' on':'')} onClick={()=>setSub('parametros')}>Parâmetros</button>}</div>
-    {carregando?<div className="card muted">Carregando agendamentos...</div>:sub==='agenda'?<><div className="row"><div className="grow"><h2>Agenda geral</h2><div className="muted">Somente veículos ativos da Frota Leve marcados como uso compartilhado.</div>{base.veiculos.length===0&&<div className="aviso-box" style={{marginTop:8}}>Nenhuma placa disponível. Cadastro: {base.diagnosticoVeiculos.totalCadastro||0}; ativos: {base.diagnosticoVeiculos.totalAtivos||0}; Frota Leve: {base.diagnosticoVeiculos.totalFrotaLeve||0}; compartilhados: {base.diagnosticoVeiculos.totalCompartilhados||0}. Regra: {base.diagnosticoVeiculos.regra||'ATIVO + FROTA LEVE + USO COMPARTILHADO'}.</div>}</div><button className="btn btn-p" onClick={()=>setForm(true)}>+ Novo agendamento</button></div><div className="row card"><button className="btn btn-g btn-sm" onClick={()=>setMes(new Date(mes.getFullYear(),mes.getMonth()-1,1))}>‹</button><h2 className="grow">{mes.toLocaleDateString('pt-BR',{month:'long',year:'numeric'})}</h2><button className="btn btn-g btn-sm" onClick={()=>setMes(new Date(mes.getFullYear(),mes.getMonth()+1,1))}>›</button></div><CalendarioAgenda mes={mes} eventos={base.agendamentos} onAbrir={setDetalhe}/></>:sub==='monitor'?<><div className="agenda-kpis">{monitorStatus.map(s=>{const total=base.agendamentos.filter(a=>monitorMatch(a,s)).length;return <button type="button" className="agenda-kpi" key={s} onClick={()=>setMonitorFiltro(s)} style={{textAlign:'left',outline:monitorFiltro===s?'2px solid var(--folha)':'none',cursor:'pointer'}}><b>{total}</b><span>{AG_STATUS_LABEL[s]}</span></button>})}</div><div className="card">{monitorLista.length===0?<div className="muted">Nenhum agendamento neste status.</div>:monitorLista.map(a=><div className="agenda-lista-item row" key={a.id}><div className="grow"><b>{a.placa} · {a.origem} → {a.destino}</b><div className="muted">{a.motorista} · Saída prevista: {fmtDataHora(a.saidaPrevista)}</div><div className="muted">Devolução prevista: {fmtDataHora(a.retornoPrevisto)}{a.retornoReal?<> · Devolução real: {fmtDataHora(a.retornoReal)}</>:a.status==='DEVOLUCAO_ATRASADA'?<span style={{color:'var(--erro)',fontWeight:700}}> · Atrasada</span>:null}</div></div><AgendaStatus status={a.status}/><button className="btn btn-g btn-sm" onClick={()=>setDetalhe(a)}>Abrir</button></div>)}</div></>:sub==='relatorio'?<><div className="row"><div className="grow"><h2>Relatório de agendamentos</h2></div><button className="btn btn-p" onClick={exportar}>Exportar Excel</button></div><div className="card"><div className="form-grid"><div><label>Período de</label><input type="date" value={fDataIniRel} onChange={e=>setFDataIniRel(e.target.value)}/></div><div><label>Até</label><input type="date" value={fDataFimRel} onChange={e=>setFDataFimRel(e.target.value)}/></div><div><label>Veículo</label><select value={fPlacaRel} onChange={e=>setFPlacaRel(e.target.value)}><option value="TODAS">Todas as placas</option>{placasRel.map(p=><option key={p} value={p}>{p}</option>)}</select></div><div><label>Status</label><select value={fStatus} onChange={e=>setFStatus(e.target.value)}><option value="TODOS">Todos os status</option>{Object.keys(AG_STATUS_LABEL).map(s=><option key={s} value={s}>{AG_STATUS_LABEL[s]}</option>)}</select></div></div><div style={{overflowX:'auto',marginTop:12}}><table><thead><tr><th>Código</th><th>Veículo</th><th>Motorista</th><th>Trajeto</th><th>Previsto</th><th>Real</th><th>KM</th><th>Status</th></tr></thead><tbody>{filtrados.map(a=><tr key={a.id}><td>{a.codigo}</td><td>{a.placa}</td><td>{a.motorista}</td><td>{a.origem} → {a.destino}</td><td>{fmtDataHora(a.saidaPrevista)}<br/>{fmtDataHora(a.retornoPrevisto)}</td><td>{fmtDataHora(a.saidaReal)}<br/>{fmtDataHora(a.retornoReal)}</td><td>{a.kmInicial||'—'} → {a.kmFinal||'—'}</td><td><AgendaStatus status={a.status}/></td></tr>)}</tbody></table></div></div></>:<><div className="row"><div className="grow"><h2>Parâmetros de agendamentos</h2><div className="muted">Configurações lidas da lista Agendamentos_Parametros.</div></div><button className="btn btn-p" disabled={salvandoParam} onClick={salvarParametros}>{salvandoParam?'Salvando...':'Salvar parâmetros'}</button></div><div className="card"><div className="form-grid"><div><label>Dias permitidos para frente</label><input type="number" value={paramForm.diasPermitidosFrente??''} onChange={e=>alterarParam('diasPermitidosFrente',Number(e.target.value))}/></div><div><label>Antecedência mínima para criar/agendar (horas)</label><input type="number" value={paramForm.antecedenciaMinimaHoras??''} onChange={e=>alterarParam('antecedenciaMinimaHoras',Number(e.target.value))}/></div><div><label>Duração máxima (horas)</label><input type="number" value={paramForm.duracaoMaximaHoras??''} onChange={e=>alterarParam('duracaoMaximaHoras',Number(e.target.value))}/></div><div><label>Intervalo entre reservas (minutos)</label><input type="number" value={paramForm.intervaloReservasMinutos??''} onChange={e=>alterarParam('intervaloReservasMinutos',Number(e.target.value))}/></div><div><label>Hora inicial permitida</label><input type="time" value={paramForm.horaInicialPermitida||'00:00'} onChange={e=>alterarParam('horaInicialPermitida',e.target.value)}/></div><div><label>Hora final permitida</label><input type="time" value={paramForm.horaFinalPermitida||'23:59'} onChange={e=>alterarParam('horaFinalPermitida',e.target.value)}/></div><div><label>Permite sábado</label><SimNao campo="permiteSabado"/></div><div><label>Permite domingo</label><SimNao campo="permiteDomingo"/></div><div><label>Permite feriado</label><SimNao campo="permiteFeriado"/></div><div><label>Confirmação automática</label><SimNao campo="confirmacaoAutomatica"/></div><div><label>Periodicidade do checklist</label><select value={paramForm.checklistPeriodicidade||'SEMANAL'} onChange={e=>alterarParam('checklistPeriodicidade',e.target.value)}><option>DIARIO</option><option>SEMANAL</option><option>A_CADA_RETIRADA</option></select></div><div><label>Abre checklist na NC</label><SimNao campo="abreChecklistNaNC"/></div><div><label>Resposta impeditiva bloqueia</label><SimNao campo="respostaImpeditivaBloqueia"/></div><div><label>Código checklist Frota Leve</label><input value={paramForm.codigoChecklistFrotaLeve||''} onChange={e=>alterarParam('codigoChecklistFrotaLeve',e.target.value)}/></div><div><label>Libera retirada antes da saída (minutos)</label><input type="number" value={paramForm.janelaRetiradaMinutos??''} onChange={e=>alterarParam('janelaRetiradaMinutos',Number(e.target.value))}/></div><div><label>Tolerância devolução (minutos)</label><input type="number" value={paramForm.toleranciaDevolucaoMinutos??''} onChange={e=>alterarParam('toleranciaDevolucaoMinutos',Number(e.target.value))}/></div><div><label>Permite finalizar antes</label><SimNao campo="permiteFinalizarAnterior"/></div><div><label>Libera no retorno real</label><SimNao campo="liberaNoRetornoReal"/></div></div></div></>}
-    {form&&<FormAgendamento base={base} admin onClose={()=>setForm(false)} onSalvo={carregar} toast={toast}/>} {detalhe&&<DetalheAgendamento item={detalhe} admin onClose={()=>setDetalhe(null)} onAtualizar={carregar} toast={toast}/>} 
+    {carregando?<div className="card muted">Carregando agendamentos...</div>:sub==='agenda'?<ConteudoAgendaGeral/>:sub==='monitor'?<><div className="agenda-kpis">{monitorStatus.map(s=>{const total=base.agendamentos.filter(a=>monitorMatch(a,s)).length;return <button type="button" className="agenda-kpi" key={s} onClick={()=>setMonitorFiltro(s)} style={{textAlign:'left',outline:monitorFiltro===s?'2px solid var(--folha)':'none',cursor:'pointer'}}><b>{total}</b><span>{AG_STATUS_LABEL[s]}</span></button>})}</div><div className="card">{monitorLista.length===0?<div className="muted">Nenhum agendamento neste status.</div>:monitorLista.map(a=><div className="agenda-lista-item row" key={a.id}><div className="grow"><b>{a.placa} · {a.origem} → {a.destino}</b><div className="muted">{a.motorista} · Saída prevista: {fmtDataHora(a.saidaPrevista)}</div><div className="muted">Devolução prevista: {fmtDataHora(a.retornoPrevisto)}{a.retornoReal?<> · Devolução real: {fmtDataHora(a.retornoReal)}</>:a.status==='DEVOLUCAO_ATRASADA'?<span style={{color:'var(--erro)',fontWeight:700}}> · Atrasada</span>:null}</div></div><AgendaStatus status={a.status}/><button className="btn btn-g btn-sm" onClick={()=>setDetalhe(a)}>Abrir</button></div>)}</div></>:sub==='relatorio'?<><div className="row"><div className="grow"><h2>Relatório de agendamentos</h2></div><button className="btn btn-p" onClick={exportar}>Exportar Excel</button></div><div className="card"><div className="form-grid"><div><label>Período de</label><input type="date" value={fDataIniRel} onChange={e=>setFDataIniRel(e.target.value)}/></div><div><label>Até</label><input type="date" value={fDataFimRel} onChange={e=>setFDataFimRel(e.target.value)}/></div><div><label>Veículo</label><select value={fPlacaRel} onChange={e=>setFPlacaRel(e.target.value)}><option value="TODAS">Todas as placas</option>{placasRel.map(p=><option key={p} value={p}>{p}</option>)}</select></div><div><label>Status</label><select value={fStatus} onChange={e=>setFStatus(e.target.value)}><option value="TODOS">Todos os status</option>{Object.keys(AG_STATUS_LABEL).map(s=><option key={s} value={s}>{AG_STATUS_LABEL[s]}</option>)}</select></div></div><div style={{overflowX:'auto',marginTop:12}}><table><thead><tr><th>Código</th><th>Veículo</th><th>Motorista</th><th>Trajeto</th><th>Previsto</th><th>Real</th><th>KM</th><th>Status</th></tr></thead><tbody>{filtrados.map(a=><tr key={a.id}><td>{a.codigo}</td><td>{a.placa}</td><td>{a.motorista}</td><td>{a.origem} → {a.destino}</td><td>{fmtDataHora(a.saidaPrevista)}<br/>{fmtDataHora(a.retornoPrevisto)}</td><td>{fmtDataHora(a.saidaReal)}<br/>{fmtDataHora(a.retornoReal)}</td><td>{a.kmInicial||'—'} → {a.kmFinal||'—'}</td><td><AgendaStatus status={a.status}/></td></tr>)}</tbody></table></div></div></>:<><div className="row"><div className="grow"><h2>Parâmetros de agendamentos</h2><div className="muted">Configurações lidas da lista Agendamentos_Parametros.</div></div><button className="btn btn-p" disabled={salvandoParam} onClick={salvarParametros}>{salvandoParam?'Salvando...':'Salvar parâmetros'}</button></div><div className="card"><div className="form-grid"><div><label>Dias permitidos para frente</label><input type="number" value={paramForm.diasPermitidosFrente??''} onChange={e=>alterarParam('diasPermitidosFrente',Number(e.target.value))}/></div><div><label>Antecedência mínima para criar/agendar (horas)</label><input type="number" value={paramForm.antecedenciaMinimaHoras??''} onChange={e=>alterarParam('antecedenciaMinimaHoras',Number(e.target.value))}/></div><div><label>Duração máxima (horas)</label><input type="number" value={paramForm.duracaoMaximaHoras??''} onChange={e=>alterarParam('duracaoMaximaHoras',Number(e.target.value))}/></div><div><label>Intervalo entre reservas (minutos)</label><input type="number" value={paramForm.intervaloReservasMinutos??''} onChange={e=>alterarParam('intervaloReservasMinutos',Number(e.target.value))}/></div><div><label>Hora inicial permitida</label><input type="time" value={paramForm.horaInicialPermitida||'00:00'} onChange={e=>alterarParam('horaInicialPermitida',e.target.value)}/></div><div><label>Hora final permitida</label><input type="time" value={paramForm.horaFinalPermitida||'23:59'} onChange={e=>alterarParam('horaFinalPermitida',e.target.value)}/></div><div><label>Permite sábado</label><SimNao campo="permiteSabado"/></div><div><label>Permite domingo</label><SimNao campo="permiteDomingo"/></div><div><label>Permite feriado</label><SimNao campo="permiteFeriado"/></div><div><label>Confirmação automática</label><SimNao campo="confirmacaoAutomatica"/></div><div><label>Periodicidade do checklist</label><select value={paramForm.checklistPeriodicidade||'SEMANAL'} onChange={e=>alterarParam('checklistPeriodicidade',e.target.value)}><option>DIARIO</option><option>SEMANAL</option><option>A_CADA_RETIRADA</option></select></div><div><label>Abre checklist na NC</label><SimNao campo="abreChecklistNaNC"/></div><div><label>Resposta impeditiva bloqueia</label><SimNao campo="respostaImpeditivaBloqueia"/></div><div><label>Código checklist Frota Leve</label><input value={paramForm.codigoChecklistFrotaLeve||''} onChange={e=>alterarParam('codigoChecklistFrotaLeve',e.target.value)}/></div><div><label>Libera retirada antes da saída (minutos)</label><input type="number" value={paramForm.janelaRetiradaMinutos??''} onChange={e=>alterarParam('janelaRetiradaMinutos',Number(e.target.value))}/></div><div><label>Tolerância devolução (minutos)</label><input type="number" value={paramForm.toleranciaDevolucaoMinutos??''} onChange={e=>alterarParam('toleranciaDevolucaoMinutos',Number(e.target.value))}/></div><div><label>Permite finalizar antes</label><SimNao campo="permiteFinalizarAnterior"/></div><div><label>Libera no retorno real</label><SimNao campo="liberaNoRetornoReal"/></div></div></div></>}
+    {form&&<FormAgendamento base={base} admin dataInicial={diaSelecionado} onClose={()=>setForm(false)} onSalvo={carregar} toast={toast}/>} {detalhe&&<DetalheAgendamento item={detalhe} admin onClose={()=>setDetalhe(null)} onAtualizar={carregar} toast={toast}/>} 
   </>
 }
 
@@ -2875,8 +2904,13 @@ function AdmPainel({st, dados, user, onNavegar}){
   const [sinistrosPainel,setSinistrosPainel]=useState([]);
   const [periodoPendencias,setPeriodoPendencias]=useState(MES_ATUAL);
   const [carregandoPainel,setCarregandoPainel]=useState(false);
+  const [carregandoCargasPainel,setCarregandoCargasPainel]=useState(false);
   const [erroPainel,setErroPainel]=useState('');
+  const [erroCargasPainel,setErroCargasPainel]=useState('');
   const [progressoPainel,setProgressoPainel]=useState('');
+  const [revisaoPendencias,setRevisaoPendencias]=useState(0);
+  const [revisaoCargas,setRevisaoCargas]=useState(0);
+  const [cargasCarregadas,setCargasCarregadas]=useState(false);
   const [fMotorista,setFMotorista]=useState('');
   const [fTipo,setFTipo]=useState('');
   const [fSituacao,setFSituacao]=useState('');
@@ -2886,17 +2920,57 @@ function AdmPainel({st, dados, user, onNavegar}){
   const [fProdutoDetalhe,setFProdutoDetalhe]=useState('');
   const [fDataInicialDetalhe,setFDataInicialDetalhe]=useState('');
   const [fDataFinalDetalhe,setFDataFinalDetalhe]=useState('');
-  const [revisao,setRevisao]=useState(0);
   const [mesNumero,anoNumero]=String(mes).split('/');
   const competencia=anoNumero+'-'+mesNumero;
   const inicioMes=`${competencia}-01`;
   const fimMes=new Date(Number(anoNumero),Number(mesNumero),0).toISOString().slice(0,10);
 
+  /* Visão geral: carrega somente os módulos de pendência. */
   useEffect(()=>{
     let ativo=true;
-    const carregar=async()=>{
+    const carregarPendencias=async()=>{
       setCarregandoPainel(true);
       setErroPainel('');
+      try{
+        if(CONFIG.MODO_DEMONSTRACAO){
+          if(!ativo)return;
+          setContestacoesPainel(st.contestacoes||[]);
+          setChecklistsPainel(st.checklists||[]);
+          setSinistrosPainel(st.sinistros||[]);
+          return;
+        }
+        const [contestacoesResp,checklistsResp,sinistrosResp]=await Promise.allSettled([
+          pode(user,'contestacoes.visualizar')?ApiService.admListarContestacoes():Promise.resolve({contestacoes:[]}),
+          pode(user,'checklist.aprovacao')?ApiService.admListarChecklists():Promise.resolve({checklists:[]}),
+          pode(user,'sinistros.visualizar')?ApiService.admListarSinistros():Promise.resolve({sinistros:[]})
+        ]);
+        if(!ativo)return;
+        setContestacoesPainel(contestacoesResp.status==='fulfilled'?(contestacoesResp.value.contestacoes||[]):[]);
+        const dadosChecklist=checklistsResp.status==='fulfilled'?(checklistsResp.value.itens||checklistsResp.value.checklists||[]):[];
+        setChecklistsPainel(dadosChecklist.map(x=>({
+          ...x,
+          motorista:x.motorista||x.motoristaNome||'',
+          data:String(x.data||x.dataHoraLocal||'').slice(0,10),
+          status:String(x.status||'PENDENTE').toLowerCase()
+        })));
+        setSinistrosPainel(sinistrosResp.status==='fulfilled'?(sinistrosResp.value.sinistros||[]):[]);
+      }catch(e){
+        if(ativo)setErroPainel('Não foi possível carregar as pendências: '+e.message);
+      }finally{
+        if(ativo)setCarregandoPainel(false);
+      }
+    };
+    carregarPendencias();
+    return()=>{ativo=false};
+  },[revisaoPendencias]);
+
+  /* Subtela Cargas: dados pesados somente sob demanda. */
+  useEffect(()=>{
+    if(revisaoCargas===0)return;
+    let ativo=true;
+    const carregarCargas=async()=>{
+      setCarregandoCargasPainel(true);
+      setErroCargasPainel('');
       try{
         if(CONFIG.MODO_DEMONSTRACAO){
           if(!ativo)return;
@@ -2907,20 +2981,13 @@ function AdmPainel({st, dados, user, onNavegar}){
           const salvas={};
           (st.apuracoes||[]).filter(a=>String(a.competencia||'')===competencia).forEach(a=>{salvas[String(a.motoristaId||a.usuarioId||'')]=a});
           setApuracoesPainel(salvas);
-          setContestacoesPainel(st.contestacoes||[]);
-          setChecklistsPainel(st.checklists||[]);
-          setSinistrosPainel(st.sinistros||[]);
+          setCargasCarregadas(true);
           return;
         }
         const [cadastros,cargasResp,apuracoesResp]=await Promise.all([
           ApiService.admCadastros(),
           ApiService.obterCargas(competencia),
           ApiService.obterApuracoesSalvas(competencia)
-        ]);
-        const [contestacoesResp,checklistsResp,sinistrosResp]=await Promise.allSettled([
-          pode(user,'contestacoes.visualizar')?ApiService.admListarContestacoes():Promise.resolve({contestacoes:[]}),
-          pode(user,'checklist.aprovacao')?ApiService.admListarChecklists():Promise.resolve({checklists:[]}),
-          pode(user,'sinistros.visualizar')?ApiService.admListarSinistros():Promise.resolve({sinistros:[]})
         ]);
         if(!ativo)return;
         const usuarios=Array.isArray(cadastros.usuarios)?cadastros.usuarios:[];
@@ -2934,33 +3001,25 @@ function AdmPainel({st, dados, user, onNavegar}){
           salvas[String(item.motoristaId||'')]=apuracaoSalvaParaTela(item,u?.nome||'');
         });
         setApuracoesPainel(salvas);
-        setContestacoesPainel(contestacoesResp.status==='fulfilled'?(contestacoesResp.value.contestacoes||[]):[]);
-        const dadosChecklist=checklistsResp.status==='fulfilled'?(checklistsResp.value.itens||checklistsResp.value.checklists||[]):[];
-        setChecklistsPainel(dadosChecklist.map(x=>({
-          ...x,
-          motorista:x.motorista||x.motoristaNome||'',
-          data:String(x.data||x.dataHoraLocal||'').slice(0,10),
-          status:String(x.status||'PENDENTE').toLowerCase()
-        })));
-        setSinistrosPainel(sinistrosResp.status==='fulfilled'?(sinistrosResp.value.sinistros||[]):[]);
+        setCargasCarregadas(true);
       }catch(e){
-        if(ativo)setErroPainel('Não foi possível carregar o painel: '+e.message);
+        if(ativo)setErroCargasPainel('Não foi possível carregar Cargas: '+e.message);
       }finally{
-        if(ativo)setCarregandoPainel(false);
+        if(ativo)setCarregandoCargasPainel(false);
       }
     };
-    carregar();
+    carregarCargas();
     return()=>{ativo=false};
-  },[mes,revisao]);
+  },[mes,revisaoCargas]);
 
   const motoristas=usuariosPainel.filter(u=>usuarioValidoPremiacaoPeriodo(u,vinculosPainel,inicioMes,fimMes));
   const mesFechado=Object.values(apuracoesPainel).some(
     item=>String(item?.status||'').toUpperCase()==='FECHADO'
   );
   const recalcularMes=async()=>{
-    if(!motoristas.length||carregandoPainel)return;
-    setCarregandoPainel(true);
-    setErroPainel('');
+    if(!motoristas.length||carregandoCargasPainel)return;
+    setCarregandoCargasPainel(true);
+    setErroCargasPainel('');
     setProgressoPainel('');
     const falhas=[];
     try{
@@ -2986,11 +3045,11 @@ function AdmPainel({st, dados, user, onNavegar}){
         saida[String(item.motoristaId||'')]=apuracaoSalvaParaTela(item,u?.nome||'');
       });
       setApuracoesPainel(saida);
-      if(falhas.length)setErroPainel(`${falhas.length} motorista(s) não puderam ser atualizados: ${falhas.join(' | ')}`);
+      if(falhas.length)setErroCargasPainel(`${falhas.length} motorista(s) não puderam ser atualizados: ${falhas.join(' | ')}`);
     }catch(e){
-      setErroPainel('Falha ao atualizar a apuração mensal: '+e.message);
+      setErroCargasPainel('Falha ao atualizar a apuração mensal: '+e.message);
     }finally{
-      setCarregandoPainel(false);
+      setCarregandoCargasPainel(false);
       setProgressoPainel('');
     }
   };
@@ -3076,18 +3135,20 @@ function AdmPainel({st, dados, user, onNavegar}){
 
   const Subtabs=()=> <div className="subtabs" style={{marginBottom:12}}>
     <button className={'subtab'+(subPainel==='visao'?' on':'')} onClick={()=>setSubPainel('visao')}>Visão geral</button>
-    <button className={'subtab'+(['cargas','detalhes'].includes(subPainel)?' on':'')} onClick={()=>setSubPainel('cargas')}>Cargas</button>
+    <button className={'subtab'+(['cargas','detalhes'].includes(subPainel)?' on':'')} onClick={()=>{setSubPainel('cargas');if(!cargasCarregadas)setRevisaoCargas(v=>v+1)}}>Cargas</button>
   </div>;
 
+  const emCargas=['cargas','detalhes'].includes(subPainel);
   const Cabecalho=()=> <div className="row" style={{flexWrap:'wrap',gap:10,alignItems:'flex-end'}}>
     <div className="grow"><h2 style={{marginBottom:2}}>Painel operacional</h2><div className="muted">Pendências que aguardam análise, aprovação ou reprovação</div></div>
-    <button className="btn btn-s btn-sm" disabled={carregandoPainel} onClick={()=>setRevisao(v=>v+1)}>{carregandoPainel?'Carregando...':'Recarregar dados'}</button>
-    {pode(user,'apuracao.mensal.atualizar')&&<button
+    {subPainel==='visao'&&<button className="btn btn-s btn-sm" disabled={carregandoPainel} onClick={()=>setRevisaoPendencias(v=>v+1)}>{carregandoPainel?'Carregando...':'Atualizar pendências'}</button>}
+    {emCargas&&<button className="btn btn-s btn-sm" disabled={carregandoCargasPainel} onClick={()=>setRevisaoCargas(v=>v+1)}>{carregandoCargasPainel?'Carregando...':'Recarregar dados'}</button>}
+    {emCargas&&pode(user,'apuracao.mensal.atualizar')&&<button
       className="btn btn-p btn-sm"
-      disabled={carregandoPainel||mesFechado}
+      disabled={carregandoCargasPainel||mesFechado}
       title={mesFechado?'O quadrimestre está fechado. Reabra-o no Fechamento RH para atualizar este mês.':''}
       onClick={recalcularMes}>
-      {carregandoPainel?'Atualizando...':mesFechado?'Quadrimestre fechado':'Atualizar apuração mensal'}
+      {carregandoCargasPainel?'Atualizando...':mesFechado?'Quadrimestre fechado':'Atualizar apuração mensal'}
     </button>}
   </div>;
 
@@ -3130,8 +3191,10 @@ function AdmPainel({st, dados, user, onNavegar}){
 
   return <React.Fragment>
     <Cabecalho/><Subtabs/>
-    {carregandoPainel&&<div className="aviso-box">{progressoPainel||'Carregando cargas, motoristas e apurações salvas...'}</div>}
-    {erroPainel&&<div className="aviso-box" style={{color:'var(--erro)'}}>{erroPainel}</div>}
+    {subPainel==='visao'&&carregandoPainel&&<div className="aviso-box">Carregando pendências operacionais...</div>}
+    {subPainel==='visao'&&erroPainel&&<div className="aviso-box" style={{color:'var(--erro)'}}>{erroPainel}</div>}
+    {['cargas','detalhes'].includes(subPainel)&&carregandoCargasPainel&&<div className="aviso-box">{progressoPainel||'Carregando cargas, motoristas e apurações salvas...'}</div>}
+    {['cargas','detalhes'].includes(subPainel)&&erroCargasPainel&&<div className="aviso-box" style={{color:'var(--erro)'}}>{erroCargasPainel}</div>}
 
     {!carregandoPainel&&!erroPainel&&subPainel==='visao'&&<React.Fragment>
       <div className="card" style={{padding:12}}>
@@ -3162,7 +3225,7 @@ function AdmPainel({st, dados, user, onNavegar}){
       <div className="aviso-box">O painel apenas sinaliza o volume pendente e direciona para o módulo de origem. A decisão continua sendo registrada na tela responsável.</div>
     </React.Fragment>}
 
-    {!carregandoPainel&&!erroPainel&&subPainel==='cargas'&&<React.Fragment>
+    {!carregandoCargasPainel&&!erroCargasPainel&&subPainel==='cargas'&&<React.Fragment>
       <FiltrosCargas/>
       <div className="cards4" style={{marginTop:12}}>
         <div className="card kpi"><div className="l">Motoristas</div><div className="v num">{linhasFiltradas.length}</div></div>
@@ -4587,7 +4650,7 @@ function AdmSinistros({toast,user,foco}){
     {sub==='gestao'&&podeGestao&&<React.Fragment>
       <div className="card"><div className="filtros-cadastro" style={{margin:0}}>
         <div><label>Buscar</label><input value={filtro.texto} onChange={e=>setFiltro({...filtro,texto:e.target.value})} placeholder="Protocolo, placa ou motorista"/></div>
-        <div><label>Status</label><select value={filtro.status} onChange={e=>setFiltro({...filtro,status:e.target.value})}><option value="ABERTOS">Em aberto</option><option value="TODOS">Todos</option>{['ABERTO','AGUARDANDO_ANALISE','EM_ATENDIMENTO','AGUARDANDO_DOCUMENTOS','ENCAMINHADO_SEGURADORA','AGUARDANDO_ORCAMENTO','EM_REPARO','AGUARDANDO_TERCEIRO','CONCLUIDO','CANCELADO'].map(x=><option key={x} value={x}>{x.replaceAll('_',' ')}</option>)}</select></div>
+        <div><label>Status</label><select value={filtro.status} onChange={e=>setFiltro({...filtro,status:e.target.value})}><option value="ABERTOS">Todos em aberto</option><option value="TODOS">Todos</option>{['ABERTO','AGUARDANDO_ANALISE','EM_ATENDIMENTO','AGUARDANDO_DOCUMENTOS','ENCAMINHADO_SEGURADORA','AGUARDANDO_ORCAMENTO','EM_REPARO','AGUARDANDO_TERCEIRO','CONCLUIDO','CANCELADO'].map(x=><option key={x} value={x}>{x==='ABERTO'?'Aberto (novo)':x.replaceAll('_',' ')}</option>)}</select></div>
         <div><label>Competência</label><input type="month" value={filtro.competencia||''} onChange={e=>setFiltro({...filtro,competencia:e.target.value})}/></div>
         <div><label>Gravidade</label><select value={filtro.gravidade} onChange={e=>setFiltro({...filtro,gravidade:e.target.value})}><option value="">Todas</option>{['BAIXA','MEDIA','ALTA','CRITICA'].map(x=><option key={x}>{x}</option>)}</select></div>
       </div></div>
