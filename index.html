@@ -187,9 +187,12 @@ th.td-num{text-align:right}
 .agenda-proxima-info b{display:block;font-size:11px;text-transform:uppercase;color:var(--cinza);margin-bottom:3px}
 .agenda-dia-lista{display:flex;flex-direction:column;gap:8px}
 .agenda-dia-card{padding:13px 14px;border-left:5px solid var(--folha);background:#fff;border-radius:12px;box-shadow:var(--sombra);text-align:left;width:100%}
+.agenda-fab{position:fixed;right:22px;bottom:86px;width:58px;height:58px;border-radius:50%;font-size:28px;z-index:25}
+
 
 @media(min-width:900px){
   .mshell.mshell-agendamento{max-width:780px}
+  .mshell.mshell-agendamento .agenda-fab{right:calc((100vw - 780px)/2 + 18px)}
   .mshell.mshell-agendamento .mtabs{max-width:780px}
   .mshell.mshell-agendamento .agenda-dia{min-height:100px}
   .mshell.mshell-agendamento .agenda-evento{
@@ -325,7 +328,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 90000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '2.8.1'
+  VERSAO: '2.8.2'
 };
 
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
@@ -2169,8 +2172,8 @@ function FormAgendamento({base,item,onClose,onSalvo,toast,admin=false,dataInicia
   const agora=new Date(),pad=n=>String(n).padStart(2,'0'),local=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   const dataBase=(!item&&dataInicial instanceof Date&&Number.isFinite(dataInicial.getTime()))?new Date(dataInicial.getFullYear(),dataInicial.getMonth(),dataInicial.getDate(),agora.getHours(),agora.getMinutes()):agora;
   const retorno=new Date(dataBase.getTime()+2*3600000);
-  const [form,setForm]=useState({veiculoId:item?.veiculoId||'',motorista:item?.motorista||'',origem:item?.origem||'',destino:item?.destino||'',saidaPrevista:item?.saidaPrevista?String(item.saidaPrevista).slice(0,16):local(dataBase),retornoPrevisto:item?.retornoPrevisto?String(item.retornoPrevisto).slice(0,16):local(retorno),possuiPassageiros:item?.possuiPassageiros||false,quantidadePassageiros:item?.quantidadePassageiros||0,observacao:item?.observacao||'',criadoManualmente:admin});
-  const [salvando,setSalvando]=useState(false);const salvar=async()=>{if(!form.veiculoId||!form.motorista.trim()||!form.origem.trim()||!form.destino.trim()){toast('Informe veículo, motorista, origem e destino.');return}if(new Date(form.retornoPrevisto)<=new Date(form.saidaPrevista)){toast('O retorno deve ser posterior à saída.');return}setSalvando(true);try{if(item)await ApiService.alterarAgendamento(item.id,form);else await ApiService.criarAgendamento(form);toast(item?'Agendamento alterado.':'Agendamento criado.');await onSalvo();onClose()}catch(e){toast(e.message)}finally{setSalvando(false)}};
+  const [form,setForm]=useState({veiculoId:item?.veiculoId||'',motorista:item?.motorista||'',origem:item?.origem||'',destino:item?.destino||'',saidaPrevista:item?.saidaPrevista?local(new Date(item.saidaPrevista)):local(dataBase),retornoPrevisto:item?.retornoPrevisto?local(new Date(item.retornoPrevisto)):local(retorno),possuiPassageiros:item?.possuiPassageiros||false,quantidadePassageiros:item?.quantidadePassageiros||0,observacao:item?.observacao||'',criadoManualmente:admin});
+  const [salvando,setSalvando]=useState(false);const salvar=async()=>{if(!form.veiculoId||!form.motorista.trim()||!form.origem.trim()||!form.destino.trim()){toast('Informe veículo, motorista, origem e destino.');return}const saidaLocal=new Date(form.saidaPrevista),retornoLocal=new Date(form.retornoPrevisto);if(!Number.isFinite(saidaLocal.getTime())||!Number.isFinite(retornoLocal.getTime())){toast('Informe datas e horários válidos.');return}if(retornoLocal<=saidaLocal){toast('O retorno deve ser posterior à saída.');return}const payload={...form,saidaPrevista:saidaLocal.toISOString(),retornoPrevisto:retornoLocal.toISOString()};setSalvando(true);try{if(item)await ApiService.alterarAgendamento(item.id,payload);else await ApiService.criarAgendamento(payload);toast(item?'Agendamento alterado.':'Agendamento criado.');await onSalvo();onClose()}catch(e){toast(e.message)}finally{setSalvando(false)}};
   return <Modal titulo={item?'Alterar agendamento':'Novo agendamento'} onClose={onClose} large><div className="agenda-modal-grid"><div><label>Saída prevista</label><input type="datetime-local" value={form.saidaPrevista} onChange={e=>setForm({...form,saidaPrevista:e.target.value})}/></div><div><label>Retorno previsto</label><input type="datetime-local" value={form.retornoPrevisto} onChange={e=>setForm({...form,retornoPrevisto:e.target.value})}/></div><div><label>Veículo compartilhado</label><select value={form.veiculoId} onChange={e=>setForm({...form,veiculoId:e.target.value})}><option value="">Selecionar...</option>{base.veiculos.map(v=><option key={v.id} value={v.id}>{v.placa} — {v.modelo||v.tipoModelo||'Sem modelo'}</option>)}</select></div><div><label>Motorista</label><input value={form.motorista} onChange={e=>setForm({...form,motorista:e.target.value})}/></div><div><label>Origem</label><input value={form.origem} onChange={e=>setForm({...form,origem:e.target.value})}/></div><div><label>Destino</label><input value={form.destino} onChange={e=>setForm({...form,destino:e.target.value})}/></div><div><label>Possui passageiros?</label><select value={form.possuiPassageiros?'sim':'nao'} onChange={e=>setForm({...form,possuiPassageiros:e.target.value==='sim',quantidadePassageiros:e.target.value==='sim'?form.quantidadePassageiros:0})}><option value="nao">Não</option><option value="sim">Sim</option></select></div>{form.possuiPassageiros&&<div><label>Quantidade</label><input type="number" min="1" value={form.quantidadePassageiros} onChange={e=>setForm({...form,quantidadePassageiros:Number(e.target.value)})}/></div>}<div style={{gridColumn:'1/-1'}}><label>Observação</label><textarea rows="3" value={form.observacao} onChange={e=>setForm({...form,observacao:e.target.value})}/></div></div><div className="agenda-acoes" style={{marginTop:14}}><button className="btn btn-g" onClick={onClose}>Voltar</button><button className="btn btn-p" disabled={salvando} onClick={salvar}>{salvando?'Salvando...':'Validar e salvar'}</button></div></Modal>
 }
 function DetalheAgendamento({item,admin,onClose,onAtualizar,toast,onAbrirChecklist,parametros={}}){
@@ -2304,7 +2307,7 @@ function TelaAgendamento({user,toast,onAbrirChecklist}){
       <div className="card row"><button className="btn btn-g btn-sm" onClick={()=>moverDia(-1)}>‹</button><b className="grow" style={{textAlign:'center'}}>{diaSelecionado.toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long'})}</b><button className="btn btn-g btn-sm" onClick={()=>moverDia(1)}>›</button></div>
       {eventosDia.length?eventosDia.sort((a,b)=>new Date(a.saidaPrevista)-new Date(b.saidaPrevista)).map(e=>{const c=corAgendaVeiculo(e.placa);return <button key={e.id} className="agenda-dia-card" style={{borderLeftColor:c.b}} onClick={()=>setDetalhe(e)}><div className="row"><div className="grow"><b>{String(e.saidaPrevista||'').slice(11,16)} · {e.placa}</b><div className="muted">{e.origem} → {e.destino}</div></div><AgendaStatus status={e.status}/></div></button>}):<div className="card muted">Nenhum agendamento neste dia.</div>}
     </div>}
-    <button className="btn btn-p" style={{position:'fixed',right:22,bottom:86,width:58,height:58,borderRadius:'50%',fontSize:28,zIndex:25}} onClick={()=>setForm(true)}>+</button>
+    <button className="btn btn-p agenda-fab" onClick={()=>setForm(true)}>+</button>
   </>}{form&&<FormAgendamento base={base} dataInicial={diaSelecionado} onClose={()=>setForm(false)} onSalvo={carregar} toast={toast}/>} {detalheAtual&&<DetalheAgendamento item={detalheAtual} parametros={base.parametros} onClose={()=>setDetalhe(null)} onAtualizar={carregar} toast={toast} onAbrirChecklist={onAbrirChecklist}/>}</>
 }
 function AdmAgendamentos({user,toast}){
