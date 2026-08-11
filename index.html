@@ -353,7 +353,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 90000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '2.8.9'
+  VERSAO: '2.8.10'
 };
 
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
@@ -576,7 +576,7 @@ function comprimirImagem(arquivo){
 function otimizarArquivoBinario(arquivo){
   if(!String(arquivo?.type||'').toLowerCase().startsWith('image/')){
     if(Number(arquivo?.size||0)>4*1024*1024) return Promise.reject(new Error('O arquivo '+arquivo.name+' ultrapassa 4 MB.'));
-    return Promise.resolve({nome:arquivo.name||'arquivo',tipo:arquivo.type||'application/octet-stream',blob:arquivo,tamanho:Number(arquivo.size||0)});
+    return Promise.resolve({nome:arquivo.name||'arquivo',tipo:arquivo.type||'application/octet-stream',blob:arquivo,tamanho:Number(arquivo.size||0),chave:[arquivo.name||'arquivo',arquivo.size||0,arquivo.lastModified||0].join('_')});
   }
   return new Promise((resolve,reject)=>{
     const url=URL.createObjectURL(arquivo),img=new Image();
@@ -589,7 +589,7 @@ function otimizarArquivoBinario(arquivo){
           URL.revokeObjectURL(url);
           if(!blob){reject(new Error('Não foi possível otimizar '+arquivo.name));return;}
           if(blob.size>4*1024*1024){reject(new Error('A foto '+arquivo.name+' ainda ultrapassa 4 MB após a otimização.'));return;}
-          resolve({nome:String(arquivo.name||'foto').replace(/\.[^.]+$/,'')+'.jpg',tipo:'image/jpeg',blob,tamanho:blob.size});
+          resolve({nome:String(arquivo.name||'foto').replace(/\.[^.]+$/,'')+'.jpg',tipo:'image/jpeg',blob,tamanho:blob.size,chave:[arquivo.name||'foto',arquivo.size||0,arquivo.lastModified||0].join('_')});
         },'image/jpeg',CONFIG.QUALIDADE_FOTO);
       }catch(e){URL.revokeObjectURL(url);reject(e);}
     };
@@ -724,7 +724,7 @@ const ApiService = {
   obterMeusSinistros(){ return this._req('GET','/sinistros/me'); },
   obterSinistro(id){ return this._req('GET','/sinistros/'+encodeURIComponent(id)); },
   async enviarArquivoDocumentoSinistro(id,documentoId,arquivo){
-    const headers={Authorization:'Bearer '+(_token||''),'X-File-Name':encodeURIComponent(arquivo.nome||'arquivo'),'X-File-Type':arquivo.tipo||'application/octet-stream','X-File-Size':String(arquivo.tamanho||arquivo.blob?.size||0)};
+    const headers={Authorization:'Bearer '+(_token||''),'X-File-Name':encodeURIComponent(arquivo.nome||'arquivo'),'X-File-Type':arquivo.tipo||'application/octet-stream','X-File-Size':String(arquivo.tamanho||arquivo.blob?.size||0),'X-File-Key':encodeURIComponent(arquivo.chave||'')};
     const r=await fetchComTimeout(CONFIG.API_URL+'/sinistros/'+encodeURIComponent(id)+'/documentos/'+encodeURIComponent(documentoId)+'/arquivo',{method:'POST',headers,body:arquivo.blob},CONFIG.TIMEOUT_MS);
     if(!r.ok){let d={};try{d=await r.json();}catch{};const e=new Error(d.erro||d.mensagem||('Erro '+r.status));e.status=r.status;throw e;}return r.json();
   },
@@ -2163,13 +2163,36 @@ function TelaSinistro({user,toast}){
     finally{setCarregandoRegistro(false);}
   };
   const selecionarComplemento=async(docId,files)=>{
-    const selecionados=[...files].slice(0,8),conv=[];let total=0;
+    const atuais=Array.isArray(complementos?.[docId]?.arquivos)?complementos[docId].arquivos:[];
+    const restantes=Math.max(0,8-atuais.length);
+    if(!restantes){toast('Limite de 8 arquivos por solicitação.');return;}
+    const selecionados=[...files].slice(0,restantes),conv=[];
+    let total=atuais.reduce((s,a)=>s+Number(a?.tamanho||a?.blob?.size||0),0);
     for(const f of selecionados){
-      try{const item=await otimizarArquivoBinario(f);if(total+item.tamanho>18*1024*1024){toast('Os arquivos ultrapassam 18 MB após a otimização. Envie em menos arquivos.');break;}total+=item.tamanho;conv.push(item);}
-      catch(e){toast(e.message||('Não foi possível preparar '+f.name));}
+      try{
+        const item=await otimizarArquivoBinario(f);
+        const duplicado=atuais.some(a=>String(a?.chave||'')===String(item?.chave||'')&&item?.chave);
+        if(duplicado)continue;
+        if(total+item.tamanho>18*1024*1024){toast('Os arquivos ultrapassam 18 MB após a otimização. Envie em menos arquivos.');break;}
+        total+=item.tamanho;conv.push(item);
+      }catch(e){toast(e.message||('Não foi possível preparar '+f.name));}
     }
-    setComplementos(prev=>({...prev,[docId]:{...(prev[docId]||{}),arquivos:conv}}));
+    if(!conv.length)return;
+    setComplementos(prev=>{
+      const base=Array.isArray(prev?.[docId]?.arquivos)?prev[docId].arquivos:[];
+      const combinados=[...base];
+      for(const item of conv){
+        if(combinados.length>=8)break;
+        if(item?.chave&&combinados.some(a=>String(a?.chave||'')===String(item.chave)))continue;
+        combinados.push(item);
+      }
+      return {...prev,[docId]:{...(prev[docId]||{}),arquivos:combinados}};
+    });
   };
+  const removerComplementoArquivo=(docId,indice)=>setComplementos(prev=>{
+    const atual=prev?.[docId]||{};
+    return {...prev,[docId]:{...atual,arquivos:(atual.arquivos||[]).filter((_,i)=>i!==indice)}};
+  });
   const enviarComplemento=async doc=>{
     const dados=complementos[doc.id]||{};
     if(!Array.isArray(dados.arquivos)||!dados.arquivos.length){toast('Selecione o arquivo solicitado.');return;}
@@ -2230,7 +2253,7 @@ function TelaSinistro({user,toast}){
         <div className="card"><label>Local</label><b>{registroAberto.localOcorrido}</b><div className="muted">{registroAberto.municipio} / {registroAberto.uf}</div></div>
       </div>
       <div className="card" style={{marginTop:10}}><label>Descrição do ocorrido</label><div style={{whiteSpace:'pre-wrap'}}>{registroAberto.descricaoOcorrido}</div></div>
-      {(registroAberto.solicitacoesDocumentos||[]).length>0&&<div className="card" style={{marginTop:10}}><h3>Solicitações da Logística</h3><div className="muted" style={{marginTop:3}}>Envie somente os documentos solicitados abaixo. Cada item possui acompanhamento próprio.</div>{registroAberto.solicitacoesDocumentos.map(doc=>{const chave=normalizarPerfil(doc.statusDocumento);const podeEnviar=normalizarPerfil(registroAberto.statusSinistro)==='AGUARDANDO_DOCUMENTOS'&&['PENDENTE_DE_ENVIO','REJEITADO'].includes(chave);const dados=complementos[doc.id]||{};return <div className={'sinistro-documento-item '+(chave==='REJEITADO'?'rejeitado':chave==='PENDENTE_DE_ENVIO'?'pendente':chave==='ENVIADO'?'enviado':chave==='ACEITO'?'aceito':'dispensado')} key={doc.id}><div className="row"><div className="grow"><b>{doc.tipoDocumento}</b>{doc.obrigatorio&&<span className="muted"> · obrigatório</span>}</div><DocumentoStatusTag s={doc.statusDocumento}/></div>{doc.descricaoSolicitacao&&<div style={{marginTop:7,whiteSpace:'pre-wrap'}}>{doc.descricaoSolicitacao}</div>}{doc.motivoRejeicao&&<div className="erro-box" style={{marginTop:8}}><b>Motivo para reenviar:</b> {doc.motivoRejeicao}</div>}{(doc.arquivos||[]).length>0&&<div style={{marginTop:8}}>{doc.arquivos.map(a=><div className="sinistro-arquivo" key={a.id||a.nome}><span>📎</span><span className="grow">{a.nome}</span><a className="btn btn-g btn-sm" href={a.webUrl} target="_blank" rel="noopener">Abrir</a></div>)}</div>}{podeEnviar&&<div style={{marginTop:10}}><label>{chave==='REJEITADO'?'Reenviar arquivo(s)':'Adicionar arquivo(s)'}</label><input type="file" multiple accept="image/*,.pdf,.doc,.docx,video/*" onChange={e=>selecionarComplemento(doc.id,e.target.files||[])}/>{(dados.arquivos||[]).map((a,i)=><div className="muted" key={a.nome+i} style={{marginTop:4}}>📎 {a.nome}</div>)}<div style={{marginTop:8}}><label>Observação (opcional)</label><textarea rows="2" value={dados.observacao||''} onChange={e=>setComplementos(prev=>({...prev,[doc.id]:{...(prev[doc.id]||{}),observacao:e.target.value}}))}/></div><button className="btn btn-p" style={{width:'100%',marginTop:8}} disabled={enviandoDocumentoId===doc.id} onClick={()=>enviarComplemento(doc)}>{enviandoDocumentoId===doc.id?'Enviando...':(chave==='REJEITADO'?'Reenviar documento':'Enviar documento')}</button></div>}{chave==='ENVIADO'&&<div className="aviso-box" style={{marginTop:8}}>Documento recebido e aguardando conferência da Logística.</div>}</div>})}</div>}
+      {(registroAberto.solicitacoesDocumentos||[]).length>0&&<div className="card" style={{marginTop:10}}><h3>Solicitações da Logística</h3><div className="muted" style={{marginTop:3}}>Envie somente os documentos solicitados abaixo. Cada item possui acompanhamento próprio.</div>{registroAberto.solicitacoesDocumentos.map(doc=>{const chave=normalizarPerfil(doc.statusDocumento);const podeEnviar=normalizarPerfil(registroAberto.statusSinistro)==='AGUARDANDO_DOCUMENTOS'&&['PENDENTE_DE_ENVIO','REJEITADO'].includes(chave);const dados=complementos[doc.id]||{};return <div className={'sinistro-documento-item '+(chave==='REJEITADO'?'rejeitado':chave==='PENDENTE_DE_ENVIO'?'pendente':chave==='ENVIADO'?'enviado':chave==='ACEITO'?'aceito':'dispensado')} key={doc.id}><div className="row"><div className="grow"><b>{doc.tipoDocumento}</b>{doc.obrigatorio&&<span className="muted"> · obrigatório</span>}</div><DocumentoStatusTag s={doc.statusDocumento}/></div>{doc.descricaoSolicitacao&&<div style={{marginTop:7,whiteSpace:'pre-wrap'}}>{doc.descricaoSolicitacao}</div>}{doc.motivoRejeicao&&<div className="erro-box" style={{marginTop:8}}><b>Motivo para reenviar:</b> {doc.motivoRejeicao}</div>}{(doc.arquivos||[]).length>0&&<div style={{marginTop:8}}>{doc.arquivos.map(a=><div className="sinistro-arquivo" key={a.id||a.nome}><span>📎</span><span className="grow">{a.nome}</span><a className="btn btn-g btn-sm" href={a.webUrl} target="_blank" rel="noopener">Abrir</a></div>)}</div>}{podeEnviar&&<div style={{marginTop:10}}><label>{chave==='REJEITADO'?'Reenviar arquivo(s)':'Adicionar arquivo(s)'}</label><input type="file" multiple accept="image/*,.pdf,.doc,.docx,video/*" onChange={e=>{selecionarComplemento(doc.id,e.target.files||[]);e.target.value='';}}/><div className="muted" style={{marginTop:5}}>Até 8 arquivos. No celular, você pode selecionar vários de uma vez ou voltar em “Escolher arquivos” para adicionar outros sem perder os já escolhidos.</div>{(dados.arquivos||[]).map((a,i)=><div className="sinistro-arquivo" key={(a.chave||a.nome)+i}><span>📎</span><span className="grow">{a.nome}</span><button type="button" className="btn btn-g btn-sm" onClick={()=>removerComplementoArquivo(doc.id,i)}>Remover</button></div>)}<div style={{marginTop:8}}><label>Observação (opcional)</label><textarea rows="2" value={dados.observacao||''} onChange={e=>setComplementos(prev=>({...prev,[doc.id]:{...(prev[doc.id]||{}),observacao:e.target.value}}))}/></div><button className="btn btn-p" style={{width:'100%',marginTop:8}} disabled={enviandoDocumentoId===doc.id} onClick={()=>enviarComplemento(doc)}>{enviandoDocumentoId===doc.id?'Enviando...':(chave==='REJEITADO'?'Reenviar documento':'Enviar documento')}</button></div>}{chave==='ENVIADO'&&<div className="aviso-box" style={{marginTop:8}}>Documento recebido e aguardando conferência da Logística.</div>}</div>})}</div>}
       <div className="card" style={{marginTop:10}}><h3>Documentos e evidências do registro inicial</h3>{(registroAberto.documentos||[]).length?(registroAberto.documentos||[]).map(d=><div className="linha-item" key={d.id||d.nome}><span>📎 {d.nome}</span><a className="btn btn-g btn-sm" href={d.webUrl} target="_blank" rel="noopener">Abrir</a></div>):<div className="muted" style={{marginTop:8}}>Nenhum arquivo no envio inicial.</div>}</div>
       <div className="card" style={{marginTop:10}}><h3>Histórico</h3>{(registroAberto.historico||[]).length?(registroAberto.historico||[]).map(h=><div className="linha-item" key={h.id}><span><b>{h.acao||'Atualização'}</b><span className="muted" style={{display:'block'}}>{h.dataHora?new Date(h.dataHora).toLocaleString('pt-BR'):''} · {h.usuario||h.perfil}</span>{h.observacao&&<span style={{display:'block',marginTop:3}}>{h.observacao}</span>}</span></div>):<div className="muted" style={{marginTop:8}}>Sem movimentações adicionais.</div>}</div>
     </Modal>}
