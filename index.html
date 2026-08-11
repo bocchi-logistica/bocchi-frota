@@ -325,7 +325,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 90000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '2.7.9'
+  VERSAO: '2.8.0'
 };
 
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
@@ -1709,7 +1709,8 @@ function TelaChecklist({st, setSt, user, toast, inicioAgendamento, onInicioConsu
         statusChecklist: 'PENDENTE',
         agendamentoId: inicioAgendamento?.agendamentoId || '',
         etapaAgendamento: inicioAgendamento?.etapa || '',
-        origemChecklist: inicioAgendamento?.agendamentoId ? (modoOcorrenciaAgendamento?'AGENDAMENTO_NC':'AGENDAMENTO_RETIRADA') : 'CHECKLIST_NORMAL'
+        origemChecklist: inicioAgendamento?.agendamentoId ? (modoOcorrenciaAgendamento?'AGENDAMENTO_NC':'AGENDAMENTO_RETIRADA') : 'CHECKLIST_NORMAL',
+        regularizacaoTerceiro: inicioAgendamento?.regularizacaoTerceiro===true
       };
 
       // 1) grava na fila local ANTES de tentar enviar (não se perde sem internet)
@@ -2175,12 +2176,14 @@ function FormAgendamento({base,item,onClose,onSalvo,toast,admin=false,dataInicia
 function DetalheAgendamento({item,admin,onClose,onAtualizar,toast,onAbrirChecklist,parametros={}}){
   const [acao,setAcao]=useState(''),[km,setKm]=useState(''),[motivo,setMotivo]=useState(''),[obs,setObs]=useState(''),[problema,setProblema]=useState(false),[salvando,setSalvando]=useState(false),[avisoRetirada,setAvisoRetirada]=useState(false);
   const kmReferencia=Number(item.kmMinimoRetirada||0);
+  const regularizacaoTerceiro=item.regularizacaoTerceiro===true;
+  const somenteLeitura=!admin&&item.meuAgendamento===false&&!regularizacaoTerceiro;
   const janelaRetiradaMinutos=Math.max(0,Number(parametros?.janelaRetiradaMinutos||0));
   const inicioPrevistoRetirada=new Date(item.saidaPrevista||0);
   const liberaRetiradaEm=Number.isFinite(inicioPrevistoRetirada.getTime())?new Date(inicioPrevistoRetirada.getTime()-janelaRetiradaMinutos*60000):null;
   const retiradaLiberada=admin||!liberaRetiradaEm||Date.now()>=liberaRetiradaEm.getTime();
   const textoLiberacaoRetirada=liberaRetiradaEm?liberaRetiradaEm.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'';
-  const executar=async()=>{if(acao==='retirar'&&kmReferencia&&Number(km)<kmReferencia){toast(`KM inicial não pode ser menor que o último KM final registrado da placa (${kmReferencia}).`);return}setSalvando(true);try{let resposta=null;if(acao==='cancelar')resposta=await ApiService.cancelarAgendamento(item.id,motivo,obs);if(acao==='retirar')resposta=await ApiService.retirarAgendamento(item.id,{kmInicial:Number(km),possuiNC:problema,dataHora:new Date().toISOString()});if(acao==='finalizar')resposta=await ApiService.finalizarAgendamento(item.id,{kmFinal:Number(km),possuiProblema:problema,dataHora:new Date().toISOString()});if(acao==='corrigir')resposta=await ApiService.admCorrigirKmAgendamento(item.id,{kmInicial:Number(km),kmFinal:Number(obs||0),motivo});toast(resposta?.mensagem||'Ação concluída.');await onAtualizar();onClose();if(resposta?.abrirChecklist&&onAbrirChecklist)onAbrirChecklist({placa:resposta.placa||item.placa,agendamentoId:resposta.agendamentoId||item.id,etapa:resposta.etapa||acao,km:Number(resposta.km||km||0),modoChecklist:resposta.modoChecklist||'',ultimoChecklist:resposta.ultimoChecklist||null})}catch(e){toast(e.message)}finally{setSalvando(false)}};
+  const executar=async()=>{if(acao==='retirar'&&kmReferencia&&Number(km)<kmReferencia){toast(`KM inicial não pode ser menor que o último KM final registrado da placa (${kmReferencia}).`);return}setSalvando(true);try{let resposta=null;if(acao==='cancelar')resposta=await ApiService.cancelarAgendamento(item.id,motivo,obs);if(acao==='retirar')resposta=await ApiService.retirarAgendamento(item.id,{kmInicial:Number(km),possuiNC:problema,dataHora:new Date().toISOString()});if(acao==='finalizar')resposta=await ApiService.finalizarAgendamento(item.id,{kmFinal:Number(km),possuiProblema:problema,dataHora:new Date().toISOString(),regularizacaoTerceiro});if(acao==='corrigir')resposta=await ApiService.admCorrigirKmAgendamento(item.id,{kmInicial:Number(km),kmFinal:Number(obs||0),motivo});toast(resposta?.mensagem||'Ação concluída.');await onAtualizar();onClose();if(resposta?.abrirChecklist&&onAbrirChecklist)onAbrirChecklist({placa:resposta.placa||item.placa,agendamentoId:resposta.agendamentoId||item.id,etapa:resposta.etapa||acao,km:Number(resposta.km||km||0),modoChecklist:resposta.modoChecklist||'',ultimoChecklist:resposta.ultimoChecklist||null,regularizacaoTerceiro:resposta.regularizacaoTerceiro===true||regularizacaoTerceiro})}catch(e){toast(e.message)}finally{setSalvando(false)}};
   if(avisoRetirada&&!admin)return <Modal titulo="Orientações antes da retirada" onClose={()=>setAvisoRetirada(false)}>
     <div className="orientacao-retirada">
       <div className="orientacao-alerta">
@@ -2210,22 +2213,23 @@ function DetalheAgendamento({item,admin,onClose,onAtualizar,toast,onAbrirCheckli
     ?[['Veículo',item.placa],['Motorista',item.motorista],['Previsto',fmtDataHora(item.saidaPrevista)+' até '+fmtDataHora(item.retornoPrevisto)],['Real',fmtDataHora(item.saidaReal)+' até '+fmtDataHora(item.retornoReal)],['Último KM registrado',kmReferencia||'—']]
     :[['Veículo',item.placa],['Motorista',item.motorista],['Previsto',fmtDataHora(item.saidaPrevista)+' até '+fmtDataHora(item.retornoPrevisto)],['Real',fmtDataHora(item.saidaReal)+' até '+fmtDataHora(item.retornoReal)],['KM',`${item.kmInicial||'—'} → ${item.kmFinal||'—'}`]];
   return <Modal titulo={`${item.origem} → ${item.destino}`} onClose={onClose}><div className="row"><AgendaStatus status={item.status}/><span className="muted">{item.codigo}</span></div><div className="divider"/>{linhasDetalhe.map(([l,v])=><div className="linha-item" key={l}><b>{l}</b><span>{v}</span></div>)}{!acao&&<div className="agenda-acoes" style={{marginTop:14}}>
-  {aguardando&&<><button className="btn btn-d" onClick={()=>setAcao('cancelar')}>Cancelar agendamento</button><button className="btn btn-p" disabled={!retiradaLiberada} onClick={()=>{if(!retiradaLiberada)return;admin?(setKm(String(kmReferencia||item.kmInicial||'')),setAcao('retirar')):setAvisoRetirada(true)}}>{admin?'Retirar manualmente':retiradaLiberada?'Retirar veículo':'Retirada ainda não liberada'}</button>{!admin&&!retiradaLiberada&&<div className="muted" style={{width:'100%',fontSize:12,textAlign:'right'}}>Disponível a partir de {textoLiberacaoRetirada}</div>}</>}
+  {somenteLeitura&&<div className="aviso-box" style={{width:'100%'}}>Somente consulta. Este agendamento pertence a {item.motorista||'outro motorista'}.</div>}
+  {!somenteLeitura&&!regularizacaoTerceiro&&aguardando&&<><button className="btn btn-d" onClick={()=>setAcao('cancelar')}>Cancelar agendamento</button><button className="btn btn-p" disabled={!retiradaLiberada} onClick={()=>{if(!retiradaLiberada)return;admin?(setKm(String(kmReferencia||item.kmInicial||'')),setAcao('retirar')):setAvisoRetirada(true)}}>{admin?'Retirar manualmente':retiradaLiberada?'Retirar veículo':'Retirada ainda não liberada'}</button>{!admin&&!retiradaLiberada&&<div className="muted" style={{width:'100%',fontSize:12,textAlign:'right'}}>Disponível a partir de {textoLiberacaoRetirada}</div>}</>}
+  {regularizacaoTerceiro&&emUso&&<><div className="aviso-box" style={{width:'100%'}}>Este veículo possui uma devolução anterior ainda aberta por {item.motorista||'outro motorista'}. Informe a condição atual do veículo para liberar sua retirada.</div><button className="btn btn-p" onClick={()=>{setKm(String(item.kmFinal||''));setProblema(item.status==='PENDENTE_FINALIZACAO');setAcao('finalizar')}}>Regularizar devolução anterior</button></>}
   {admin&&item.status==='EM_USO'&&<><button className="btn btn-s" onClick={()=>{setKm(item.kmInicial||'');setObs(item.kmFinal||'');setAcao('corrigir')}}>Corrigir KM</button><button className="btn btn-d" onClick={()=>setAcao('cancelar')}>Cancelar agendamento</button><button className="btn btn-p" onClick={()=>setAcao('finalizar')}>Finalizar manualmente</button></>}
   {admin&&item.status==='DEVOLUCAO_ATRASADA'&&<><button className="btn btn-s" onClick={()=>{setKm(item.kmInicial||'');setObs(item.kmFinal||'');setAcao('corrigir')}}>Corrigir KM</button><button className="btn btn-p" onClick={()=>setAcao('finalizar')}>Finalizar manualmente</button></>}
   {admin&&item.status==='PENDENTE_FINALIZACAO'&&<><button className="btn btn-s" onClick={()=>{setKm(item.kmInicial||'');setObs(item.kmFinal||'');setAcao('corrigir')}}>Corrigir KM</button><button className="btn btn-p" onClick={()=>setAcao('finalizar')}>Concluir finalização</button></>}
-  {!admin&&emUso&&<button className="btn btn-p" onClick={()=>setAcao('finalizar')}>{item.status==='PENDENTE_FINALIZACAO'?'Concluir devolução':'Devolver veículo'}</button>}
+  {!admin&&!somenteLeitura&&!regularizacaoTerceiro&&emUso&&<button className="btn btn-p" onClick={()=>setAcao('finalizar')}>{item.status==='PENDENTE_FINALIZACAO'?'Concluir devolução':'Devolver veículo'}</button>}
   {admin&&item.status==='FINALIZADO'&&<button className="btn btn-s" onClick={()=>{setKm(item.kmInicial||'');setObs(item.kmFinal||'');setAcao('corrigir')}}>Corrigir KM</button>}
-</div>}{acao&&<div style={{marginTop:14}}>{acao==='cancelar'?<><label>Motivo obrigatório</label><select value={motivo} onChange={e=>setMotivo(e.target.value)}><option value="">Selecionar...</option>{['VIAGEM_CANCELADA','ALTERACAO_PROGRAMACAO','VEICULO_NAO_NECESSARIO','MOTORISTA_INDISPONIVEL','VEICULO_INDISPONIVEL','ERRO_AGENDAMENTO','DUPLICIDADE','OUTRO'].map(x=><option key={x}>{x}</option>)}</select><label style={{marginTop:8}}>Observação</label><textarea value={obs} onChange={e=>setObs(e.target.value)}/></>:<><label>{acao==='finalizar'?'KM final':'KM inicial'}</label><input type="number" min={acao==='retirar'&&kmReferencia?kmReferencia:1} value={km} onChange={e=>setKm(e.target.value)}/>{acao==='retirar'&&kmReferencia>0&&<div className="muted" style={{marginTop:5}}>Último KM registrado: {kmReferencia}. Informe este valor ou um superior.</div>}{acao==='corrigir'&&<><label style={{marginTop:8}}>KM final correto</label><input type="number" value={obs} onChange={e=>setObs(e.target.value)}/><label style={{marginTop:8}}>Motivo</label><textarea value={motivo} onChange={e=>setMotivo(e.target.value)}/></>}{acao!=='corrigir'&&<div style={{marginTop:8}}><label>{acao==='retirar'?'Possui alguma NC?':'Houve problema?'}</label><select value={problema?'sim':'nao'} onChange={e=>setProblema(e.target.value==='sim')}><option value="nao">Não</option><option value="sim">Sim</option></select></div>}</>}<div className="agenda-acoes" style={{marginTop:12}}><button className="btn btn-g" onClick={()=>setAcao('')}>Voltar</button><button className="btn btn-p" disabled={salvando||acao==='cancelar'&&!motivo} onClick={executar}>Confirmar</button></div></div>}</Modal>
+</div>}{acao&&<div style={{marginTop:14}}>{acao==='cancelar'?<><label>Motivo obrigatório</label><select value={motivo} onChange={e=>setMotivo(e.target.value)}><option value="">Selecionar...</option>{['VIAGEM_CANCELADA','ALTERACAO_PROGRAMACAO','VEICULO_NAO_NECESSARIO','MOTORISTA_INDISPONIVEL','VEICULO_INDISPONIVEL','ERRO_AGENDAMENTO','DUPLICIDADE','OUTRO'].map(x=><option key={x}>{x}</option>)}</select><label style={{marginTop:8}}>Observação</label><textarea value={obs} onChange={e=>setObs(e.target.value)}/></>:<><label>{acao==='finalizar'?(regularizacaoTerceiro?'KM atual / final da devolução anterior':'KM final'):'KM inicial'}</label><input type="number" min={acao==='retirar'&&kmReferencia?kmReferencia:1} value={km} onChange={e=>setKm(e.target.value)}/>{acao==='retirar'&&kmReferencia>0&&<div className="muted" style={{marginTop:5}}>Último KM registrado: {kmReferencia}. Informe este valor ou um superior.</div>}{acao==='corrigir'&&<><label style={{marginTop:8}}>KM final correto</label><input type="number" value={obs} onChange={e=>setObs(e.target.value)}/><label style={{marginTop:8}}>Motivo</label><textarea value={motivo} onChange={e=>setMotivo(e.target.value)}/></>}{acao!=='corrigir'&&<div style={{marginTop:8}}><label>{acao==='retirar'?'Possui alguma NC?':regularizacaoTerceiro?'Há alguma NC na condição atual?':'Houve problema?'}</label>{regularizacaoTerceiro&&item.status==='PENDENTE_FINALIZACAO'?<div className="aviso-box">Existe uma ocorrência pendente nesta devolução. O registro da NC é obrigatório para concluir.</div>:<select value={problema?'sim':'nao'} onChange={e=>setProblema(e.target.value==='sim')}><option value="nao">Não</option><option value="sim">Sim</option></select>}</div>}</>}<div className="agenda-acoes" style={{marginTop:12}}><button className="btn btn-g" onClick={()=>setAcao('')}>Voltar</button><button className="btn btn-p" disabled={salvando||acao==='cancelar'&&!motivo} onClick={executar}>Confirmar</button></div></div>}</Modal>
 }
 function TelaAgendamento({user,toast,onAbrirChecklist}){
   const [base,setBase]=useState({veiculos:[],agendamentos:[],parametros:{}}),[carregando,setCarregando]=useState(true),[mes,setMes]=useState(new Date()),[form,setForm]=useState(false),[detalhe,setDetalhe]=useState(null),[visual,setVisual]=useState('todos'),[veiculoFiltro,setVeiculoFiltro]=useState(''),[modoVisao,setModoVisao]=useState('mes'),[diaSelecionado,setDiaSelecionado]=useState(new Date()),[filtroRapido,setFiltroRapido]=useState('proximo');
   const carregar=async()=>{setCarregando(true);try{const r=await ApiService.obterAgendamentos();setBase({veiculos:r.veiculos||[],agendamentos:r.agendamentos||[],parametros:r.parametros||{}})}catch(e){toast(e.message)}finally{setCarregando(false)}};useEffect(()=>{carregar()},[]);
   const norm=v=>String(v||'').trim().toLocaleLowerCase('pt-BR');
-  // A API já devolve ao motorista apenas os agendamentos que ele pode visualizar/executar.
-  // Evita perder a próxima ação por divergência entre ID de usuário, login e nome exibido.
-  const meus=base.agendamentos.slice();
-  const eventos=base.agendamentos.filter(a=>(visual==='todos'||meus.some(m=>String(m.id)===String(a.id)))&&(!veiculoFiltro||String(a.placa)===veiculoFiltro));
+  // Agenda compartilhada visível; as ações continuam restritas ao responsável.
+  const meus=base.agendamentos.filter(a=>a.meuAgendamento===true);
+  const eventos=base.agendamentos.filter(a=>(visual==='todos'||a.meuAgendamento===true)&&(!veiculoFiltro||String(a.placa)===veiculoFiltro));
   const agora=new Date();
   const janelaRetirada=Number(base.parametros?.janelaRetiradaMinutos||30);
   const ativos=meus.filter(a=>!['FINALIZADO','CANCELADO'].includes(a.status));
@@ -2242,8 +2246,18 @@ function TelaAgendamento({user,toast,onAbrirChecklist}){
     const inicio=new Date(a.saidaPrevista||0);
     return Number.isFinite(inicio.getTime())&&inicio>agora;
   });
-  const proxima=pendencias[0]||emUso[0]||liberadosRetirada[0]||agendadosFuturos[0]||null;
+  const mesmoVeiculoTela=(a,b)=>{
+    if(a?.veiculoId&&b?.veiculoId&&String(a.veiculoId)===String(b.veiculoId))return true;
+    const pa=String(a?.placa||'').replace(/[^A-Z0-9]/gi,'').toUpperCase(),pb=String(b?.placa||'').replace(/[^A-Z0-9]/gi,'').toUpperCase();
+    return Boolean(pa&&pb&&pa===pb);
+  };
+  const retiradaPronta=liberadosRetirada[0]||null;
+  const bloqueadorRetirada=retiradaPronta?base.agendamentos
+    .filter(a=>a.meuAgendamento!==true&&String(a.id)!==String(retiradaPronta.id)&&mesmoVeiculoTela(a,retiradaPronta)&&['EM_USO','DEVOLUCAO_ATRASADA','PENDENTE_FINALIZACAO'].includes(a.status))
+    .sort((a,b)=>new Date(b.saidaReal||b.saidaPrevista||0)-new Date(a.saidaReal||a.saidaPrevista||0))[0]||null:null;
+  const proxima=pendencias[0]||emUso[0]||(bloqueadorRetirada?{...bloqueadorRetirada,regularizacaoTerceiro:true,agendamentoSeguinteId:retiradaPronta.id}:retiradaPronta)||agendadosFuturos[0]||null;
   const configAcao=proxima?(
+    proxima.regularizacaoTerceiro?{titulo:'Regularizar devolução anterior',sub:`${proxima.motorista||'Outro motorista'} ainda não concluiu a devolução deste veículo. Regularize a condição atual antes da sua retirada.`,botao:'Regularizar devolução'}:
     proxima.status==='PENDENTE_FINALIZACAO'?{titulo:'Finalizar pendência',sub:'A devolução possui uma pendência e precisa ser concluída.',botao:'Concluir devolução'}:
     ['EM_USO','DEVOLUCAO_ATRASADA'].includes(proxima.status)?{titulo:'Devolver veículo',sub:proxima.status==='DEVOLUCAO_ATRASADA'?'O horário previsto de retorno já passou.':'A utilização está aberta e precisa ser encerrada ao retornar.',botao:'Devolver veículo'}:
     ['AGENDADO','AGUARDANDO_RETIRADA'].includes(proxima.status)&&agora>=new Date(new Date(proxima.saidaPrevista).getTime()-janelaRetirada*60000)?{titulo:'Retirar veículo',sub:`Seu agendamento começa às ${String(proxima.saidaPrevista||'').slice(11,16)}.`,botao:'Retirar veículo'}:
