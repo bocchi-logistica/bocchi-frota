@@ -325,7 +325,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 90000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '2.8.0'
+  VERSAO: '2.8.1'
 };
 
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
@@ -2260,8 +2260,8 @@ function TelaAgendamento({user,toast,onAbrirChecklist}){
     proxima.regularizacaoTerceiro?{titulo:'Regularizar devolução anterior',sub:`${proxima.motorista||'Outro motorista'} ainda não concluiu a devolução deste veículo. Regularize a condição atual antes da sua retirada.`,botao:'Regularizar devolução'}:
     proxima.status==='PENDENTE_FINALIZACAO'?{titulo:'Finalizar pendência',sub:'A devolução possui uma pendência e precisa ser concluída.',botao:'Concluir devolução'}:
     ['EM_USO','DEVOLUCAO_ATRASADA'].includes(proxima.status)?{titulo:'Devolver veículo',sub:proxima.status==='DEVOLUCAO_ATRASADA'?'O horário previsto de retorno já passou.':'A utilização está aberta e precisa ser encerrada ao retornar.',botao:'Devolver veículo'}:
-    ['AGENDADO','AGUARDANDO_RETIRADA'].includes(proxima.status)&&agora>=new Date(new Date(proxima.saidaPrevista).getTime()-janelaRetirada*60000)?{titulo:'Retirar veículo',sub:`Seu agendamento começa às ${String(proxima.saidaPrevista||'').slice(11,16)}.`,botao:'Retirar veículo'}:
-    {titulo:'Próximo agendamento',sub:`Previsto para ${new Date(proxima.saidaPrevista).toLocaleDateString('pt-BR')} às ${String(proxima.saidaPrevista||'').slice(11,16)}. A retirada será liberada dentro da janela configurada.`,botao:'Ver agendamento'}
+    ['AGENDADO','AGUARDANDO_RETIRADA'].includes(proxima.status)&&agora>=new Date(new Date(proxima.saidaPrevista).getTime()-janelaRetirada*60000)?{titulo:'Retirar veículo',sub:`Seu agendamento começa às ${fmtDataHora(proxima.saidaPrevista).slice(-5)}.`,botao:'Retirar veículo'}:
+    {titulo:'Próximo agendamento',sub:`Previsto para ${fmtDataHora(proxima.saidaPrevista)}. A retirada será liberada dentro da janela configurada.`,botao:'Ver agendamento'}
   ):null;
   const irHoje=()=>{const h=new Date();setMes(h);setDiaSelecionado(h)};
   const isoDia=d=>{const z=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`};
@@ -2297,7 +2297,7 @@ function TelaAgendamento({user,toast,onAbrirChecklist}){
     </div>
     {configAcao?<div className="agenda-proxima card">
       <div className="kicker"><span>●</span> Próxima ação</div><div className="titulo">{configAcao.titulo}</div><div className="muted" style={{fontSize:14}}>{configAcao.sub}</div>
-      <div className="agenda-proxima-grid"><div className="agenda-proxima-info"><b>Veículo</b>{proxima.placa||'—'}</div><div className="agenda-proxima-info"><b>Trajeto</b>{proxima.origem} → {proxima.destino}</div><div className="agenda-proxima-info"><b>Horário</b>{String(proxima.saidaPrevista||'').slice(11,16)} às {String(proxima.retornoPrevisto||'').slice(11,16)}</div><div className="agenda-proxima-info"><b>Status</b>{AG_STATUS_LABEL[proxima.status]||proxima.status}</div></div>
+      <div className="agenda-proxima-grid"><div className="agenda-proxima-info"><b>Veículo</b>{proxima.placa||'—'}</div><div className="agenda-proxima-info"><b>Trajeto</b>{proxima.origem} → {proxima.destino}</div><div className="agenda-proxima-info"><b>Horário</b>{fmtDataHora(proxima.saidaPrevista).slice(-5)} às {fmtDataHora(proxima.retornoPrevisto).slice(-5)}</div><div className="agenda-proxima-info"><b>Status</b>{AG_STATUS_LABEL[proxima.status]||proxima.status}</div></div>
       <button className="btn btn-p" style={{width:'100%',marginTop:13,fontSize:16}} onClick={()=>setDetalhe(proxima)}>{configAcao.botao}</button>
     </div>:<div className="card" style={{margin:'14px 0'}}><b>Nenhuma ação disponível agora</b><div className="muted">Você não possui retirada, devolução ou finalização pendente neste momento.</div></div>}
     {modoVisao==='mes'?<CalendarioAgenda mes={mes} eventos={eventos} onAbrir={setDetalhe} diaSelecionado={diaSelecionado} onSelecionarDia={d=>{setDiaSelecionado(d);setMes(d);setModoVisao('dia')}}/>:<div className="agenda-dia-lista">
