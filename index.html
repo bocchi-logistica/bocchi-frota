@@ -353,7 +353,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 90000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '2.8.10'
+  VERSAO: '2.8.11'
 };
 
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
@@ -3470,7 +3470,7 @@ function AdmImportar({st, setSt, toast}){
   cargasFiltradas.forEach(c=>{const comp=c.data.slice(0,7);(porCompetenciaFiltrada[comp]||(porCompetenciaFiltrada[comp]=[])).push(c)});
   const alternarCompetencia=comp=>setCompetenciasSelecionadas(atual=>atual.includes(comp)?atual.filter(x=>x!==comp):[...atual,comp].sort());
   const confirmar=async()=>{
-    const TAMANHO_LOTE=20;
+    const TAMANHO_LOTE=25;
     const MAX_TENTATIVAS_LOTE=6;
     if(!cargasFiltradas.length){setErro('Selecione ao menos uma competência com cargas para importar.');return;}
     setEnviando(true); setErro(''); setProgresso({processadas:0,total:cargasFiltradas.length,lote:0,totalLotes:Math.ceil(cargasFiltradas.length/TAMANHO_LOTE)});
@@ -3498,6 +3498,7 @@ function AdmImportar({st, setSt, toast}){
             await new Promise(resolve=>setTimeout(resolve,espera));
           }
         }
+        setErro('');
         novas+=Number(r.novas??r.gravadas??0);
         atualizadas+=Number(r.atualizadas||0);
         semAlteracao+=Number(r.semAlteracao||0);
@@ -3506,8 +3507,12 @@ function AdmImportar({st, setSt, toast}){
         setProgresso({processadas,total:cargasFiltradas.length,lote:indice+1,totalLotes:lotes.length});
         await new Promise(resolve=>setTimeout(resolve,1200));
       }
-      const cargasAtualizadas=await ApiService.obterCargas();
-      setSt(s=>({...s,cargas:Array.isArray(cargasAtualizadas.cargas)?cargasAtualizadas.cargas:s.cargas}));
+      /* A importação já foi confirmada lote a lote pela API. Não consulta
+         /cargas/me novamente aqui: essa leitura era pesada e podia falhar depois
+         de uma importação bem-sucedida, exibindo um falso "Failed to fetch".
+         As telas que precisam das cargas consultam a competência necessária ao
+         serem abertas. */
+      setErro('');
       toast(novas+' novas, '+atualizadas+' atualizadas, '+semAlteracao+' já estavam iguais'+(duplicadasRemovidas?' e '+duplicadasRemovidas+' duplicadas removidas.':'.'));
       setResumo(null); setProgresso(null);
     }catch(e){
