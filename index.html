@@ -377,7 +377,7 @@ MODO_DEMONSTRACAO: false,   // true = funciona offline e não grava no SharePoin
   TIMEOUT_MS: 90000,
   RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
   MAX_TENTATIVAS: 4,
-  VERSAO: '2.8.14'
+  VERSAO: '2.8.15'
 };
 
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
@@ -4926,9 +4926,46 @@ function AdmSinistros({toast,user,foco}){
     try{
       const r=await ApiService.admAnalisarDocumentoSinistro(selecionado.id,doc.id,status,motivo.trim());
       const docs=r.solicitacoesDocumentos||selecionado.solicitacoesDocumentos||[];
-      setSelecionado(atual=>({...atual,solicitacoesDocumentos:docs,documentosResumo:r.documentosResumo||atual.documentosResumo,pendenciaDocumental:r.pendenciaDocumental}));
-      setLista(lista=>lista.map(s=>String(s.id)===String(selecionado.id)?{...s,documentosResumo:r.documentosResumo||s.documentosResumo,pendenciaDocumental:r.pendenciaDocumental}:s));
-      toast(status==='Aceito'?'Documento aceito.':status==='Rejeitado'?'Documento devolvido para reenvio.':'Documento dispensado.');
+      const novoStatus=r.statusSinistro||selecionado.statusSinistro;
+      const agora=new Date().toISOString();
+      const historicoDocumento={
+        id:'auto-doc-'+Date.now(),
+        dataHora:agora,
+        usuario:user?.login||user?.nome||'Administrativo',
+        perfil:'Administrativo',
+        acao:'Status alterado',
+        status:selecionado.statusSinistro,
+        observacao:status==='Rejeitado'
+          ?'Documento rejeitado: '+doc.tipoDocumento+'. Motivo: '+motivo.trim()
+          :'Documento '+status.toLowerCase()+': '+doc.tipoDocumento+'.',
+        origem:'Painel Administrativo'
+      };
+      const historicoAutomatico=r.statusAlteradoAutomaticamente?{
+        id:'auto-status-'+Date.now(),
+        dataHora:agora,
+        usuario:'Sistema',
+        perfil:'Sistema',
+        acao:'Status alterado',
+        status:novoStatus,
+        observacao:'Documentação concluída. Todos os documentos obrigatórios foram aceitos ou dispensados. Aguardando documentos → Em atendimento.',
+        origem:'Painel Administrativo'
+      }:null;
+      setSelecionado(atual=>({...atual,
+        statusSinistro:novoStatus,
+        solicitacoesDocumentos:docs,
+        documentosResumo:r.documentosResumo||atual.documentosResumo,
+        pendenciaDocumental:r.pendenciaDocumental,
+        historico:[...(atual.historico||[]),historicoDocumento,...(historicoAutomatico?[historicoAutomatico]:[])]
+      }));
+      if(r.statusAlteradoAutomaticamente)setEdicao(atual=>({...atual,statusSinistro:novoStatus}));
+      setLista(lista=>lista.map(s=>String(s.id)===String(selecionado.id)?{...s,
+        statusSinistro:novoStatus,
+        documentosResumo:r.documentosResumo||s.documentosResumo,
+        pendenciaDocumental:r.pendenciaDocumental
+      }:s));
+      toast(r.statusAlteradoAutomaticamente
+        ?'Documento '+(status==='Dispensado'?'dispensado':'aceito')+'. Documentação concluída: sinistro voltou para Em atendimento.'
+        :(status==='Aceito'?'Documento aceito.':status==='Rejeitado'?'Documento devolvido para reenvio.':'Documento dispensado.'));
     }catch(e){toast('Erro ao analisar documento: '+e.message);}
     finally{setAnalisandoDocumento('');}
   };
