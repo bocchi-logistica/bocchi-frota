@@ -20,7 +20,7 @@ const CONFIG = {
     TIMEOUT_MS: 90000,
     RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
     MAX_TENTATIVAS: 4,
-    VERSAO: '2.8.17'
+    VERSAO: '2.8.18'
 };
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
 document.title = `Bocchi Frota — Portal do Motorista e ADM Logística (${CONFIG.VERSAO})`;
@@ -831,8 +831,7 @@ function competenciaValidaTela(valor) {
 /* ================= COMPONENTES BASE ================= */
 function Toast({ msg }) { return msg ? React.createElement("div", { className: "toast" }, msg) : null; }
 function Modal({ titulo, onClose, children, large = false }) {
-    return (React.createElement("div", { className: "overlay", onClick: e => { if (e.target === e.currentTarget)
-            onClose(); } },
+    return (React.createElement("div", { className: "overlay" },
         React.createElement("div", { className: 'modal' + (large ? ' modal-lg' : '') },
             React.createElement("div", { className: "row", style: { marginBottom: 8 } },
                 React.createElement("h3", { className: "grow" }, titulo),
