@@ -20,7 +20,7 @@ const CONFIG = {
     TIMEOUT_MS: 90000,
     RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
     MAX_TENTATIVAS: 4,
-    VERSAO: '2.8.16'
+    VERSAO: '2.8.17'
 };
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
 document.title = `Bocchi Frota — Portal do Motorista e ADM Logística (${CONFIG.VERSAO})`;
@@ -404,9 +404,13 @@ const ApiService = {
     obterConfiguracoes() { return this._req('GET', '/configuracoes'); },
     obterMotoristas() { return this._req('GET', '/motoristas'); },
     obterVeiculos() { return this._req('GET', '/veiculos'); },
-    obterCargas(competencia = '') {
-        const q = competencia ? '?competencia=' + encodeURIComponent(competencia) : '';
-        return this._req('GET', '/cargas/me' + q);
+    obterCargas(competencia = '', ateCompetencia = '') {
+        const q = new URLSearchParams();
+        if (competencia)
+            q.set('competencia', competencia);
+        if (ateCompetencia && ateCompetencia !== competencia)
+            q.set('ateCompetencia', ateCompetencia);
+        return this._req('GET', '/cargas/me' + (q.toString() ? '?' + q.toString() : ''));
     },
     obterMinhasContestacoes() { return this._req('GET', '/contestacoes/me'); },
     obterOpcoesContestacao(cargaId) {
@@ -2523,7 +2527,7 @@ function TelaSinistro({ user, toast }) {
                         p.observacao && React.createElement("span", { style: { display: 'block', marginTop: 3, whiteSpace: 'pre-wrap' } }, p.observacao))); }) : React.createElement("div", { className: "muted", style: { marginTop: 8 } }, "Sem movimenta\u00E7\u00F5es adicionais."))));
 }
 /* ================= AGENDAMENTOS: COMPONENTES ================= */
-const AG_STATUS_LABEL = { AGENDADO: 'Agendado', AGUARDANDO_RETIRADA: 'Aguardando retirada', EM_USO: 'Em uso', PENDENTE_FINALIZACAO: 'Pendente finalização', DEVOLUCAO_ATRASADA: 'Devolução atrasada', BLOQUEADO_NC: 'Bloqueado por NC', PENDENTE_ANALISE: 'Pendente análise', FINALIZADO: 'Finalizado', CANCELADO: 'Cancelado' };
+const AG_STATUS_LABEL = { AGENDADO: 'Agendado', AGUARDANDO_RETIRADA: 'Aguardando retirada', RETIRADA_ATRASADA: 'Retirada atrasada', EM_USO: 'Em uso', PENDENTE_FINALIZACAO: 'Pendente finalização', DEVOLUCAO_ATRASADA: 'Devolução atrasada', BLOQUEADO_NC: 'Bloqueado por NC', PENDENTE_ANALISE: 'Pendente análise', FINALIZADO: 'Finalizado', CANCELADO: 'Cancelado' };
 const fmtDataHora = v => v ? new Date(v).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '—';
 function AgendaStatus({ status }) { return React.createElement("span", { className: 'agenda-status ' + status }, AG_STATUS_LABEL[status] || status); }
 const AGENDA_CORES = [
@@ -2575,9 +2579,13 @@ function FormAgendamento({ base, item, onClose, onSalvo, toast, admin = false, d
     const dataBase = dataSelecionada < agora ? agora : dataSelecionada;
     const retorno = new Date(dataBase.getTime() + 2 * 3600000);
     const minimoSaida = local(agora);
-    const [form, setForm] = useState({ veiculoId: item?.veiculoId || '', motorista: item?.motorista || '', origem: item?.origem || '', destino: item?.destino || '', saidaPrevista: item?.saidaPrevista ? local(new Date(item.saidaPrevista)) : local(dataBase), retornoPrevisto: item?.retornoPrevisto ? local(new Date(item.retornoPrevisto)) : local(retorno), possuiPassageiros: item?.possuiPassageiros || false, quantidadePassageiros: item?.quantidadePassageiros || 0, observacao: item?.observacao || '', criadoManualmente: admin });
+    const [form, setForm] = useState({ solicitanteItemId: item?.solicitanteId || '', veiculoId: item?.veiculoId || '', motorista: item?.motorista || '', origem: item?.origem || '', destino: item?.destino || '', saidaPrevista: item?.saidaPrevista ? local(new Date(item.saidaPrevista)) : local(dataBase), retornoPrevisto: item?.retornoPrevisto ? local(new Date(item.retornoPrevisto)) : local(retorno), possuiPassageiros: item?.possuiPassageiros || false, quantidadePassageiros: item?.quantidadePassageiros || 0, observacao: item?.observacao || '', criadoManualmente: admin });
+    const selecionarUsuario = id => { const u = (base.usuarios || []).find(x => String(x.id) === String(id)); setForm(f => ({ ...f, solicitanteItemId: id, motorista: u?.nome || f.motorista })); };
     const [salvando, setSalvando] = useState(false);
-    const salvar = async () => { if (!form.veiculoId || !form.motorista.trim() || !form.origem.trim() || !form.destino.trim()) {
+    const salvar = async () => { if (admin && !form.solicitanteItemId) {
+        toast('Selecione o usuário que utilizará o veículo.');
+        return;
+    } if (!form.veiculoId || !form.motorista.trim() || !form.origem.trim() || !form.destino.trim()) {
         toast('Informe veículo, motorista, origem e destino.');
         return;
     } const saidaLocal = new Date(form.saidaPrevista), retornoLocal = new Date(form.retornoPrevisto); if (!Number.isFinite(saidaLocal.getTime()) || !Number.isFinite(retornoLocal.getTime())) {
@@ -2613,6 +2621,14 @@ function FormAgendamento({ base, item, onClose, onSalvo, toast, admin = false, d
             React.createElement("div", null,
                 React.createElement("label", { htmlFor: "form-agendamento-retorno-previsto" }, "Retorno previsto"),
                 React.createElement("input", { id: "form-agendamento-retorno-previsto", name: "form-agendamento-retorno-previsto", autoComplete: "off", type: "datetime-local", min: form.saidaPrevista || minimoSaida, value: form.retornoPrevisto, onChange: e => setForm({ ...form, retornoPrevisto: e.target.value }) })),
+            admin && React.createElement("div", null,
+                React.createElement("label", { htmlFor: "form-agendamento-usuario" }, "Usu\u00E1rio do agendamento"),
+                React.createElement("select", { id: "form-agendamento-usuario", name: "form-agendamento-usuario", value: form.solicitanteItemId, onChange: e => selecionarUsuario(e.target.value) },
+                    React.createElement("option", { value: "" }, "Selecionar usu\u00E1rio..."),
+                    (base.usuarios || []).map(u => React.createElement("option", { key: u.id, value: u.id },
+                        u.nome,
+                        u.login ? ' — ' + u.login : ''))),
+                React.createElement("div", { className: "muted", style: { marginTop: 4 } }, "Este usu\u00E1rio ver\u00E1 o agendamento no pr\u00F3prio acesso e far\u00E1 a retirada.")),
             React.createElement("div", null,
                 React.createElement("label", { htmlFor: "form-agendamento-veiculo-compartilhado" }, "Ve\u00EDculo compartilhado"),
                 React.createElement("select", { id: "form-agendamento-veiculo-compartilhado", name: "form-agendamento-veiculo-compartilhado", value: form.veiculoId, onChange: e => setForm({ ...form, veiculoId: e.target.value }) },
@@ -2712,8 +2728,8 @@ function DetalheAgendamento({ item, admin, onClose, onAtualizar, toast, onAbrirC
                 React.createElement("button", { className: "btn btn-p orientacao-ciente", onClick: () => { setAvisoRetirada(false); setKm(String(kmReferencia || item.kmInicial || '')); setAcao('retirar'); } }, "Li e estou ciente \u2014 Continuar retirada")));
     const aguardando = ['AGENDADO', 'AGUARDANDO_RETIRADA'].includes(item.status), emUso = ['EM_USO', 'DEVOLUCAO_ATRASADA', 'PENDENTE_FINALIZACAO'].includes(item.status);
     const linhasDetalhe = aguardando
-        ? [['Veículo', item.placa], ['Motorista', item.motorista], ['Previsto', fmtDataHora(item.saidaPrevista) + ' até ' + fmtDataHora(item.retornoPrevisto)], ['Real', fmtDataHora(item.saidaReal) + ' até ' + fmtDataHora(item.retornoReal)], ['Último KM registrado', kmReferencia || '—']]
-        : [['Veículo', item.placa], ['Motorista', item.motorista], ['Previsto', fmtDataHora(item.saidaPrevista) + ' até ' + fmtDataHora(item.retornoPrevisto)], ['Real', fmtDataHora(item.saidaReal) + ' até ' + fmtDataHora(item.retornoReal)], ['KM', `${item.kmInicial || '—'} → ${item.kmFinal || '—'}`]];
+        ? [['Veículo', item.placa], ['Motorista', item.motorista], ['Agendado para', item.solicitante || item.motorista || '—'], ['Criado por', (item.criadoPor || item.solicitante || '—') + (item.criadoManualmente ? ' · Manual ADM' : ' · Aplicativo')], ['Previsto', fmtDataHora(item.saidaPrevista) + ' até ' + fmtDataHora(item.retornoPrevisto)], ['Real', fmtDataHora(item.saidaReal) + ' até ' + fmtDataHora(item.retornoReal)], ['Último KM registrado', kmReferencia || '—']]
+        : [['Veículo', item.placa], ['Motorista', item.motorista], ['Agendado para', item.solicitante || item.motorista || '—'], ['Criado por', (item.criadoPor || item.solicitante || '—') + (item.criadoManualmente ? ' · Manual ADM' : ' · Aplicativo')], ['Previsto', fmtDataHora(item.saidaPrevista) + ' até ' + fmtDataHora(item.retornoPrevisto)], ['Real', fmtDataHora(item.saidaReal) + ' até ' + fmtDataHora(item.retornoReal)], ['KM', `${item.kmInicial || '—'} → ${item.kmFinal || '—'}`]];
     return React.createElement(Modal, { titulo: `${item.origem} → ${item.destino}`, onClose: onClose },
         React.createElement("div", { className: "row" },
             React.createElement(AgendaStatus, { status: item.status }),
@@ -2933,10 +2949,10 @@ function TelaAgendamento({ user, toast, onAbrirChecklist }) {
 function AdmAgendamentos({ user, toast }) {
     const podeAgenda = pode(user, 'agendamentos.agenda'), podeMonitor = pode(user, 'agendamentos.monitoramento'), podeRel = pode(user, 'agendamentos.relatorio'), podeParam = pode(user, 'agendamentos.parametros');
     const inicial = podeAgenda ? 'agenda' : podeMonitor ? 'monitor' : podeRel ? 'relatorio' : 'parametros';
-    const [sub, setSub] = useState(inicial), [base, setBase] = useState({ veiculos: [], agendamentos: [], parametros: {}, diagnosticoVeiculos: {} }), [carregando, setCarregando] = useState(true), [mes, setMes] = useState(new Date()), [detalhe, setDetalhe] = useState(null), [form, setForm] = useState(false), [monitorFiltro, setMonitorFiltro] = useState('AGUARDANDO_RETIRADA'), [fStatus, setFStatus] = useState('TODOS'), [fPlacaRel, setFPlacaRel] = useState('TODAS'), [fDataIniRel, setFDataIniRel] = useState(''), [fDataFimRel, setFDataFimRel] = useState(''), [paramForm, setParamForm] = useState({}), [salvandoParam, setSalvandoParam] = useState(false), [modoVisao, setModoVisao] = useState('mes'), [diaSelecionado, setDiaSelecionado] = useState(new Date());
+    const [sub, setSub] = useState(inicial), [base, setBase] = useState({ veiculos: [], usuarios: [], agendamentos: [], parametros: {}, diagnosticoVeiculos: {} }), [carregando, setCarregando] = useState(true), [mes, setMes] = useState(new Date()), [detalhe, setDetalhe] = useState(null), [form, setForm] = useState(false), [monitorFiltro, setMonitorFiltro] = useState('AGUARDANDO_RETIRADA'), [fStatus, setFStatus] = useState('TODOS'), [fPlacaRel, setFPlacaRel] = useState('TODAS'), [fDataIniRel, setFDataIniRel] = useState(''), [fDataFimRel, setFDataFimRel] = useState(''), [paramForm, setParamForm] = useState({}), [salvandoParam, setSalvandoParam] = useState(false), [modoVisao, setModoVisao] = useState('mes'), [diaSelecionado, setDiaSelecionado] = useState(new Date());
     const carregar = async () => { setCarregando(true); try {
         const r = await ApiService.admAgendamentos();
-        const dados = { veiculos: r.veiculos || [], agendamentos: r.agendamentos || [], parametros: r.parametros || {}, diagnosticoVeiculos: r.diagnosticoVeiculos || {} };
+        const dados = { veiculos: r.veiculos || [], usuarios: r.usuarios || [], agendamentos: r.agendamentos || [], parametros: r.parametros || {}, diagnosticoVeiculos: r.diagnosticoVeiculos || {} };
         setBase(dados);
         setParamForm(dados.parametros);
     }
@@ -2960,7 +2976,7 @@ function AdmAgendamentos({ user, toast }) {
             return false;
         return true;
     });
-    const exportar = () => { const linhas = filtrados.map(a => ({ Codigo: a.codigo, Placa: a.placa, UsuarioAgendou: a.solicitante || '', Modelo: a.modelo || '', Motorista: a.motorista, Origem: a.origem, Destino: a.destino, SaidaPrevista: a.saidaPrevista, RetornoPrevisto: a.retornoPrevisto, SaidaReal: a.saidaReal, RetornoReal: a.retornoReal, KmInicial: a.kmInicial, KmFinal: a.kmFinal, KmRodado: a.kmRodado, Status: AG_STATUS_LABEL[a.status] || a.status, MotivoCancelamento: a.motivoCancelamento })); const ws = XLSX.utils.json_to_sheet(linhas), wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Agendamentos'); XLSX.writeFile(wb, 'Relatorio_Agendamentos.xlsx'); };
+    const exportar = () => { const linhas = filtrados.map(a => ({ Codigo: a.codigo, Placa: a.placa, AgendadoPara: a.solicitante || '', CriadoPor: a.criadoPor || '', OrigemAgendamento: a.criadoManualmente ? 'Manual ADM' : 'Aplicativo', Modelo: a.modelo || '', Motorista: a.motorista, Origem: a.origem, Destino: a.destino, SaidaPrevista: a.saidaPrevista, RetornoPrevisto: a.retornoPrevisto, SaidaReal: a.saidaReal, RetornoReal: a.retornoReal, KmInicial: a.kmInicial, KmFinal: a.kmFinal, KmRodado: a.kmRodado, Status: AG_STATUS_LABEL[a.status] || a.status, MotivoCancelamento: a.motivoCancelamento })); const ws = XLSX.utils.json_to_sheet(linhas), wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Agendamentos'); XLSX.writeFile(wb, 'Relatorio_Agendamentos.xlsx'); };
     const alterarParam = (campo, valor) => setParamForm(p => ({ ...p, [campo]: valor }));
     const salvarParametros = async () => { setSalvandoParam(true); try {
         const r = await ApiService.salvarParametrosAgendamento(paramForm);
@@ -3032,8 +3048,9 @@ function AdmAgendamentos({ user, toast }) {
                             " \u2192 ",
                             e.destino)),
                     React.createElement(AgendaStatus, { status: e.status }))); }) : React.createElement("div", { className: "card muted" }, "Nenhum agendamento neste dia.")));
-    const monitorStatus = ['AGUARDANDO_RETIRADA', 'EM_USO', 'DEVOLUCAO_ATRASADA', 'PENDENTE_FINALIZACAO', 'FINALIZADO'];
-    const monitorMatch = (a, s) => s === 'AGUARDANDO_RETIRADA' ? ['AGENDADO', 'AGUARDANDO_RETIRADA'].includes(a.status) : a.status === s;
+    const retiradaAtrasada = a => ['AGENDADO', 'AGUARDANDO_RETIRADA'].includes(a.status) && !a.saidaReal && Number.isFinite(new Date(a.saidaPrevista).getTime()) && new Date(a.saidaPrevista).getTime() < Date.now();
+    const monitorStatus = ['AGUARDANDO_RETIRADA', 'RETIRADA_ATRASADA', 'EM_USO', 'DEVOLUCAO_ATRASADA', 'PENDENTE_FINALIZACAO', 'FINALIZADO'];
+    const monitorMatch = (a, s) => s === 'RETIRADA_ATRASADA' ? retiradaAtrasada(a) : s === 'AGUARDANDO_RETIRADA' ? ['AGENDADO', 'AGUARDANDO_RETIRADA'].includes(a.status) : a.status === s;
     const monitorLista = base.agendamentos.filter(a => monitorMatch(a, monitorFiltro));
     return React.createElement(React.Fragment, null,
         React.createElement("div", { className: "subtabs" },
@@ -3063,7 +3080,7 @@ function AdmAgendamentos({ user, toast }) {
                         a.retornoReal ? React.createElement(React.Fragment, null,
                             " \u00B7 Devolu\u00E7\u00E3o real: ",
                             fmtDataHora(a.retornoReal)) : a.status === 'DEVOLUCAO_ATRASADA' ? React.createElement("span", { style: { color: 'var(--erro)', fontWeight: 700 } }, " \u00B7 Atrasada") : null)),
-                React.createElement(AgendaStatus, { status: a.status }),
+                retiradaAtrasada(a) ? React.createElement("span", { className: "tag tag-neg" }, "Retirada atrasada") : React.createElement(AgendaStatus, { status: a.status }),
                 React.createElement("button", { className: "btn btn-g btn-sm", onClick: () => setDetalhe(a) }, "Abrir"))))) : sub === 'relatorio' ? React.createElement(React.Fragment, null,
             React.createElement("div", { className: "row" },
                 React.createElement("div", { className: "grow" },
@@ -3800,6 +3817,7 @@ function PainelRH({ st, dados, user }) {
 }
 function AdmPainel({ st, dados, user, onNavegar }) {
     const [mes, setMes] = useState(MES_ATUAL);
+    const [mesAte, setMesAte] = useState(MES_ATUAL);
     const [usuariosPainel, setUsuariosPainel] = useState([]);
     const [vinculosPainel, setVinculosPainel] = useState([]);
     const [veiculosPainel, setVeiculosPainel] = useState([]);
@@ -3826,10 +3844,16 @@ function AdmPainel({ st, dados, user, onNavegar }) {
     const [fProdutoDetalhe, setFProdutoDetalhe] = useState('');
     const [fDataInicialDetalhe, setFDataInicialDetalhe] = useState('');
     const [fDataFinalDetalhe, setFDataFinalDetalhe] = useState('');
-    const [mesNumero, anoNumero] = String(mes).split('/');
-    const competencia = anoNumero + '-' + mesNumero;
-    const inicioMes = `${competencia}-01`;
-    const fimMes = new Date(Number(anoNumero), Number(mesNumero), 0).toISOString().slice(0, 10);
+    const compDeTela = m => { const [mm, aa] = String(m).split('/'); return aa + '-' + mm; };
+    const competenciaDe = compDeTela(mes), competenciaAte = compDeTela(mesAte);
+    const competenciaInicio = competenciaDe <= competenciaAte ? competenciaDe : competenciaAte;
+    const competenciaFim = competenciaDe <= competenciaAte ? competenciaAte : competenciaDe;
+    const competencia = competenciaInicio;
+    const periodoMultiplo = competenciaInicio !== competenciaFim;
+    const inicioMes = `${competenciaInicio}-01`;
+    const [anoFim, mesFim] = competenciaFim.split('-');
+    const fimMes = new Date(Number(anoFim), Number(mesFim), 0).toISOString().slice(0, 10);
+    const rotuloPeriodo = periodoMultiplo ? `${mesLabel(competenciaInicio.slice(5) + '/' + competenciaInicio.slice(0, 4))} a ${mesLabel(competenciaFim.slice(5) + '/' + competenciaFim.slice(0, 4))}` : mesLabel(mes);
     /* Visão geral: carrega somente os módulos de pendência. */
     useEffect(() => {
         let ativo = true;
@@ -3889,7 +3913,7 @@ function AdmPainel({ st, dados, user, onNavegar }) {
                     setUsuariosPainel(st.usuarios || []);
                     setVinculosPainel(st.vinculos || []);
                     setVeiculosPainel(Object.values(st.frota || {}));
-                    setCargasPainel((st.cargas || []).filter(c => String(c.mes || c.competencia || '') === mes || String(c.competencia || '') === competencia));
+                    setCargasPainel((st.cargas || []).filter(c => { const comp = String(c.competencia || '') || compDeTela(String(c.mes || '')); return comp >= competenciaInicio && comp <= competenciaFim; }));
                     const salvas = {};
                     (st.apuracoes || []).filter(a => String(a.competencia || '') === competencia).forEach(a => { salvas[String(a.motoristaId || a.usuarioId || '')] = a; });
                     setApuracoesPainel(salvas);
@@ -3898,8 +3922,8 @@ function AdmPainel({ st, dados, user, onNavegar }) {
                 }
                 const [cadastros, cargasResp, apuracoesResp] = await Promise.all([
                     ApiService.admCadastros(),
-                    ApiService.obterCargas(competencia),
-                    ApiService.obterApuracoesSalvas(competencia)
+                    ApiService.obterCargas(competenciaInicio, competenciaFim),
+                    periodoMultiplo ? Promise.resolve({ apuracoes: [] }) : ApiService.obterApuracoesSalvas(competenciaInicio)
                 ]);
                 if (!ativo)
                     return;
@@ -3927,10 +3951,14 @@ function AdmPainel({ st, dados, user, onNavegar }) {
         };
         carregarCargas();
         return () => { ativo = false; };
-    }, [mes, revisaoCargas]);
+    }, [mes, mesAte, revisaoCargas]);
     const motoristas = usuariosPainel.filter(u => usuarioValidoPremiacaoPeriodo(u, vinculosPainel, inicioMes, fimMes));
-    const mesFechado = Object.values(apuracoesPainel).some(item => String(item?.status || '').toUpperCase() === 'FECHADO');
+    const mesFechado = !periodoMultiplo && Object.values(apuracoesPainel).some(item => String(item?.status || '').toUpperCase() === 'FECHADO');
     const recalcularMes = async () => {
+        if (periodoMultiplo) {
+            setErroCargasPainel('Para atualizar a apuração mensal, selecione o mesmo mês em De e Até.');
+            return;
+        }
         if (!motoristas.length || carregandoCargasPainel)
             return;
         setCarregandoCargasPainel(true);
@@ -3984,8 +4012,8 @@ function AdmPainel({ st, dados, user, onNavegar }) {
         cargasPorMotorista.get(chave).push(carga);
     }
     const pendenciasNome = nome => {
-        const contestacoes = contestacoesPainel.filter(c => String(c.status || '').toLowerCase() === 'pendente' && String(c.dataCarga || c.data || '').slice(0, 7) === competencia && normalizar(c.motorista) === normalizar(nome)).length;
-        const checklists = checklistsPainel.filter(c => String(c.status || '').toLowerCase() === 'pendente' && String(c.data || '').slice(0, 7) === competencia && normalizar(c.motoristaNome || c.motorista) === normalizar(nome)).length;
+        const contestacoes = contestacoesPainel.filter(c => String(c.status || '').toLowerCase() === 'pendente' && String(c.dataCarga || c.data || '').slice(0, 7) >= competenciaInicio && String(c.dataCarga || c.data || '').slice(0, 7) <= competenciaFim && normalizar(c.motorista) === normalizar(nome)).length;
+        const checklists = checklistsPainel.filter(c => String(c.status || '').toLowerCase() === 'pendente' && String(c.data || '').slice(0, 7) >= competenciaInicio && String(c.data || '').slice(0, 7) <= competenciaFim && normalizar(c.motoristaNome || c.motorista) === normalizar(nome)).length;
         return contestacoes + checklists;
     };
     const linhas = motoristas.map(u => {
@@ -4007,7 +4035,7 @@ function AdmPainel({ st, dados, user, onNavegar }) {
             situacao = 'FECHADO';
         else if (!cargas.length)
             situacao = 'SEM_MOVIMENTO';
-        else if (inconsistencias > 0 || !oficial)
+        else if (inconsistencias > 0 || (!periodoMultiplo && !oficial))
             situacao = 'DIVERGENTE';
         else if (pendencias > 0)
             situacao = 'PENDENTE';
@@ -4067,12 +4095,17 @@ function AdmPainel({ st, dados, user, onNavegar }) {
             React.createElement("div", { className: "muted" }, "Pend\u00EAncias que aguardam an\u00E1lise, aprova\u00E7\u00E3o ou reprova\u00E7\u00E3o")),
         subPainel === 'visao' && React.createElement("button", { className: "btn btn-s btn-sm", disabled: carregandoPainel, onClick: () => setRevisaoPendencias(v => v + 1) }, carregandoPainel ? 'Carregando...' : 'Atualizar pendências'),
         emCargas && React.createElement("button", { className: "btn btn-s btn-sm", disabled: carregandoCargasPainel, onClick: () => setRevisaoCargas(v => v + 1) }, carregandoCargasPainel ? 'Carregando...' : 'Recarregar dados'),
-        emCargas && pode(user, 'apuracao.mensal.atualizar') && React.createElement("button", { className: "btn btn-p btn-sm", disabled: carregandoCargasPainel || mesFechado, title: mesFechado ? 'O quadrimestre está fechado. Reabra-o no Fechamento RH para atualizar este mês.' : '', onClick: recalcularMes }, carregandoCargasPainel ? 'Atualizando...' : mesFechado ? 'Quadrimestre fechado' : 'Atualizar apuração mensal'));
+        emCargas && pode(user, 'apuracao.mensal.atualizar') && React.createElement("button", { className: "btn btn-p btn-sm", disabled: carregandoCargasPainel || mesFechado || periodoMultiplo, title: periodoMultiplo ? 'A atualização da apuração é mensal. Selecione o mesmo mês em De e Até.' : mesFechado ? 'O quadrimestre está fechado. Reabra-o no Fechamento RH para atualizar este mês.' : '', onClick: recalcularMes }, carregandoCargasPainel ? 'Atualizando...' : periodoMultiplo ? 'Selecione 1 mês' : mesFechado ? 'Quadrimestre fechado' : 'Atualizar apuração mensal'));
     const FiltrosCargas = () => React.createElement("div", { className: "card", style: { marginTop: 12 } },
         React.createElement("div", { className: "form-grid", style: { alignItems: 'end' } },
             React.createElement("div", null,
-                React.createElement("label", { htmlFor: "adm-painel-competencia" }, "Compet\u00EAncia"),
-                React.createElement("select", { id: "adm-painel-competencia", name: "adm-painel-competencia", value: mes, onChange: e => setMes(e.target.value) }, MESES_2026.map(m => React.createElement("option", { key: m, value: m }, mesLabel(m))))),
+                React.createElement("label", { htmlFor: "adm-painel-competencia-de" }, "Compet\u00EAncia de"),
+                React.createElement("select", { id: "adm-painel-competencia-de", name: "adm-painel-competencia-de", value: mes, onChange: e => { setMes(e.target.value); if (compDeTela(e.target.value) > compDeTela(mesAte))
+                        setMesAte(e.target.value); } }, MESES_2026.map(m => React.createElement("option", { key: m, value: m }, mesLabel(m))))),
+            React.createElement("div", null,
+                React.createElement("label", { htmlFor: "adm-painel-competencia-ate" }, "At\u00E9"),
+                React.createElement("select", { id: "adm-painel-competencia-ate", name: "adm-painel-competencia-ate", value: mesAte, onChange: e => { setMesAte(e.target.value); if (compDeTela(e.target.value) < compDeTela(mes))
+                        setMes(e.target.value); } }, MESES_2026.map(m => React.createElement("option", { key: m, value: m }, mesLabel(m))))),
             React.createElement("div", null,
                 React.createElement("label", { htmlFor: "adm-painel-motorista" }, "Motorista"),
                 React.createElement("select", { id: "adm-painel-motorista", name: "adm-painel-motorista", value: fMotorista, onChange: e => setFMotorista(e.target.value) },
@@ -4099,7 +4132,7 @@ function AdmPainel({ st, dados, user, onNavegar }) {
                 React.createElement("div", { className: "grow" },
                     React.createElement("h3", { style: { margin: 0 } }, motoristaDetalhe.u.nome),
                     React.createElement("div", { className: "muted" },
-                        mesLabel(mes),
+                        rotuloPeriodo,
                         " \u00B7 ",
                         motoristaDetalhe.tipo || 'Tipo não identificado'))),
             React.createElement("div", { className: "cards4" },
@@ -4144,6 +4177,7 @@ function AdmPainel({ st, dados, user, onNavegar }) {
                             React.createElement("th", null, "Produto"),
                             React.createElement("th", null, "NF"),
                             React.createElement("th", { className: "td-num" }, "Peso (t)"),
+                            React.createElement("th", { className: "td-num" }, "Frete/T"),
                             React.createElement("th", { className: "td-num" }, "Frete"),
                             React.createElement("th", { className: "td-num" }, "Premia\u00E7\u00E3o"))),
                     React.createElement("tbody", null,
@@ -4156,16 +4190,19 @@ function AdmPainel({ st, dados, user, onNavegar }) {
                             React.createElement("td", null, c.produto || '—'),
                             React.createElement("td", null, c.nota || c.numeroNota || '—'),
                             React.createElement("td", { className: "td-num num" }, brn(Number(c.peso || c.pesoTon || 0), 2)),
+                            React.createElement("td", { className: "td-num num" }, Number(c.peso || c.pesoTon || 0) > 0 ? brl(Number(c.freteTotal || 0) / Number(c.peso || c.pesoTon || 0)) : '—'),
                             React.createElement("td", { className: "td-num num" }, brl(Number(c.freteTotal || 0))),
                             React.createElement("td", { className: "td-num num" }, brl(Number(c.valor || c.premiacao || 0))))),
                         !cargasDetalhe.length && React.createElement("tr", null,
-                            React.createElement("td", { colSpan: "9", className: "muted", style: { textAlign: 'center', padding: 24 } }, "Nenhuma carga encontrada para os filtros selecionados."))),
+                            React.createElement("td", { colSpan: "10", className: "muted", style: { textAlign: 'center', padding: 24 } }, "Nenhuma carga encontrada para os filtros selecionados."))),
                     React.createElement("tfoot", null,
                         React.createElement("tr", null,
                             React.createElement("td", { colSpan: "6" },
                                 React.createElement("b", null, "Total filtrado")),
                             React.createElement("td", { className: "td-num num" },
                                 React.createElement("b", null, brn(totaisDetalhe.peso, 2))),
+                            React.createElement("td", { className: "td-num num" },
+                                React.createElement("b", null, totaisDetalhe.peso > 0 ? brl(totaisDetalhe.frete / totaisDetalhe.peso) : '—')),
                             React.createElement("td", { className: "td-num num" },
                                 React.createElement("b", null, brl(totaisDetalhe.frete))),
                             React.createElement("td", { className: "td-num num" },
