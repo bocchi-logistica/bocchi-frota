@@ -1,29 +1,24 @@
 const { useState, useMemo, useRef, useEffect } = React;
 /* ============================================================================
-   ALTERAÇÃO V6 — CONFIG (configuração centralizada)
-   >>> AQUI é o ÚNICO lugar onde se configura a URL da API. <<<
-   Em produção: MODO_DEMONSTRACAO = false e API_URL = endereço real da Azure Function.
+   CONFIGURAÇÕES GERAIS DA PLATAFORMA
+   Backend: Cloudflare Worker | Persistência: Microsoft SharePoint
+   API_URL é o ponto central de configuração do serviço de integração.
+   Nunca inserir credenciais, tokens ou segredos neste arquivo.
    ========================================================================== */
 const CONFIG = {
-    // ÚNICO ponto de configuração da integração. Não inserir credenciais neste HTML.
     API_URL: "https://bocchi-frota-api.logistica-951.workers.dev",
-    MODO_DEMONSTRACAO: false, // true = funciona offline e não grava no SharePoint
-    ORIGEM_PORTAL: "https://bocchi-logistica.github.io",
-    SHAREPOINT_ESTRUTURA: {
-        listaChecklists: "Checklists_Frota",
-        listaRespostas: "Checklists_Respostas",
-        bibliotecaFotos: "Fotos_Checklist"
-    },
+    // Modo local de testes, desativado em produção: não grava no SharePoint.
+    MODO_TESTE_LOCAL: false,
     MAX_FOTO_MB: 2,
     QUALIDADE_FOTO: 0.7,
     FOTO_MAX_PX: 1600,
     TIMEOUT_MS: 90000,
     RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
     MAX_TENTATIVAS: 4,
-    VERSAO: '2.8.18'
+    VERSAO: '2.8.19'
 };
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
-document.title = `Bocchi Frota — Portal do Motorista e ADM Logística (${CONFIG.VERSAO})`;
+document.title = `Logística Bocchi — Portal do Motorista e ADM Logística (${CONFIG.VERSAO})`;
 /* ============================================================================
    CONTROLE DE ACESSO — PERFIS + PERMISSÕES
    A API pode devolver `perfis` e `permissoes`. Enquanto a API não devolver
@@ -132,7 +127,7 @@ function pode(user, permissao) {
 }
 function temPerfil(user, perfil) { return perfisDoUsuario(user).includes(normalizarPerfil(perfil)); }
 /* ============================================================================
-   ALTERAÇÃO V6 — UTILITÁRIOS
+   UTILITÁRIOS GERAIS
    ========================================================================== */
 function gerarUUID() {
     if (window.crypto && crypto.randomUUID)
@@ -155,7 +150,7 @@ async function fetchComTimeout(url, options = {}, timeout = CONFIG.TIMEOUT_MS) {
 }
 const agoraISO = () => new Date().toISOString();
 /* ============================================================================
-   ALTERAÇÃO V6 — INDEXEDDB (fila de envio local + rascunho)
+   ARMAZENAMENTO LOCAL — fila de envio e rascunhos
    Status locais: RASCUNHO, PENDENTE, ENVIANDO, ENVIADO, ERRO
    ========================================================================== */
 const IDB = {
@@ -212,7 +207,7 @@ const IDB = {
     apagarRascunho(chave) { return this._tx('rascunho', 'readwrite', st => st.delete(chave)); }
 };
 /* ============================================================================
-   ALTERAÇÃO V6 — FOTOS (compressão antes do envio)
+   PROCESSAMENTO DE FOTOS — compressão antes do envio
    Redimensiona para no máximo CONFIG.FOTO_MAX_PX no maior lado,
    converte para JPEG qualidade CONFIG.QUALIDADE_FOTO e valida o tamanho.
    Isolada de propósito: se o backend passar a aceitar multipart/form-data,
@@ -297,10 +292,10 @@ function otimizarArquivoBinario(arquivo) {
     });
 }
 /* ============================================================================
-   ALTERAÇÃO V6 — API SERVICE
-   Toda comunicação com o servidor passa por aqui. Nenhuma credencial do
-   SharePoint existe neste arquivo: o HTML só conhece CONFIG.API_URL.
-   Em MODO_DEMONSTRACAO as funções simulam o servidor localmente.
+   SERVIÇO DE INTEGRAÇÃO
+   O front-end acessa somente o backend definido em CONFIG.API_URL.
+   O acesso ao SharePoint é responsabilidade exclusiva do backend.
+   Em MODO_TESTE_LOCAL, as funções simulam o servidor localmente.
    ========================================================================== */
 let _token = null; // token de sessão em memória (nunca gravar senha no navegador)
 let _loginSessao = null; // identifica o proprietário do token atual
@@ -343,7 +338,7 @@ const ApiService = {
         return r.json();
     },
     async login(login, senha) {
-        if (CONFIG.MODO_DEMONSTRACAO)
+        if (CONFIG.MODO_TESTE_LOCAL)
             return null;
         const r = await this._req('POST', '/login', {
             login,
@@ -387,7 +382,7 @@ const ApiService = {
     },
     sair() { _token = null; _loginSessao = null; },
     enviarChecklist(registro) {
-        if (CONFIG.MODO_DEMONSTRACAO) {
+        if (CONFIG.MODO_TESTE_LOCAL) {
             // Simula o servidor com prefixo DEMO, sem confundir com protocolos reais
             return new Promise(res => setTimeout(() => {
                 const d = new Date();
@@ -565,7 +560,7 @@ async function executarComRetentativaGraph(operacao, maxTentativas = 4) {
     throw ultimoErro;
 }
 /* ============================================================================
-   ALTERAÇÃO V6 — FILA DE ENVIO (internet instável)
+   FILA DE ENVIO — tratamento de conexão instável
    O checklist é gravado no IndexedDB ANTES da tentativa de envio.
    Só é marcado como ENVIADO com confirmação real da API (protocolo).
    O mesmo idLocal é mantido em todas as tentativas (idempotência).
@@ -638,7 +633,7 @@ const FilaEnvio = {
             return;
         // Um temporizador de uma sessão anterior pode disparar depois da troca de
         // motorista. Nesse caso ele é encerrado sem acessar nem enviar o registro.
-        if (!CONFIG.MODO_DEMONSTRACAO && ApiService.loginAtual !== login)
+        if (!CONFIG.MODO_TESTE_LOCAL && ApiService.loginAtual !== login)
             return;
         if (this._processando)
             return; // evita tentativas simultâneas
@@ -717,7 +712,6 @@ const chaveTipo = v => String(v || '')
     .replace(/[º°]/g, 'O')
     .trim()
     .toUpperCase();
-const FOTO_DEMO = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="#D8D6C9"/><text x="100" y="95" font-family="sans-serif" font-size="16" fill="#6B7267" text-anchor="middle">FOTO ANEXADA</text><text x="100" y="118" font-family="sans-serif" font-size="12" fill="#9A9F94" text-anchor="middle">(exemplo)</text></svg>');
 function estadoInicial() {
     return {
         usuarios: [],
@@ -996,13 +990,13 @@ function Login({ st, onLogin }) {
     const [senha, setSenha] = useState('');
     const [erro, setErro] = useState('');
     const [senhaLoginVisivel, setSenhaLoginVisivel] = useState(false);
-    /* ALTERAÇÃO V6: em produção a autenticação é feita pelo endpoint POST /auth/login
-       da API (o token fica só em memória; a senha nunca é gravada no navegador).
-       O modo demonstração usa a base local e está claramente separado. */
+    /* Em produção, a autenticação é feita pelo endpoint POST /auth/login.
+       O token permanece somente em memória e a senha não é gravada no navegador.
+       O modo local de testes utiliza uma base simulada. */
     const [carregando, setCarregando] = useState(false);
     const entrar = async () => {
         setErro('');
-        if (CONFIG.MODO_DEMONSTRACAO) {
+        if (CONFIG.MODO_TESTE_LOCAL) {
             const u = st.usuarios.find(x => x.login === login.trim().toLowerCase());
             if (!u) {
                 setErro('Usuário ou senha incorretos.');
@@ -1065,8 +1059,8 @@ function Login({ st, onLogin }) {
                         React.createElement("button", { type: "button", className: "btn btn-s btn-sm", onClick: () => setSenhaLoginVisivel(v => !v), title: senhaLoginVisivel ? 'Ocultar senha' : 'Visualizar senha', "aria-label": senhaLoginVisivel ? 'Ocultar senha' : 'Visualizar senha', style: { minWidth: 72 } }, senhaLoginVisivel ? 'Ocultar' : 'Ver'))),
                 erro && React.createElement("div", { className: "erro-box" }, erro),
                 React.createElement("button", { className: "btn btn-p", disabled: carregando, onClick: entrar }, carregando ? 'Entrando...' : 'Entrar')),
-            CONFIG.MODO_DEMONSTRACAO && React.createElement("div", { className: "hint" },
-                React.createElement("b", null, "MODO DEMONSTRA\u00C7\u00C3O ativo"),
+            CONFIG.MODO_TESTE_LOCAL && React.createElement("div", { className: "hint" },
+                React.createElement("b", null, "MODO LOCAL DE TESTES ATIVO"),
                 " \u2014 selecione um usu\u00E1rio cadastrado para navegar sem gravar no SharePoint."))));
 }
 /* ================= MOTORISTA: CARGAS ================= */
@@ -1087,7 +1081,7 @@ function TelaCargas({ st, setSt, user, dados, toast }) {
         setContestar(carga);
         setMotivo('');
         setTipoContestacao('ERRO_CARGA');
-        if (CONFIG.MODO_DEMONSTRACAO) {
+        if (CONFIG.MODO_TESTE_LOCAL) {
             setOpcoesContestacao(['ERRO_CARGA']);
             return;
         }
@@ -1114,7 +1108,7 @@ function TelaCargas({ st, setSt, user, dados, toast }) {
             toast('Descreva o que está errado na carga.');
             return;
         }
-        if (CONFIG.MODO_DEMONSTRACAO) {
+        if (CONFIG.MODO_TESTE_LOCAL) {
             setSt(s => ({ ...s, contestacoes: [...s.contestacoes, { id: 'ct' + Date.now(), motorista: user.nome, cargaId: contestar.id, tipoContestacao, motivo: motivo.trim(), status: 'pendente', resposta: '', data: HOJE }] }));
             setContestar(null);
             setMotivo('');
@@ -1416,9 +1410,9 @@ function TelaPremiacao({ st, user, dados }) {
 }
 /* ================= MOTORISTA: CHECK LIST ================= */
 function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioConsumido, onConcluidoAgendamento }) {
-    /* ALTERAÇÃO V6: o envio agora passa por IndexedDB + ApiService (fila offline
-       com idempotência por idLocal). O estado local (setSt) é mantido apenas
-       para a demonstração do fluxo de aprovação do ADM. */
+    /* O envio passa pela fila local (IndexedDB) e pelo serviço de integração,
+       com controle de idempotência por idLocal. O estado local atualiza a
+       interface e sustenta o modo local de testes. */
     const meus = st.checklists.filter(c => c.motorista === user.nome).sort((a, b) => b.data.localeCompare(a.data));
     const normalizarTexto = valor => String(valor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
     const deHoje = meus.find(c => c.data === HOJE && c.status !== 'reprovado');
@@ -1437,8 +1431,8 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
     const [temRascunho, setTemRascunho] = useState(false);
     const fileRefs = useRef({});
     const veiculosDemo = Object.values(st.frota).filter(f => f.motorista === user.nome);
-    const [veiculosPermitidos, setVeiculosPermitidos] = useState(CONFIG.MODO_DEMONSTRACAO ? veiculosDemo : []);
-    const [carregandoVeiculos, setCarregandoVeiculos] = useState(!CONFIG.MODO_DEMONSTRACAO);
+    const [veiculosPermitidos, setVeiculosPermitidos] = useState(CONFIG.MODO_TESTE_LOCAL ? veiculosDemo : []);
+    const [carregandoVeiculos, setCarregandoVeiculos] = useState(!CONFIG.MODO_TESTE_LOCAL);
     const [erroVeiculos, setErroVeiculos] = useState('');
     const [veiculo, setVeiculo] = useState(veiculosDemo[0]?.placa || '');
     const vSel = veiculosPermitidos.find(v => v.placa === veiculo);
@@ -1450,7 +1444,7 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
     const [grupoOcorrencia, setGrupoOcorrencia] = useState('');
     const [ultimoChecklistValido, setUltimoChecklistValido] = useState(null);
     useEffect(() => {
-        if (CONFIG.MODO_DEMONSTRACAO)
+        if (CONFIG.MODO_TESTE_LOCAL)
             return;
         let ativo = true;
         setCarregandoVeiculos(true);
@@ -1491,7 +1485,7 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
         return 'pendente';
     };
     const carregarHistorico = async () => {
-        if (CONFIG.MODO_DEMONSTRACAO)
+        if (CONFIG.MODO_TESTE_LOCAL)
             return;
         try {
             const r = await ApiService.consultarMeusChecklists();
@@ -1609,7 +1603,7 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
     const cont = lista => ({ tot: lista.length, ap: lista.filter(c => c.status === 'aprovado').length, rep: lista.filter(c => c.status === 'reprovado').length, pen: lista.filter(c => c.status === 'pendente').length });
     const cM = cont(historicoFiltrado);
     const mesFiltroLabel = filtroMesHistorico ? mesLabel(filtroMesHistorico.slice(5, 7) + '/' + filtroMesHistorico.slice(0, 4)) : 'todos os meses';
-    /* ALTERAÇÃO V6: monitorar fila local e estado da conexão */
+    /* Monitora a fila local e o estado da conexão. */
     const atualizarFila = () => { FilaEnvio.pendentes(user.login).then(setPendentes).catch(() => { }); };
     useEffect(() => {
         atualizarFila();
@@ -1625,7 +1619,7 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
         IDB.lerRascunho(chaveRascunho).then(r => setTemRascunho(!!r));
         return () => { FilaEnvio.ouvintes.delete(ouv); window.removeEventListener('online', on); window.removeEventListener('offline', off); };
     }, [user.login]);
-    /* ALTERAÇÃO V6: salvamento automático do rascunho + aviso ao sair da página */
+    /* Salva o rascunho automaticamente e avisa antes de sair da página. */
     useEffect(() => {
         if (!preenchendo)
             return;
@@ -1688,7 +1682,7 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
             onInicioConsumido();
     };
     const setResp = (pid, campo, v) => setResps(r => ({ ...r, [pid]: { ...(r[pid] || {}), [campo]: v } }));
-    /* ALTERAÇÃO V6: foto é comprimida (máx. 1600px, JPEG q=0,7) antes de anexar */
+    /* Comprime a foto (máx. 1600px, JPEG q=0,7) antes de anexar. */
     const anexar = (pid, e) => {
         const f = e.target.files && e.target.files[0];
         if (!f)
@@ -1704,7 +1698,7 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
             return res({ latitude: null, longitude: null });
         navigator.geolocation.getCurrentPosition(p => res({ latitude: p.coords.latitude, longitude: p.coords.longitude }), () => res({ latitude: null, longitude: null }), { timeout: 4000, maximumAge: 600000 });
     });
-    /* ALTERAÇÃO V6: validações, payload padronizado, fila IndexedDB e envio à API */
+    /* Valida os dados, padroniza o payload e envia pela fila local. */
     const enviar = async () => {
         if (enviando)
             return; // prevenção contra clique duplo
@@ -1789,9 +1783,9 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
             // 1) grava na fila local ANTES de tentar enviar (não se perde sem internet)
             await FilaEnvio.adicionar(registro);
             localStorage.setItem('km_' + veiculo, String(km));
-            // Somente no modo demonstração o registro entra diretamente no painel local.
+            // Somente no modo local de testes o registro entra diretamente no painel local.
             // Em produção, o painel administrativo deve carregar exclusivamente os dados da API/SharePoint.
-            if (CONFIG.MODO_DEMONSTRACAO) {
+            if (CONFIG.MODO_TESTE_LOCAL) {
                 const registroLocal = { id: 'demo' + Date.now(), idLocal, motorista: user.nome, placa: veiculo, frota: frotaSel, data: HOJE, status: 'pendente', motivoReprova: '',
                     km: String(km), combustivel: extras.combustivel || '',
                     respostas: perguntasExibidas.map(p => ({ pid: p.id, resp: (resps[p.id] && resps[p.id].resp) || 'NA', obs: (resps[p.id] && resps[p.id].obs) || '', foto: (resps[p.id] && resps[p.id].foto) || null })) };
@@ -3210,10 +3204,10 @@ function AdmAgendamentos({ user, toast }) {
 /* ================= SHELL MOTORISTA ================= */
 function MotoristaApp({ st, setSt, user, onSair, toast }) {
     const dados = usarDadosMensais(st);
-    const [carregandoCargas, setCarregandoCargas] = useState(!CONFIG.MODO_DEMONSTRACAO);
-    const [carregandoPremiacao, setCarregandoPremiacao] = useState(!CONFIG.MODO_DEMONSTRACAO);
+    const [carregandoCargas, setCarregandoCargas] = useState(!CONFIG.MODO_TESTE_LOCAL);
+    const [carregandoPremiacao, setCarregandoPremiacao] = useState(!CONFIG.MODO_TESTE_LOCAL);
     useEffect(() => {
-        if (CONFIG.MODO_DEMONSTRACAO)
+        if (CONFIG.MODO_TESTE_LOCAL)
             return;
         let ativo = true;
         Promise.allSettled([
@@ -3410,7 +3404,7 @@ function PainelRH({ st, dados, user }) {
     const motoristas = motoristasPeriodo
         .filter(u => String(u.nome || '').toLocaleLowerCase('pt-BR').includes(nome.toLocaleLowerCase('pt-BR')));
     useEffect(() => {
-        if (CONFIG.MODO_DEMONSTRACAO) {
+        if (CONFIG.MODO_TESTE_LOCAL) {
             setUsuariosRH(st.usuarios || []);
             setVinculosRH(st.vinculos || []);
             return;
@@ -3436,7 +3430,7 @@ function PainelRH({ st, dados, user }) {
         return () => { ativo = false; };
     }, []);
     useEffect(() => {
-        if (CONFIG.MODO_DEMONSTRACAO)
+        if (CONFIG.MODO_TESTE_LOCAL)
             return;
         let ativo = true;
         setCarregandoRH(true);
@@ -3860,7 +3854,7 @@ function AdmPainel({ st, dados, user, onNavegar }) {
             setCarregandoPainel(true);
             setErroPainel('');
             try {
-                if (CONFIG.MODO_DEMONSTRACAO) {
+                if (CONFIG.MODO_TESTE_LOCAL) {
                     if (!ativo)
                         return;
                     setContestacoesPainel(st.contestacoes || []);
@@ -3906,7 +3900,7 @@ function AdmPainel({ st, dados, user, onNavegar }) {
             setCarregandoCargasPainel(true);
             setErroCargasPainel('');
             try {
-                if (CONFIG.MODO_DEMONSTRACAO) {
+                if (CONFIG.MODO_TESTE_LOCAL) {
                     if (!ativo)
                         return;
                     setUsuariosPainel(st.usuarios || []);
@@ -4541,7 +4535,7 @@ function AdmContestacoes({ st, setSt, toast, foco }) {
     const [respondendo, setRespondendo] = useState(null);
     const [resposta, setResposta] = useState('');
     const [decisao, setDecisao] = useState('procede');
-    const [carregando, setCarregando] = useState(!CONFIG.MODO_DEMONSTRACAO);
+    const [carregando, setCarregando] = useState(!CONFIG.MODO_TESTE_LOCAL);
     const [salvando, setSalvando] = useState(false);
     useEffect(() => {
         if (!foco?.chave)
@@ -4560,7 +4554,7 @@ function AdmContestacoes({ st, setSt, toast, foco }) {
         .sort((a, b) => String(b.data || '').localeCompare(String(a.data || '')));
     const cargaDe = id => st.cargas.find(c => c.id === id);
     const carregar = async () => {
-        if (CONFIG.MODO_DEMONSTRACAO)
+        if (CONFIG.MODO_TESTE_LOCAL)
             return;
         setCarregando(true);
         try {
@@ -4580,7 +4574,7 @@ function AdmContestacoes({ st, setSt, toast, foco }) {
             toast('Informe a justificativa da decisão.');
             return;
         }
-        if (CONFIG.MODO_DEMONSTRACAO) {
+        if (CONFIG.MODO_TESTE_LOCAL) {
             setSt(s => ({ ...s, contestacoes: s.contestacoes.map(c => c.id === respondendo.id ? { ...c, status: decisao, resposta: resposta.trim() } : c) }));
             setRespondendo(null);
             setResposta('');
@@ -4697,13 +4691,13 @@ function AdmContestacoes({ st, setSt, toast, foco }) {
 }
 /* ================= ADM: CHECK LIST (aprovação + perguntas + relatório) ================= */
 function AdmChecklist({ st, setSt, toast, user, foco }) {
-    /* ALTERAÇÃO V6: fora do modo demonstração, o painel carrega os registros pela
-       API (GET /admin/checklists) em vez de usar apenas o estado do navegador. */
+    /* Em produção, o painel carrega os registros pelo endpoint
+       GET /admin/checklists. */
     const [sub, setSub] = useState(pode(user, 'checklist.aprovacao') ? 'aprovar' : pode(user, 'checklist.perguntas') ? 'perguntas' : 'relatorio');
     const [sincronizando, setSincronizando] = useState(false);
     const sincronizar = async () => {
-        if (CONFIG.MODO_DEMONSTRACAO) {
-            toast('Modo demonstração: dados locais. Configure a URL da Azure Function e desative MODO_DEMONSTRACAO para consultar o SharePoint.');
+        if (CONFIG.MODO_TESTE_LOCAL) {
+            toast('Modo local de testes: dados simulados. Configure a URL do backend e desative MODO_TESTE_LOCAL para consultar o SharePoint.');
             return;
         }
         setSincronizando(true);
@@ -4798,7 +4792,7 @@ function AdmChecklist({ st, setSt, toast, user, foco }) {
             toast('Informe o motivo do bloqueio do veículo.');
             return;
         }
-        if (!CONFIG.MODO_DEMONSTRACAO && ck.id && !String(ck.id).startsWith('DEMO-')) {
+        if (!CONFIG.MODO_TESTE_LOCAL && ck.id && !String(ck.id).startsWith('DEMO-')) {
             try {
                 await ApiService.admStatus(ck.id, status === 'aprovado' ? 'APROVADO' : 'REPROVADO', motivo || '', opcoes);
             }
@@ -6660,7 +6654,7 @@ function AdmApp({ st, setSt, user, onSair, toast }) {
         setAba(id);
     };
     useEffect(() => {
-        if (CONFIG.MODO_DEMONSTRACAO || !pode(user, 'checklist.administrar'))
+        if (CONFIG.MODO_TESTE_LOCAL || !pode(user, 'checklist.administrar'))
             return;
         ApiService.admListarChecklists().then(r => {
             const vindos = (r.itens || r.checklists || []).map(x => ({
