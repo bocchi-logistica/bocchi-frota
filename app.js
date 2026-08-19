@@ -15,7 +15,7 @@ const CONFIG = {
     TIMEOUT_MS: 90000,
     RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
     MAX_TENTATIVAS: 4,
-    VERSAO: '2.8.19'
+    VERSAO: '2.8.20'
 };
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
 document.title = `Logística Bocchi — Portal do Motorista e ADM Logística (${CONFIG.VERSAO})`;
@@ -1438,11 +1438,26 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
     const vSel = veiculosPermitidos.find(v => v.placa === veiculo);
     const frotaSel = normalizarTexto(vSel?.tipoFrota || vSel?.frota || '').includes('leve') ? 'leve' : 'pesada';
     const [perguntasAtivas, setPerguntasAtivas] = useState([]);
+    const perguntasPeriodicasRef = useRef([]);
+    const [periodicidadeChecklist, setPeriodicidadeChecklist] = useState(null);
+    const [modoChecklistAdicional, setModoChecklistAdicional] = useState(false);
     const [carregandoPerguntas, setCarregandoPerguntas] = useState(false);
     const [erroPerguntas, setErroPerguntas] = useState('');
     const [modoOcorrenciaAgendamento, setModoOcorrenciaAgendamento] = useState(false);
     const [grupoOcorrencia, setGrupoOcorrencia] = useState('');
     const [ultimoChecklistValido, setUltimoChecklistValido] = useState(null);
+    const mapearPerguntas = (lista, tipo) => (lista || []).map(p => ({
+        id: String(p.id),
+        texto: p.texto || '',
+        grupo: p.grupo || 'Outros',
+        frota: (p.tipoFrota || tipo).toLowerCase(),
+        frequencia: p.frequencia || 'Diária',
+        obrigatoria: p.obrigatoria === true,
+        fotoNC: p.fotoObrigatoriaNC === true,
+        observacaoObrigatoriaNC: p.observacaoObrigatoriaNC === true,
+        ativa: p.ativa !== false,
+        ordem: Number(p.ordem || 999)
+    })).sort((a, b) => a.grupo.localeCompare(b.grupo, 'pt-BR') || a.ordem - b.ordem);
     useEffect(() => {
         if (CONFIG.MODO_TESTE_LOCAL)
             return;
@@ -1525,19 +1540,11 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
                 const r = await ApiService.obterPerguntas(tipo, { placa: veiculo, ignorarFrequencia: !!inicioAgendamento?.agendamentoId });
                 if (!ativo)
                     return;
-                const lista = (r.perguntas || []).map(p => ({
-                    id: String(p.id),
-                    texto: p.texto || '',
-                    grupo: p.grupo || 'Outros',
-                    frota: (p.tipoFrota || tipo).toLowerCase(),
-                    frequencia: p.frequencia || 'Diária',
-                    obrigatoria: p.obrigatoria === true,
-                    fotoNC: p.fotoObrigatoriaNC === true,
-                    observacaoObrigatoriaNC: p.observacaoObrigatoriaNC === true,
-                    ativa: p.ativa !== false,
-                    ordem: Number(p.ordem || 999)
-                })).sort((a, b) => a.grupo.localeCompare(b.grupo, 'pt-BR') || a.ordem - b.ordem);
+                const lista = mapearPerguntas(r.perguntas, tipo);
                 setPerguntasAtivas(lista);
+                perguntasPeriodicasRef.current = lista;
+                setPeriodicidadeChecklist(r.periodicidade || null);
+                setModoChecklistAdicional(false);
             }
             catch (e) {
                 if (ativo)
@@ -1595,6 +1602,15 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
         preparar();
         return () => { ativo = false; };
     }, [inicioAgendamento, veiculo, perguntasAtivas, carregandoVeiculos, carregandoPerguntas, erroVeiculos, erroPerguntas, preenchendo]);
+    const formatarFrequenciasChecklist = lista => {
+        const nomes = (lista || []).map(valor => ({ 'Diária': 'diário', 'Semanal': 'semanal', 'Mensal': 'mensal' }[valor] || String(valor || '').toLowerCase())).filter(Boolean);
+        if (nomes.length <= 1)
+            return nomes[0] || 'periódico';
+        return nomes.slice(0, -1).join(', ') + ' e ' + nomes[nomes.length - 1];
+    };
+    const periodoPesadoConcluido = frotaSel === 'pesada' && periodicidadeChecklist?.aplicada === true && periodicidadeChecklist?.todasRealizadas === true;
+    const frequenciasRealizadasLabel = formatarFrequenciasChecklist(periodicidadeChecklist?.frequenciasRealizadas);
+    const frequenciasPendentesLabel = formatarFrequenciasChecklist(periodicidadeChecklist?.frequenciasPendentes);
     const grupos = [...new Set(perguntasAtivas.map(p => p.grupo))];
     const perguntasExibidas = modoOcorrenciaAgendamento ? (grupoOcorrencia ? perguntasAtivas.filter(p => p.grupo === grupoOcorrencia) : []) : perguntasAtivas;
     const chaveRascunho = 'ck_' + user.login + '_' + HOJE;
@@ -1669,6 +1685,39 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
         setPreenchendo(true);
         setUltimoEnvio(null);
     };
+    const abrirFormularioAdicional = async () => {
+        if (frotaSel !== 'pesada' || !periodoPesadoConcluido)
+            return;
+        if (carregandoVeiculos || carregandoPerguntas) {
+            toast('Aguarde: carregando os dados do checklist.');
+            return;
+        }
+        if (erroVeiculos || !veiculo) {
+            toast('Não foi possível abrir o checklist adicional: ' + (erroVeiculos || 'veículo não identificado.'));
+            return;
+        }
+        setCarregandoPerguntas(true);
+        try {
+            const r = await ApiService.obterPerguntas('PESADA', { placa: veiculo, ignorarFrequencia: true });
+            const lista = mapearPerguntas(r.perguntas, 'PESADA');
+            if (!lista.length) {
+                toast('Não há perguntas ativas de Frota Pesada para este veículo.');
+                return;
+            }
+            setPerguntasAtivas(lista);
+            setModoChecklistAdicional(true);
+            setResps({});
+            setExtras({ km: '', combustivel: '' });
+            setPreenchendo(true);
+            setUltimoEnvio(null);
+        }
+        catch (e) {
+            toast('Não foi possível abrir o checklist adicional: ' + (e.message || e));
+        }
+        finally {
+            setCarregandoPerguntas(false);
+        }
+    };
     const cancelar = () => {
         setPreenchendo(false);
         setResps({});
@@ -1676,6 +1725,8 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
         setModoOcorrenciaAgendamento(false);
         setGrupoOcorrencia('');
         setUltimoChecklistValido(null);
+        setModoChecklistAdicional(false);
+        setPerguntasAtivas(perguntasPeriodicasRef.current);
         IDB.apagarRascunho(chaveRascunho).catch(() => { });
         setTemRascunho(false);
         if (inicioAgendamento?.agendamentoId && onInicioConsumido)
@@ -1751,7 +1802,7 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
                 return;
             }
         }
-        if (!window.confirm('Confirma o envio do checklist da placa ' + veiculo + '?'))
+        if (!window.confirm('Confirma o envio do ' + (modoChecklistAdicional ? 'checklist adicional' : 'checklist') + ' da placa ' + veiculo + '?'))
             return;
         setEnviando(true);
         try {
@@ -1777,7 +1828,7 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
                 statusChecklist: 'PENDENTE',
                 agendamentoId: inicioAgendamento?.agendamentoId || '',
                 etapaAgendamento: inicioAgendamento?.etapa || '',
-                origemChecklist: inicioAgendamento?.agendamentoId ? (modoOcorrenciaAgendamento ? 'AGENDAMENTO_NC' : 'AGENDAMENTO_RETIRADA') : 'CHECKLIST_NORMAL',
+                origemChecklist: inicioAgendamento?.agendamentoId ? (modoOcorrenciaAgendamento ? 'AGENDAMENTO_NC' : 'AGENDAMENTO_RETIRADA') : (modoChecklistAdicional ? 'CHECKLIST_ADICIONAL' : 'CHECKLIST_NORMAL'),
                 regularizacaoTerceiro: inicioAgendamento?.regularizacaoTerceiro === true
             };
             // 1) grava na fila local ANTES de tentar enviar (não se perde sem internet)
@@ -1798,6 +1849,17 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
             if (meu && meu.statusEnvio === 'ENVIADO') {
                 setUltimoEnvio({ protocolo: meu.protocolo, placa: veiculo, quando: meu.dataHoraRecebimento || agoraISO() });
                 await carregarHistorico();
+                if (frotaSel === 'pesada' && !inicioAgendamento?.agendamentoId) {
+                    try {
+                        const periodoAtualizado = await ApiService.obterPerguntas('PESADA', { placa: veiculo });
+                        const listaAtualizada = mapearPerguntas(periodoAtualizado.perguntas, 'PESADA');
+                        perguntasPeriodicasRef.current = listaAtualizada;
+                        setPeriodicidadeChecklist(periodoAtualizado.periodicidade || null);
+                    }
+                    catch (_e) {
+                        // O envio já foi confirmado; a tela será atualizada na próxima abertura.
+                    }
+                }
                 if (inicioAgendamento?.agendamentoId && onConcluidoAgendamento) {
                     setTimeout(() => onConcluidoAgendamento(), 350);
                 }
@@ -1816,6 +1878,8 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
             setModoOcorrenciaAgendamento(false);
             setGrupoOcorrencia('');
             setUltimoChecklistValido(null);
+            setModoChecklistAdicional(false);
+            setPerguntasAtivas(perguntasPeriodicasRef.current);
             atualizarFila();
         }
         finally {
@@ -1880,25 +1944,32 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
             React.createElement("div", { className: "erro-box" },
                 "Falha ao carregar as perguntas: ",
                 erroPerguntas),
-        !preenchendo && !carregandoPerguntas && !erroPerguntas && perguntasAtivas.length === 0 &&
+        !preenchendo && !carregandoPerguntas && !erroPerguntas && perguntasAtivas.length === 0 && !periodoPesadoConcluido &&
             React.createElement("div", { className: "aviso-box" }, "N\u00E3o h\u00E1 inspe\u00E7\u00F5es pendentes para este ve\u00EDculo neste per\u00EDodo."),
         !preenchendo && carregandoVeiculos && React.createElement("div", { className: "aviso-box" }, "Carregando ve\u00EDculo vinculado..."),
         !preenchendo && erroVeiculos && React.createElement("div", { className: "erro-box" },
             "Falha ao carregar ve\u00EDculos: ",
             erroVeiculos),
         !preenchendo && !carregandoVeiculos && !erroVeiculos && veiculosPermitidos.length === 0 && !inicioAgendamento?.placa && React.createElement("div", { className: "card muted", style: { textAlign: 'center', padding: '24px 16px' } }, "Nenhum checklist pendente no momento."),
-        !preenchendo && veiculosPermitidos.length > 0 && !deHoje &&
+        !preenchendo && veiculosPermitidos.length > 0 && periodoPesadoConcluido &&
+            React.createElement("div", { className: "card", style: { textAlign: 'center', padding: '26px 16px', borderLeft: '4px solid var(--ok)' } },
+                React.createElement("div", { style: { fontSize: 34 } }, "\u2705"),
+                React.createElement("h3", { style: { margin: '6px 0 2px' } },
+                    (periodicidadeChecklist?.frequenciasRealizadas || []).length > 1 ? 'Checklists ' + frequenciasRealizadasLabel + ' já realizados' : 'Checklist ' + frequenciasRealizadasLabel + ' já realizado'),
+                React.createElement("div", { className: "muted", style: { marginBottom: 14 } }, "Todas as perguntas previstas para este veículo neste período já foram respondidas. Deseja fazer um checklist adicional?"),
+                React.createElement("button", { className: "btn btn-p", disabled: carregandoVeiculos || carregandoPerguntas || !!erroVeiculos || !veiculo, onClick: abrirFormularioAdicional }, "Fazer checklist adicional")),
+        !preenchendo && veiculosPermitidos.length > 0 && ((frotaSel === 'pesada' && perguntasAtivas.length > 0) || (frotaSel !== 'pesada' && !deHoje)) &&
             React.createElement("div", { className: "card", style: { textAlign: 'center', padding: '26px 16px' } },
                 React.createElement("div", { style: { fontSize: 34 } }, "\uD83D\uDCCB"),
-                React.createElement("h3", { style: { margin: '6px 0 2px' } }, reprovadoHoje ? 'Check list reprovado — refazer' : 'Check list de hoje pendente'),
+                React.createElement("h3", { style: { margin: '6px 0 2px' } }, reprovadoHoje ? 'Check list reprovado — refazer' : (frotaSel === 'pesada' ? 'Checklist ' + frequenciasPendentesLabel + ' pendente' : 'Check list de hoje pendente')),
                 reprovadoHoje && React.createElement("div", { className: "erro-box", style: { margin: '8px 0' } },
                     "Motivo: ",
                     reprovadoHoje.motivoReprova),
                 React.createElement("div", { className: "muted", style: { marginBottom: 14 } },
-                    "Inspe\u00E7\u00E3o pendente \u2014 ",
+                    frotaSel === 'pesada' ? 'Há perguntas previstas para o período atual — ' : 'Inspeção pendente — ',
                     dataBR(HOJE)),
                 React.createElement("button", { className: "btn btn-p", disabled: carregandoVeiculos || !!erroVeiculos || !veiculo, onClick: abrirFormulario }, reprovadoHoje ? 'Refazer check list' : (temRascunho ? 'Continuar rascunho' : 'Preencher agora'))),
-        veiculosPermitidos.length > 0 && deHoje &&
+        veiculosPermitidos.length > 0 && frotaSel !== 'pesada' && deHoje &&
             React.createElement("div", { className: "card row" },
                 React.createElement("div", { className: "grow" },
                     React.createElement("b", null, "Check list de hoje enviado"),
@@ -1908,6 +1979,9 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
                         deHoje.placa)),
                 React.createElement(StatusTag, { s: deHoje.status })),
         preenchendo && React.createElement(React.Fragment, null,
+            modoChecklistAdicional && React.createElement("div", { className: "aviso-box" },
+                React.createElement("b", null, "Checklist adicional de Frota Pesada."),
+                " Este preenchimento é opcional e será identificado separadamente no envio."),
             modoOcorrenciaAgendamento && React.createElement("div", { className: "card", style: { borderLeft: '4px solid var(--colheita)' } },
                 React.createElement("h3", null, "Registrar n\u00E3o conformidade do agendamento"),
                 React.createElement("div", { className: "muted", style: { margin: '4px 0 10px' } }, "O checklist peri\u00F3dico desta placa j\u00E1 foi realizado. Registre somente o grupo e o item com problema."),
