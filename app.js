@@ -1130,7 +1130,7 @@ function TelaCargas({ st, setSt, user, dados, toast }) {
             setEnviandoContestacao(false);
         }
     };
-    const mesesDisp = MESES_2026.slice(0, 7);
+    const mesesDisp = [...new Set([...mesesAteHoje(), ...st.cargas.filter(c => c.motorista === user.nome).map(c => mesDaData(c.data))])].sort((a,b) => (a.slice(3)+a.slice(0,2)).localeCompare(b.slice(3)+b.slice(0,2)));
     return (React.createElement(React.Fragment, null,
         React.createElement("div", { className: "seletor-mes" }, mesesDisp.map(m => React.createElement("button", { key: m, className: 'mes-pill' + (m === mes ? ' on' : ''), onClick: () => setMes(m) }, mesLabel(m)))),
         React.createElement("div", { className: "totais" },
@@ -1280,6 +1280,7 @@ function TelaPremiacao({ st, user, dados }) {
     const mesesVisiveis = mesesAteHoje();
     return (React.createElement(React.Fragment, null,
         React.createElement("div", { className: "seletor-mes" }, mesesVisiveis.map(m => React.createElement("button", { key: m, className: 'mes-pill' + (m === mes ? ' on' : ''), onClick: () => setMes(m) }, mesLabel(m)))),
+        React.createElement("div", { className: "aviso-box" }, ap.meta ? "Estimativa conforme cargas, metas e descontos cadastrados. Não substitui o fechamento oficial do RH." : "Premiação indisponível: não foi encontrada meta para o tipo de veículo e período. Valores zerados abaixo não representam uma apuração validada."),
         React.createElement("div", { className: "card regua-wrap" },
             React.createElement("div", { className: "row" },
                 React.createElement("div", { className: "grow" },
@@ -6801,3 +6802,4 @@ function App() {
         React.createElement(Toast, { msg: toastMsg })));
 }
 ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App, null));
+
