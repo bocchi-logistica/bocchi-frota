@@ -6233,7 +6233,7 @@ function AdmCadastros({ st, setSt, toast, user }) {
                             React.createElement("option", { value: "s" }, "Ativo"),
                             React.createElement("option", { value: "n" }, "Inativo"))),
                     React.createElement("div", null,
-                        React.createElement("label", null, edit.itemId ? (edit.senhaCadastrada ? 'Redefinir senha (deixe vazio para manter)' : 'Definir senha') : 'Senha inicial'),
+                        React.createElement("label", null, edit.bloqueado ? 'Acesso bloqueado — defina e salve uma nova senha para liberar' : edit.itemId ? (edit.senhaCadastrada ? 'Redefinir senha (deixe vazio para manter)' : 'Definir senha') : 'Senha inicial'),
                         React.createElement("div", { className: "row", style: { gap: 8 } },
                             React.createElement("input", { className: "grow", type: senhaVisivel ? 'text' : 'password', value: edit.novaSenha || '', onChange: e => setEdit({ ...edit, novaSenha: e.target.value }), placeholder: edit.perfil === 'MOTORISTA' ? '6 números' : 'mínimo 8 caracteres' }),
                             React.createElement("button", { type: "button", className: "btn btn-s btn-sm", onClick: () => setSenhaVisivel(!senhaVisivel) }, senhaVisivel ? 'Ocultar' : 'Ver'),
