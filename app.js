@@ -2746,7 +2746,7 @@ function DetalheAgendamento({ item, admin, onClose, onAtualizar, toast, onAbrirC
         if (acao === 'cancelar')
             resposta = await ApiService.cancelarAgendamento(item.id, motivo, obs);
         if (acao === 'retirar')
-            resposta = await ApiService.retirarAgendamento(item.id, { kmInicial: Number(km), possuiNC: problema, dataHora: new Date().toISOString() });
+            resposta = await ApiService.retirarAgendamento(item.id, { kmInicial: Number(km), possuiNC: problema, dataHora: new Date().toISOString(), origemOperacao: admin ? 'MONITORAMENTO_GESTAO' : 'APP' });
         if (acao === 'finalizar')
             resposta = await ApiService.finalizarAgendamento(item.id, { kmFinal: Number(km), possuiProblema: problema, dataHora: new Date().toISOString(), regularizacaoTerceiro });
         if (acao === 'corrigir')
