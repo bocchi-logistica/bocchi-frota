@@ -4423,6 +4423,15 @@ function AdmImportar({ st, setSt, toast }) {
                         premiacao: r['PREMIAÇÃO'] == null ? null : Number(r['PREMIAÇÃO']) || 0, maiorKM: String(r['MAIOR KM?'] || ''), distancia: Number(r['DISTANCIA']) || 0,
                         freteOriginal: Number(r['FRETE ORIGINAL']) || 0, diferenca: Number(r['DIFERENÇA']) || 0 });
                 });
+                // Identidade baseada nos dados, independente de arquivo, aba ou posição.
+                // Ocorrências idênticas recebem sequência para não descartar cargas legítimas.
+                const ocorrencias = new Map();
+                novas.forEach(c => {
+                    const identidade = JSON.stringify([c.data,c.placa,c.numeroNota,String(c.origem).toUpperCase(),String(c.destino).toUpperCase(),String(c.produto).toUpperCase(),Number(c.pesoBruto||c.pesoTon*1000),Number(c.pesoTon||0),Number(c.valorTon||0),Number(c.freteTotal||0),Number(c.distancia||0)]);
+                    const seq = (ocorrencias.get(identidade) || 0) + 1;
+                    ocorrencias.set(identidade,seq);
+                    c.ocorrenciaIdentica = seq;
+                });
                 // Descontos e multas são tratados no módulo Premiação.
                 const descNovos = [];
                 const porCompetencia = {};
