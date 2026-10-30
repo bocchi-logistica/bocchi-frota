@@ -15,7 +15,7 @@ const CONFIG = {
     TIMEOUT_MS: 90000,
     RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
     MAX_TENTATIVAS: 4,
-    VERSAO: '2.8.31-homolog'
+    VERSAO: '2.8.32-homolog'
 };
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
 document.title = `Logística Bocchi — Portal do Motorista e ADM Logística (${CONFIG.VERSAO})`;
@@ -1041,13 +1041,22 @@ function Login({ st, onLogin }) {
             setCarregando(false);
         }
     };
-    return (React.createElement("div", { className: "login-wrap" },
+    return (React.createElement("div", { className: "login-wrap bocchi-login" },
+        React.createElement("section",{className:"login-apresentacao","aria-label":"Bocchi Frota"},
+            React.createElement("a",{className:"login-empresa",href:"https://bocchiagrobios.com.br/",target:"_blank",rel:"noopener noreferrer"},"BOCCHI AGROBIOS"),
+            React.createElement("div",{className:"login-mensagem"},
+                React.createElement("div",{className:"login-eyebrow"},"BOCCHI FROTA"),
+                React.createElement("h1",null,"Quem move a Bocchi merece estar conectado."),
+                React.createElement("p",null,"Um espaço para facilitar sua rotina, cuidar dos nossos veículos e aproximar você da empresa. Juntos, seguimos com segurança, parceria e reconhecimento."),
+                React.createElement("div",{className:"login-servicos"},["Agendamento de veículos compartilhados","Checklists","Premiação","Sinistros"].map(s=>React.createElement("span",{key:s},s))),
+                React.createElement("div",{className:"login-em-breve"},"Em breve: manuais e controle de manutenção.")),
+            React.createElement("div",{className:"login-valores"},"Segurança",React.createElement("span",null,"•"),"Parceria",React.createElement("span",null,"•"),"Reconhecimento")),
         React.createElement("div", { className: "login-card" },
             React.createElement("img", { src: LOGO, className: "logo-login", alt: "Bocchi Agrobios" }),
-            React.createElement("div", { className: "login-sub" },
-                "Portal do motorista e ADM log\u00EDstica \u2014 Vers\u00E3o ",
-                CONFIG.VERSAO,
-                " \u2014 Edson.B"),
+            React.createElement("h2",{className:"login-nome-portal"},"Bocchi Frota"),
+            React.createElement("div",{className:"login-assinatura"},"Você e a Bocchi, no mesmo caminho."),
+            React.createElement("h3",{className:"login-boas-vindas"},"Bem-vindo à Bocchi Frota"),
+            React.createElement("p",{className:"login-sub"},"Entre com seu usuário e senha para acessar os serviços disponíveis para você."),
             React.createElement("div", { style: { display: 'flex', flexDirection: 'column', gap: 12 } },
                 React.createElement("div", null,
                     React.createElement("label", { htmlFor: "login-usuario" }, "Usu\u00E1rio"),
@@ -1059,6 +1068,8 @@ function Login({ st, onLogin }) {
                         React.createElement("button", { type: "button", className: "btn btn-s btn-sm", onClick: () => setSenhaLoginVisivel(v => !v), title: senhaLoginVisivel ? 'Ocultar senha' : 'Visualizar senha', "aria-label": senhaLoginVisivel ? 'Ocultar senha' : 'Visualizar senha', style: { minWidth: 72 } }, senhaLoginVisivel ? 'Ocultar' : 'Ver'))),
                 erro && React.createElement("div", { className: "erro-box" }, erro),
                 React.createElement("button", { className: "btn btn-p", disabled: carregando, onClick: entrar }, carregando ? 'Entrando...' : 'Entrar')),
+            React.createElement("p",{className:"login-ajuda"},"Precisa de acesso ou esqueceu sua senha? Fale com a Logística."),
+            React.createElement("div",{className:"login-versao"},"Versão ",CONFIG.VERSAO),
             CONFIG.MODO_TESTE_LOCAL && React.createElement("div", { className: "hint" },
                 React.createElement("b", null, "MODO LOCAL DE TESTES ATIVO"),
                 " \u2014 selecione um usu\u00E1rio cadastrado para navegar sem gravar no banco D1 de homologação."))));
