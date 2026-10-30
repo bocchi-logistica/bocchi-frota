@@ -15,7 +15,7 @@ const CONFIG = {
     TIMEOUT_MS: 90000,
     RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
     MAX_TENTATIVAS: 4,
-    VERSAO: '2.8.27-homolog'
+    VERSAO: '2.8.28-homolog'
 };
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
 document.title = `Logística Bocchi — Portal do Motorista e ADM Logística (${CONFIG.VERSAO})`;
@@ -3501,7 +3501,7 @@ function PainelRH({ st, dados, user }) {
         let ativo = true;
         setCarregandoRH(true);
         setErroRH('');
-        ApiService.admCadastros()
+        ApiService._req('GET', '/admin/rh/motoristas')
             .then(r => {
             if (!ativo)
                 return;
