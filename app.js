@@ -6014,7 +6014,7 @@ function AdmCadastros({ st, setSt, toast, user }) {
             React.createElement("div", { className: "aviso-box" }, "A classifica\u00E7\u00E3o da frota define qual modelo de check list o ve\u00EDculo recebe. Nos pesados, o tipo de ve\u00EDculo define tamb\u00E9m a meta da premia\u00E7\u00E3o; o v\u00EDnculo com o motorista \u00E9 usado na importa\u00E7\u00E3o quando a planilha n\u00E3o traz a coluna de motorista.")),
         sub === 'vinculos' && podeSub('cadastro.vinculos') && !carregandoCad && !erroCad && React.createElement(React.Fragment, null,
             React.createElement("div", null,
-                React.createElement("button", { className: "btn btn-p", onClick: () => setEditVinculo({ vinculoId: 'VIN-' + String(cad.vinculos.length + 1).padStart(3, '0'), usuarioItemId: '', veiculoItemId: '', dataInicio: HOJE, dataFim: '', ativo: true, principal: true, observacao: '' }) }, "+ Novo v\u00EDnculo")),
+                React.createElement("button", { className: "btn btn-p", onClick: () => setEditVinculo({ vinculoId: 'VIN-' + String(cad.vinculos.length + 1).padStart(3, '0'), usuarioItemId: String(cad.usuarios.find(u => u.ativo)?.itemId || ''), veiculoItemId: String(cad.veiculos.find(v => v.ativo && !v.usoCompartilhado)?.itemId || ''), dataInicio: HOJE, dataFim: '', ativo: true, principal: true, observacao: '' }) }, "+ Novo v\u00EDnculo")),
             React.createElement("div", { className: "filtros-cadastro" },
                 React.createElement("div", null,
                     React.createElement("label", { htmlFor: "adm-cadastros-placa-2" }, "Placa"),
