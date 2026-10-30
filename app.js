@@ -4391,15 +4391,14 @@ function AdmImportar({ st, setSt, toast }) {
         rd.onload = ev => {
             try {
                 const wb = XLSX.read(ev.target.result, { type: 'array', cellDates: true });
-                const nomeAba = wb.SheetNames.find(n => n.toUpperCase().includes('BASE CARGAS FROTA')) ||
-                    wb.SheetNames.find(n => n.toUpperCase().trim() === 'CARGAS FROTA');
+                const nomeAba = wb.SheetNames.find(n => n.toUpperCase().trim() === 'CARGAS FROTA') || wb.SheetNames.find(n => n.toUpperCase().includes('BASE CARGAS FROTA'));
                 if (!nomeAba)
-                    throw new Error('Nenhuma aba de cargas encontrada. O arquivo precisa ter a aba "BASE CARGAS FROTA manual" (planilha da premiação) ou "CARGAS FROTA" (relatório).');
+                    throw new Error('Nenhuma aba de cargas encontrada. O arquivo precisa ter a aba "CARGAS FROTA".');
                 const rows = XLSX.utils.sheet_to_json(wb.Sheets[nomeAba], { defval: null });
                 if (!rows.length)
                     throw new Error('A aba "' + nomeAba + '" está vazia.');
                 const cols = Object.keys(rows[0]);
-                const obrig = ['DATA', 'PLACA', 'ORIGEM', 'DESTINO', 'PRODUTO', 'PESO (t)', 'PREMIAÇÃO'];
+                const obrig = ['DATA', 'PLACA', 'ORIGEM', 'DESTINO', 'PRODUTO', 'PESO (t)'];
                 const faltando = obrig.filter(c => !cols.includes(c));
                 if (faltando.length)
                     throw new Error('Colunas não encontradas na aba "' + nomeAba + '": ' + faltando.join(', ') + '. Confira se a planilha não foi alterada.');
@@ -4421,26 +4420,11 @@ function AdmImportar({ st, setSt, toast }) {
                     novas.push({ data: dt, placa: String(r['PLACA'] || '').trim().toUpperCase(), origem: r['ORIGEM'] || '', destino: r['DESTINO'] || '',
                         produto: r['PRODUTO'] || '', numeroNota: colNota ? String(r[colNota] || '') : '', valorTon: Number(r['R$/t']) || 0,
                         pesoTon: Number(r['PESO (t)']) || 0, pesoBruto: Number(r['PESO BRUTO']) || 0, freteTotal: Number(r['R$ TOTAL']) || 0,
-                        premiacao: Number(r['PREMIAÇÃO']) || 0, maiorKM: String(r['MAIOR KM?'] || ''), distancia: Number(r['DISTANCIA']) || 0,
+                        premiacao: r['PREMIAÇÃO'] == null ? null : Number(r['PREMIAÇÃO']) || 0, maiorKM: String(r['MAIOR KM?'] || ''), distancia: Number(r['DISTANCIA']) || 0,
                         freteOriginal: Number(r['FRETE ORIGINAL']) || 0, diferenca: Number(r['DIFERENÇA']) || 0 });
                 });
-                // Descontos da aba "Lançamento", se existir
+                // Descontos e multas são tratados no módulo Premiação.
                 const descNovos = [];
-                if (wb.SheetNames.includes('Lançamento')) {
-                    const lrows = XLSX.utils.sheet_to_json(wb.Sheets['Lançamento'], { range: 6, defval: null });
-                    const jaTem = new Set(st.descontos.map(d => [d.motorista, d.mes, d.item, d.valor].join('|')));
-                    lrows.forEach(r => {
-                        const item = r['ITEM CONTROLE'];
-                        if (!['Multas', 'Notificação / Advertencia', 'Check List'].includes(item))
-                            return;
-                        const v = Number(r['R$']);
-                        if (!v)
-                            return;
-                        const d = { motorista: r['MOTORISTA'], mes: String(r['MÊS/ANO']), item, valor: v };
-                        if (!jaTem.has([d.motorista, d.mes, d.item, d.valor].join('|')))
-                            descNovos.push(d);
-                    });
-                }
                 const porCompetencia = {};
                 novas.forEach(c => { const comp = c.data.slice(0, 7); (porCompetencia[comp] || (porCompetencia[comp] = [])).push(c); });
                 const competencias = Object.keys(porCompetencia).sort();
@@ -4536,8 +4520,8 @@ function AdmImportar({ st, setSt, toast }) {
         React.createElement("div", { className: "card" },
             React.createElement("p", { style: { marginBottom: 12 } },
                 "Envie a ",
-                React.createElement("b", null, "planilha da premia\u00E7\u00E3o (.xlsm)"),
-                " salva no banco D1 de homologação \u2014 o app l\u00EA a aba de cargas e tamb\u00E9m a aba \"Lan\u00E7amento\" (multas, advert\u00EAncias e check list). O relat\u00F3rio de cargas (.xlsx) tamb\u00E9m \u00E9 aceito."),
+                React.createElement("b", null, "planilha CARGAS FROTA (.xlsx)"),
+                " para importar cargas operacionais no D1. Premiação e descontos são tratados em módulo próprio."),
             React.createElement("div", { className: "drop" },
                 React.createElement("div", { style: { fontSize: 30, marginBottom: 6 } }, "\uD83D\uDCE5"),
                 lendo ? 'Lendo o arquivo...' : 'Selecione o arquivo .xlsm ou .xlsx',
