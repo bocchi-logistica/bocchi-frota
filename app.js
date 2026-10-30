@@ -15,7 +15,7 @@ const CONFIG = {
     TIMEOUT_MS: 90000,
     RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
     MAX_TENTATIVAS: 4,
-    VERSAO: '2.8.22-homolog'
+    VERSAO: '2.8.23-homolog'
 };
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
 document.title = `Logística Bocchi — Portal do Motorista e ADM Logística (${CONFIG.VERSAO})`;
@@ -1437,7 +1437,7 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
     const [erroVeiculos, setErroVeiculos] = useState('');
     const [veiculo, setVeiculo] = useState(veiculosDemo[0]?.placa || '');
     const vSel = veiculosPermitidos.find(v => v.placa === veiculo);
-    const frotaSel = normalizarTexto(vSel?.tipoFrota || vSel?.frota || '').includes('leve') ? 'leve' : 'pesada';
+    const frotaSel = normalizarTexto(vSel?.tipoFrota || vSel?.frota || user.tipoFrotaAcesso || '').includes('leve') ? 'leve' : 'pesada';
     const [perguntasAtivas, setPerguntasAtivas] = useState([]);
     const perguntasPeriodicasRef = useRef([]);
     const [periodicidadeChecklist, setPeriodicidadeChecklist] = useState(null);
@@ -1533,6 +1533,7 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
     useEffect(() => {
         let ativo = true;
         const carregar = async () => {
+            if (carregandoVeiculos || !veiculo) { setErroPerguntas(''); setPerguntasAtivas([]); return; }
             setCarregandoPerguntas(true);
             setErroPerguntas('');
             setPerguntasAtivas([]);
@@ -1558,7 +1559,7 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
         };
         carregar();
         return () => { ativo = false; };
-    }, [frotaSel, veiculo]);
+    }, [frotaSel, veiculo, carregandoVeiculos]);
     useEffect(() => {
         if (!inicioAgendamento?.placa || carregandoVeiculos)
             return;
@@ -1951,7 +1952,7 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
         !preenchendo && erroVeiculos && React.createElement("div", { className: "erro-box" },
             "Falha ao carregar ve\u00EDculos: ",
             erroVeiculos),
-        !preenchendo && !carregandoVeiculos && !erroVeiculos && veiculosPermitidos.length === 0 && !inicioAgendamento?.placa && React.createElement("div", { className: "card muted", style: { textAlign: 'center', padding: '24px 16px' } }, "Nenhum veículo vinculado e disponível para este usuário. A Logística deve conferir o vínculo, a vigência e o status do veículo em Cadastros → Vínculos."),
+        !preenchendo && !carregandoVeiculos && !erroVeiculos && veiculosPermitidos.length === 0 && !inicioAgendamento?.placa && React.createElement("div", { className: "card muted", style: { textAlign: 'center', padding: '24px 16px' } }, (normalizarTexto(user.tipoFrotaAcesso).includes("leve") ? "Para veículo compartilhado, inicie o checklist pela retirada em Agendamento." : "Nenhum veículo vinculado e disponível para este usuário. A Logística deve conferir o vínculo, a vigência e o status do veículo em Cadastros → Vínculos.")),
         !preenchendo && veiculosPermitidos.length > 0 && periodoPesadoConcluido &&
             React.createElement("div", { className: "card", style: { textAlign: 'center', padding: '26px 16px', borderLeft: '4px solid var(--ok)' } },
                 React.createElement("div", { style: { fontSize: 34 } }, "\u2705"),
@@ -3289,9 +3290,9 @@ function MotoristaApp({ st, setSt, user, onSair, toast }) {
             return;
         let ativo = true;
         Promise.allSettled([
-            ApiService.obterCargas(),
-            ApiService.obterPremiacao(),
-            ApiService.obterMinhasContestacoes()
+            user.perms.cargas ? ApiService.obterCargas() : Promise.resolve({cargas:[]}),
+            user.perms.premiacao ? ApiService.obterPremiacao() : Promise.resolve({metas:[],descontos:[],apuracoes:[]}),
+            user.perms.cargas ? ApiService.obterMinhasContestacoes() : Promise.resolve({contestacoes:[]})
         ]).then(([cargasResult, premiacaoResult, contestacoesResult]) => {
             if (!ativo)
                 return;
