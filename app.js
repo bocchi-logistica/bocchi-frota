@@ -3693,7 +3693,8 @@ function PainelRH({ st, dados, user }) {
             return;
         setAuditoriasRH(v => ({ ...v, [motoristaId]: { carregando: true, erro: '', apuracoes: null } }));
         try {
-            const resposta = await ApiService.obterPremiacaoMotorista(linha.u.nome);
+            const competenciasAuditoria = mesesProcessaveis.map(m => m.slice(3) + '-' + m.slice(0, 2));
+            const resposta = await ApiService.obterPremiacaoMotorista(linha.u.nome, competenciasAuditoria);
             const porCompetencia = {};
             (resposta.apuracoes || []).forEach(a => { porCompetencia[String(a.competencia || '')] = a; });
             setAuditoriasRH(v => ({ ...v, [motoristaId]: {
