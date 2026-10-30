@@ -15,7 +15,7 @@ const CONFIG = {
     TIMEOUT_MS: 90000,
     RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
     MAX_TENTATIVAS: 4,
-    VERSAO: '2.8.26-homolog'
+    VERSAO: '2.8.27-homolog'
 };
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
 document.title = `Logística Bocchi — Portal do Motorista e ADM Logística (${CONFIG.VERSAO})`;
@@ -6757,6 +6757,7 @@ function AdmApp({ st, setSt, user, onSair, toast }) {
     ].filter(Boolean);
     const [aba, setAba] = useState(abas[0]?.[0] || '');
     const [destino, setDestino] = useState(null);
+    const [menuAberto,setMenuAberto]=useState(false);
     const navegarPara = (id, parametros = {}) => {
         if (!abas.some(([codigo]) => codigo === id)) {
             toast('Seu perfil não possui acesso ao módulo solicitado.');
@@ -6780,14 +6781,19 @@ function AdmApp({ st, setSt, user, onSair, toast }) {
             setSt(s => ({ ...s, checklists: vindos }));
         }).catch(e => toast('Falha ao carregar checklists do banco D1 de homologação: ' + e.message));
     }, []);
-    return (React.createElement("div", { className: "ashell" },
-        React.createElement("div", { className: "atop" },
-            React.createElement("div", { className: "atop-in" },
-                React.createElement("div", { className: "marca" },
-                    "Bocchi ",
-                    React.createElement("em", null, "Frota")),
-                React.createElement("nav", { className: "anav grow" }, abas.map(([id, nome]) => React.createElement("button", { key: id, className: aba === id ? 'on' : '', onClick: () => { setDestino(null); setAba(id); } }, nome))),
-                React.createElement("button", { className: "btn btn-sm", style: { color: 'rgba(255,255,255,.8)' }, onClick: onSair }, "Sair"))),
+    const icones={rh:"▦",painel:"◫",importar:"↥",contest:"≡",sinistros:"◇",agendamentos:"▤",check:"✓",prem:"☆",cad:"▧"};
+    return (React.createElement("div", { className: "ashell admin-lateral" },
+        menuAberto && React.createElement("button",{className:"admin-menu-fundo","aria-label":"Fechar menu",onClick:()=>setMenuAberto(false)}),
+        React.createElement("aside", { className: "admin-sidebar"+(menuAberto?" aberto":"") },
+            React.createElement("div",{className:"admin-identidade"},
+                React.createElement("div",{className:"admin-logo-box"},React.createElement("img",{src:LOGO,alt:"Bocchi Agrobios",className:"admin-logo"})),
+                React.createElement("div",{className:"admin-produto"},"Gestão de Frota"),
+                React.createElement("div",{className:"admin-legenda"},"Logística Bocchi")),
+            React.createElement("nav", { className: "admin-nav","aria-label":"Módulos disponíveis" }, abas.map(([id, nome]) => React.createElement("button", { key: id, className: aba === id ? 'on' : '',"aria-current":aba===id?"page":undefined,onClick: () => { setDestino(null); setAba(id);setMenuAberto(false); } },React.createElement("span",{"aria-hidden":true,className:"admin-nav-icon"},icones[id]),nome))),
+            React.createElement("div",{className:"admin-sidebar-footer"},React.createElement("span",null,"Bocchi Frota"),React.createElement("small",null,CONFIG.VERSAO))),
+        React.createElement("header",{className:"admin-topbar"},
+            React.createElement("div",{className:"row"},React.createElement("button",{className:"btn btn-g btn-sm admin-toggle","aria-label":"Abrir menu","aria-expanded":menuAberto,onClick:()=>setMenuAberto(x=>!x)},"☰"),React.createElement("span",{className:"admin-contexto"},abas.find(([id])=>id===aba)?.[1]||"Gestão de Frota")),
+            React.createElement("div",{className:"row admin-conta"},React.createElement("div",null,React.createElement("strong",null,user.nome),React.createElement("small",null,user.perfil||"Gestão")),React.createElement("button",{className:"btn btn-g btn-sm",onClick:onSair},"Sair"))),
         React.createElement("div", { className: "abody" },
             aba === 'rh' && React.createElement(PainelRH, { st: st, dados: dados, user: user }),
             aba === 'painel' && React.createElement(AdmPainel, { st: st, dados: dados, user: user, onNavegar: navegarPara }),
