@@ -1,13 +1,13 @@
 const { useState, useMemo, useRef, useEffect } = React;
 /* ============================================================================
    CONFIGURAÇÕES GERAIS DA PLATAFORMA
-   Backend: Cloudflare Worker | Persistência: Microsoft SharePoint
+   Backend: Cloudflare Worker | Persistência em migração para D1/R2 (homologação)
    API_URL é o ponto central de configuração do serviço de integração.
    Nunca inserir credenciais, tokens ou segredos neste arquivo.
    ========================================================================== */
 const CONFIG = {
-    API_URL: "https://bocchi-frota-api.logistica-951.workers.dev",
-    // Modo local de testes, desativado em produção: não grava no SharePoint.
+    API_URL: "https://bocchi-frota-api-homolog.logistica-951.workers.dev",
+    // Modo local de testes, desativado em produção: não grava na API.
     MODO_TESTE_LOCAL: false,
     MAX_FOTO_MB: 2,
     QUALIDADE_FOTO: 0.7,
@@ -15,7 +15,7 @@ const CONFIG = {
     TIMEOUT_MS: 90000,
     RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
     MAX_TENTATIVAS: 4,
-    VERSAO: '2.8.20'
+    VERSAO: '2.8.20-homolog'
 };
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
 document.title = `Logística Bocchi — Portal do Motorista e ADM Logística (${CONFIG.VERSAO})`;
