@@ -5784,7 +5784,7 @@ function AdmCadastros({ st, setSt, toast, user }) {
             toast('Erro ao ' + acao + ' placa: ' + e.message);
         }
     };
-    const salvarVinculo = async () => { const u = cad.usuarios.find(x => x.itemId === editVinculo.usuarioItemId), v = cad.veiculos.find(x => x.itemId === editVinculo.veiculoItemId); if (!u || !v) {
+    const salvarVinculo = async () => { const u = cad.usuarios.find(x => String(x.itemId) === String(editVinculo.usuarioItemId)), v = cad.veiculos.find(x => String(x.itemId) === String(editVinculo.veiculoItemId)); if (!u || !v) {
         toast('Selecione usuário e veículo.');
         return;
     } try {
