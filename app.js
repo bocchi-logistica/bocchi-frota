@@ -15,7 +15,7 @@ const CONFIG = {
     TIMEOUT_MS: 90000,
     RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
     MAX_TENTATIVAS: 4,
-    VERSAO: '2.8.21-homolog'
+    VERSAO: '2.8.22-homolog'
 };
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
 document.title = `Logística Bocchi — Portal do Motorista e ADM Logística (${CONFIG.VERSAO})`;
@@ -5606,7 +5606,7 @@ function RegrasCapacidadeProduto({ tipo, onChange }) {
         regras == null ? React.createElement(React.Fragment, null,
             React.createElement('p', { className: 'muted' }, 'Este tipo ainda utiliza a capacidade geral acima.'),
             React.createElement('button', { type: 'button', className: 'btn btn-s', onClick: () => onChange({ ...tipo, regrasCapacidade: [{ ...nova(), aplicar: 'TODOS' }] }) }, 'Configurar regras por produto')) : React.createElement(React.Fragment, null,
-            React.createElement('p', { className: 'muted' }, 'Ao salvar alterações nas regras, a nova versão passa a valer para cargas datadas de hoje em diante. Cargas anteriores usam a versão da sua data.'),
+            React.createElement('p', { className: 'muted' }, 'Homologação: a regra mais recente vale desde o início dos testes, inclusive para cargas antigas. Contestações já registradas mantêm seus dados originais.'),
             regras.length === 0 && React.createElement('div', { className: 'aviso-box' }, 'Nenhuma regra: a faixa operacional não será validada para nenhum produto.'),
             regras.map((r, i) => React.createElement('div', { className: 'card', key: i, style: { marginTop: 12 } },
                 React.createElement('div', { className: 'row' }, React.createElement('b', { className: 'grow' }, 'Regra ' + (i + 1)), React.createElement('button', { type: 'button', className: 'btn btn-g btn-sm', onClick: () => onChange({ ...tipo, regrasCapacidade: regras.filter((_, j) => j !== i) }) }, 'Remover')),
