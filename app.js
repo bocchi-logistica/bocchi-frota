@@ -294,7 +294,7 @@ function otimizarArquivoBinario(arquivo) {
 /* ============================================================================
    SERVIÇO DE INTEGRAÇÃO
    O front-end acessa somente o backend definido em CONFIG.API_URL.
-   O acesso ao SharePoint é responsabilidade exclusiva do backend.
+   O acesso ao banco D1 de homologação é responsabilidade exclusiva do backend.
    Em MODO_TESTE_LOCAL, as funções simulam o servidor localmente.
    ========================================================================== */
 let _token = null; // token de sessão em memória (nunca gravar senha no navegador)
@@ -1061,7 +1061,7 @@ function Login({ st, onLogin }) {
                 React.createElement("button", { className: "btn btn-p", disabled: carregando, onClick: entrar }, carregando ? 'Entrando...' : 'Entrar')),
             CONFIG.MODO_TESTE_LOCAL && React.createElement("div", { className: "hint" },
                 React.createElement("b", null, "MODO LOCAL DE TESTES ATIVO"),
-                " \u2014 selecione um usu\u00E1rio cadastrado para navegar sem gravar no SharePoint."))));
+                " \u2014 selecione um usu\u00E1rio cadastrado para navegar sem gravar no banco D1 de homologação."))));
 }
 /* ================= MOTORISTA: CARGAS ================= */
 function TelaCargas({ st, setSt, user, dados, toast }) {
@@ -1663,7 +1663,7 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
             return;
         }
         if (carregandoPerguntas) {
-            toast('Aguarde: carregando as perguntas do SharePoint.');
+            toast('Aguarde: carregando as perguntas do banco D1 de homologação.');
             return;
         }
         if (erroPerguntas) {
@@ -1807,7 +1807,7 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
         setEnviando(true);
         try {
             const loc = await obterLocalizacao();
-            const idLocal = gerarUUID(); // mesmo id em todas as tentativas -> sem duplicidade no SharePoint
+            const idLocal = gerarUUID(); // mesmo id em todas as tentativas -> sem duplicidade no banco D1 de homologação
             const registro = {
                 idLocal,
                 dataHoraLocal: agoraISO(),
@@ -1835,7 +1835,7 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
             await FilaEnvio.adicionar(registro);
             localStorage.setItem('km_' + veiculo, String(km));
             // Somente no modo local de testes o registro entra diretamente no painel local.
-            // Em produção, o painel administrativo deve carregar exclusivamente os dados da API/SharePoint.
+            // Em produção, o painel administrativo deve carregar exclusivamente os dados da API/banco D1 de homologação.
             if (CONFIG.MODO_TESTE_LOCAL) {
                 const registroLocal = { id: 'demo' + Date.now(), idLocal, motorista: user.nome, placa: veiculo, frota: frotaSel, data: HOJE, status: 'pendente', motivoReprova: '',
                     km: String(km), combustivel: extras.combustivel || '',
@@ -1939,7 +1939,7 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
                 cM.pen,
                 " checklist(s) aguardando an\u00E1lise nos filtros selecionados.")),
         !preenchendo && carregandoPerguntas &&
-            React.createElement("div", { className: "aviso-box" }, "Carregando perguntas ativas do SharePoint..."),
+            React.createElement("div", { className: "aviso-box" }, "Carregando perguntas ativas do banco D1 de homologação..."),
         !preenchendo && erroPerguntas &&
             React.createElement("div", { className: "erro-box" },
                 "Falha ao carregar as perguntas: ",
@@ -3365,9 +3365,9 @@ function MotoristaApp({ st, setSt, user, onSair, toast }) {
             React.createElement("button", { className: "btn btn-sm", style: { color: 'rgba(255,255,255,.8)' }, onClick: onSair }, "Sair")),
         React.createElement("div", { className: "mbody" },
             abas.length === 0 && React.createElement("div", { className: "card muted" }, "Seu usu\u00E1rio est\u00E1 sem m\u00F3dulos liberados. Fale com a log\u00EDstica."),
-            aba === 'cargas' && carregandoCargas && React.createElement("div", { className: "card muted" }, "Carregando cargas do SharePoint..."),
+            aba === 'cargas' && carregandoCargas && React.createElement("div", { className: "card muted" }, "Carregando cargas do banco D1 de homologação..."),
             aba === 'cargas' && !carregandoCargas && React.createElement(TelaCargas, { st: st, setSt: setSt, user: user, dados: dados, toast: toast }),
-            aba === 'prem' && carregandoPremiacao && React.createElement("div", { className: "card muted" }, "Carregando metas, apura\u00E7\u00E3o e descontos do SharePoint..."),
+            aba === 'prem' && carregandoPremiacao && React.createElement("div", { className: "card muted" }, "Carregando metas, apura\u00E7\u00E3o e descontos do banco D1 de homologação..."),
             aba === 'prem' && !carregandoPremiacao && React.createElement(TelaPremiacao, { st: st, user: user, dados: dados }),
             aba === 'check' && React.createElement(TelaChecklist, { st: st, setSt: setSt, user: user, toast: toast, inicioAgendamento: inicioChecklistAgendamento, onInicioConsumido: () => { setInicioChecklistAgendamento(null); setAba('agendamento'); }, onConcluidoAgendamento: () => { setInicioChecklistAgendamento(null); setAba('agendamento'); } }),
             aba === 'sinistro' && React.createElement(TelaSinistro, { user: user, toast: toast }),
@@ -4537,7 +4537,7 @@ function AdmImportar({ st, setSt, toast }) {
             React.createElement("p", { style: { marginBottom: 12 } },
                 "Envie a ",
                 React.createElement("b", null, "planilha da premia\u00E7\u00E3o (.xlsm)"),
-                " salva no SharePoint \u2014 o app l\u00EA a aba de cargas e tamb\u00E9m a aba \"Lan\u00E7amento\" (multas, advert\u00EAncias e check list). O relat\u00F3rio de cargas (.xlsx) tamb\u00E9m \u00E9 aceito."),
+                " salva no banco D1 de homologação \u2014 o app l\u00EA a aba de cargas e tamb\u00E9m a aba \"Lan\u00E7amento\" (multas, advert\u00EAncias e check list). O relat\u00F3rio de cargas (.xlsx) tamb\u00E9m \u00E9 aceito."),
             React.createElement("div", { className: "drop" },
                 React.createElement("div", { style: { fontSize: 30, marginBottom: 6 } }, "\uD83D\uDCE5"),
                 lendo ? 'Lendo o arquivo...' : 'Selecione o arquivo .xlsm ou .xlsx',
@@ -4692,7 +4692,7 @@ function AdmContestacoes({ st, setSt, toast, foco }) {
                         motoristasContestacoes.map(nome => React.createElement("option", { key: nome, value: nome }, nome)))),
                 (tipoFiltro !== 'todos' || motoristaFiltro || competenciaFiltro) &&
                     React.createElement("button", { className: "btn btn-g btn-sm", onClick: () => { setTipoFiltro('todos'); setMotoristaFiltro(''); setCompetenciaFiltro(''); } }, "Limpar filtros"))),
-        carregando && React.createElement("div", { className: "card muted" }, "Carregando contesta\u00E7\u00F5es do SharePoint..."),
+        carregando && React.createElement("div", { className: "card muted" }, "Carregando contesta\u00E7\u00F5es do banco D1 de homologação..."),
         lista.length === 0 && React.createElement("div", { className: "card muted" }, "Nenhuma contesta\u00E7\u00E3o encontrada com os filtros selecionados."),
         lista.map(ct => {
             const c = cargaDe(ct.cargaId);
@@ -4771,7 +4771,7 @@ function AdmChecklist({ st, setSt, toast, user, foco }) {
     const [sincronizando, setSincronizando] = useState(false);
     const sincronizar = async () => {
         if (CONFIG.MODO_TESTE_LOCAL) {
-            toast('Modo local de testes: dados simulados. Configure a URL do backend e desative MODO_TESTE_LOCAL para consultar o SharePoint.');
+            toast('Modo local de testes: dados simulados. Configure a URL do backend e desative MODO_TESTE_LOCAL para consultar o banco D1 de homologação.');
             return;
         }
         setSincronizando(true);
@@ -4839,7 +4839,7 @@ function AdmChecklist({ st, setSt, toast, user, foco }) {
             setSt(s => ({ ...s, perguntas: lista }));
         }
         catch (e) {
-            toast('Erro ao carregar perguntas do SharePoint: ' + e.message);
+            toast('Erro ao carregar perguntas do banco D1 de homologação: ' + e.message);
         }
         finally {
             setCarregandoCatalogo(false);
@@ -4871,7 +4871,7 @@ function AdmChecklist({ st, setSt, toast, user, foco }) {
                 await ApiService.admStatus(ck.id, status === 'aprovado' ? 'APROVADO' : 'REPROVADO', motivo || '', opcoes);
             }
             catch (e) {
-                toast('Não foi possível gravar a decisão no SharePoint: ' + e.message);
+                toast('Não foi possível gravar a decisão no banco D1 de homologação: ' + e.message);
                 return;
             }
         }
@@ -4928,7 +4928,7 @@ function AdmChecklist({ st, setSt, toast, user, foco }) {
             await carregarCatalogo();
             setNovaPerg({ ...perguntaVazia, grupo: novaPerg.grupo, frota: novaPerg.frota, frequencia: novaPerg.frequencia, ordem: ordem + 10 });
             setEditandoPergunta(null);
-            toast(editandoPergunta ? 'Pergunta atualizada no SharePoint.' : 'Pergunta salva no SharePoint.');
+            toast(editandoPergunta ? 'Pergunta atualizada no banco D1 de homologação.' : 'Pergunta salva no banco D1 de homologação.');
         }
         catch (e) {
             toast('Erro ao salvar pergunta: ' + e.message);
@@ -5041,7 +5041,7 @@ function AdmChecklist({ st, setSt, toast, user, foco }) {
                     editandoPergunta && React.createElement("button", { className: "btn btn-s", onClick: () => { setEditandoPergunta(null); setNovaPerg(perguntaVazia); } }, "Cancelar edi\u00E7\u00E3o"))),
             React.createElement("div", { className: "row", style: { flexWrap: 'wrap' } },
                 React.createElement("div", { className: "subtabs grow" }, [['pesada', 'Frota pesada'], ['leve', 'Frota leve'], ['todas', 'Todas']].map(([v, l]) => React.createElement("button", { key: v, className: 'subtab' + (fFrota === v ? ' on' : ''), onClick: () => setFFrota(v) }, l))),
-                React.createElement("button", { className: "btn btn-s btn-sm", disabled: carregandoCatalogo, onClick: carregarCatalogo }, carregandoCatalogo ? 'Atualizando...' : 'Atualizar do SharePoint')),
+                React.createElement("button", { className: "btn btn-s btn-sm", disabled: carregandoCatalogo, onClick: carregarCatalogo }, carregandoCatalogo ? 'Atualizando...' : 'Atualizar do banco D1 de homologação')),
             React.createElement("div", { className: "card", style: { overflowX: 'auto' } },
                 React.createElement("table", null,
                     React.createElement("thead", null,
@@ -5214,7 +5214,7 @@ function AdmPremiacao({ st, setSt, toast, user }) {
             await ApiService.salvarMeta(edit);
             setEdit(null);
             await carregarMetas();
-            toast('Meta salva no SharePoint.');
+            toast('Meta salva no banco D1 de homologação.');
         }
         catch (e) {
             toast('Erro ao salvar meta: ' + e.message);
@@ -5260,7 +5260,7 @@ function AdmPremiacao({ st, setSt, toast, user }) {
             await ApiService.salvarDesconto({ ...novoDesc, competencia });
             await carregarDescontos();
             setNovoDesc({ motoristaId: '', motoristaNome: '', categoria: 'Multas', situacao: 'Sem ocorrência', quantidade: 0, valor: 0, percentual: 0, dataOcorrencia: '', motivo: '', exibir: true });
-            toast(novoDesc.itemId ? 'Lançamento atualizado no SharePoint.' : 'Conferência salva no SharePoint.');
+            toast(novoDesc.itemId ? 'Lançamento atualizado no banco D1 de homologação.' : 'Conferência salva no banco D1 de homologação.');
         }
         catch (e) {
             toast('Erro ao salvar conferência: ' + e.message);
@@ -5884,7 +5884,7 @@ function AdmCadastros({ st, setSt, toast, user }) {
             React.createElement("div", { style: { marginTop: 8 } },
                 React.createElement("button", { className: "btn btn-s btn-sm", onClick: carregar }, "Tentar novamente"))),
         carregandoCad && React.createElement("div", { className: "card" },
-            React.createElement("div", { className: "muted" }, "Carregando cadastros do SharePoint...")),
+            React.createElement("div", { className: "muted" }, "Carregando cadastros do banco D1 de homologação...")),
         sub === 'usuarios' && podeSub('cadastro.usuarios') && !carregandoCad && !erroCad && React.createElement(React.Fragment, null,
             React.createElement("div", null,
                 React.createElement("button", { className: "btn btn-p", onClick: () => { setSenhaVisivel(false); const p = cad.perfis.find(x => x.titulo === 'MOTORISTA'); setEdit({ nome: '', usuarioId: proximoUsuarioId(), login: '', telefone: '', perfil: p?.titulo || '', perfilAcessoId: p?.itemId || '', tipoFrotaAcesso: 'FROTA PESADA', ativo: true, novaSenha: '', acessoCargas: false, acessoPremiacao: false, acessoChecklist: false, acessoSinistros: false, acessoAgendamentos: false, acessoHistorico: false }); } }, "+ Novo usu\u00E1rio")),
@@ -6740,7 +6740,7 @@ function AdmApp({ st, setSt, user, onSair, toast }) {
                 respostas: (x.respostas || []).map(rr => ({ pid: String(rr.idPergunta || ''), pergunta: rr.pergunta || '', resp: rr.resposta || 'NA', obs: rr.observacao || '', foto: rr.linkFoto || null }))
             }));
             setSt(s => ({ ...s, checklists: vindos }));
-        }).catch(e => toast('Falha ao carregar checklists do SharePoint: ' + e.message));
+        }).catch(e => toast('Falha ao carregar checklists do banco D1 de homologação: ' + e.message));
     }, []);
     return (React.createElement("div", { className: "ashell" },
         React.createElement("div", { className: "atop" },
