@@ -5745,7 +5745,7 @@ function AdmCadastros({ st, setSt, toast, user }) {
             await ApiService.salvarVeiculo({ ...editPlaca, placa });
             setEditPlaca(null);
             await carregar();
-            toast('Veículo salvo no SharePoint.');
+            toast('Veículo salvo no D1 de homologação.');
         }
         catch (e) {
             toast('Erro ao salvar veículo: ' + e.message);
@@ -5760,7 +5760,7 @@ function AdmCadastros({ st, setSt, toast, user }) {
             await ApiService.salvarTipoVeiculo(editTipo);
             setEditTipo(null);
             await carregar();
-            toast('Tipo de veículo salvo no SharePoint.');
+            toast('Tipo de veículo salvo no D1 de homologação.');
         }
         catch (e) {
             toast('Erro ao salvar tipo de veículo: ' + e.message);
