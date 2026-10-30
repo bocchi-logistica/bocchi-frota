@@ -15,7 +15,7 @@ const CONFIG = {
     TIMEOUT_MS: 90000,
     RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
     MAX_TENTATIVAS: 4,
-    VERSAO: '2.8.20-homolog'
+    VERSAO: '2.8.21-homolog'
 };
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
 document.title = `Logística Bocchi — Portal do Motorista e ADM Logística (${CONFIG.VERSAO})`;
@@ -5596,6 +5596,29 @@ const canonCodigoAcesso = (codigo) => {
 };
 const canonListaAcesso = (lista) => [...new Set((lista || []).map(canonCodigoAcesso).filter(Boolean))];
 /* ================= ADM: CADASTROS (usuários + frota + perfis) ================= */
+function RegrasCapacidadeProduto({ tipo, onChange }) {
+    const regras = tipo.regrasCapacidade;
+    const nova = () => ({ aplicar: 'SELECIONADOS', produtos: [], capacidadeCargaKg: Number(tipo.capacidadeCargaKg || 0), toleranciaSuperiorKg: Number(tipo.toleranciaSuperiorKg || 0), toleranciaInferiorKg: Number(tipo.limiteInferiorKg || 0), validarAbaixo: tipo.exigeAprovacaoAbaixo === true });
+    const alterar = (i, changes) => onChange({ ...tipo, regrasCapacidade: regras.map((r, j) => j === i ? { ...r, ...changes } : r) });
+    return React.createElement('div', { className: 'card', style: { marginTop: 14, background: 'var(--papel)' } },
+        React.createElement('h3', null, 'Capacidade por produto'),
+        React.createElement('p', { className: 'muted' }, 'Prioridade: produtos selecionados → todos, exceto → todos. Produtos sem regra não geram divergência pela faixa de capacidade. O PBT do conjunto permanece separado.'),
+        regras == null ? React.createElement(React.Fragment, null,
+            React.createElement('p', { className: 'muted' }, 'Este tipo ainda utiliza a capacidade geral acima.'),
+            React.createElement('button', { type: 'button', className: 'btn btn-s', onClick: () => onChange({ ...tipo, regrasCapacidade: [{ ...nova(), aplicar: 'TODOS' }] }) }, 'Configurar regras por produto')) : React.createElement(React.Fragment, null,
+            React.createElement('p', { className: 'muted' }, 'Ao salvar alterações nas regras, a nova versão passa a valer para cargas datadas de hoje em diante. Cargas anteriores usam a versão da sua data.'),
+            regras.length === 0 && React.createElement('div', { className: 'aviso-box' }, 'Nenhuma regra: a faixa operacional não será validada para nenhum produto.'),
+            regras.map((r, i) => React.createElement('div', { className: 'card', key: i, style: { marginTop: 12 } },
+                React.createElement('div', { className: 'row' }, React.createElement('b', { className: 'grow' }, 'Regra ' + (i + 1)), React.createElement('button', { type: 'button', className: 'btn btn-g btn-sm', onClick: () => onChange({ ...tipo, regrasCapacidade: regras.filter((_, j) => j !== i) }) }, 'Remover')),
+                React.createElement('div', { className: 'form-grid', style: { marginTop: 8 } },
+                    React.createElement('label', null, 'Aplicar a', React.createElement('select', { value: r.aplicar, onChange: e => alterar(i, { aplicar: e.target.value }) },
+                        React.createElement('option', { value: 'TODOS' }, 'Todos'), React.createElement('option', { value: 'SELECIONADOS' }, 'Produtos selecionados'), React.createElement('option', { value: 'EXCETO' }, 'Todos, exceto os selecionados'))),
+                    r.aplicar !== 'TODOS' && React.createElement('label', null, 'Produtos (separe por ponto e vírgula)', React.createElement('input', { value: r.produtosTexto ?? (r.produtos || []).join('; '), placeholder: 'SOJA; MILHO', onChange: e => alterar(i, { produtosTexto: e.target.value, produtos: e.target.value.split(/[;,]/).map(x => x.trim()).filter(Boolean) }) })),
+                    ...[['capacidadeCargaKg', 'Capacidade (kg)'], ['toleranciaSuperiorKg', 'Tolerância acima (kg)'], ['toleranciaInferiorKg', 'Tolerância abaixo (kg)']].map(([campo, label]) => React.createElement('label', { key: campo }, label, React.createElement('input', { type: 'number', min: 0, step: 1, value: r[campo], onChange: e => alterar(i, { [campo]: e.target.value }) }))),
+                    React.createElement('label', null, 'Validar abaixo do mínimo?', React.createElement('select', { value: r.validarAbaixo ? 's' : 'n', onChange: e => alterar(i, { validarAbaixo: e.target.value === 's' }) }, React.createElement('option', { value: 's' }, 'Sim'), React.createElement('option', { value: 'n' }, 'Não')))))),
+            React.createElement('button', { type: 'button', className: 'btn btn-s', style: { marginTop: 10 }, disabled: regras.length >= 30, onClick: () => onChange({ ...tipo, regrasCapacidade: [...regras, nova()] }) }, '+ Adicionar regra')));
+}
+
 function AdmCadastros({ st, setSt, toast, user }) {
     const [sub, setSub] = useState(pode(user, 'cadastro.usuarios') ? 'usuarios' : pode(user, 'cadastro.tipos_veiculo') ? 'tipos' : pode(user, 'cadastro.veiculos') ? 'frota' : pode(user, 'cadastro.vinculos') ? 'vinculos' : 'perfis');
     const [edit, setEdit] = useState(null);
@@ -6264,7 +6287,7 @@ function AdmCadastros({ st, setSt, toast, user }) {
                                 }))) : React.createElement("div", { className: "perfil-sem-subtelas" }, "Esta \u00E1rea n\u00E3o possui subdivis\u00F5es. Ao liber\u00E1-la, a tela principal j\u00E1 fica dispon\u00EDvel para o perfil.")));
                     }))),
                 React.createElement("button", { type: "button", className: "btn btn-p", disabled: salvandoPerfil, onClick: salvarPerfil }, salvandoPerfil ? 'Salvando...' : 'Salvar perfil'))),
-        editTipo && React.createElement(Modal, { titulo: editTipo.itemId ? 'Editar tipo de veículo' : 'Novo tipo de veículo', onClose: () => setEditTipo(null) },
+        editTipo && React.createElement(Modal, { titulo: editTipo.itemId ? 'Editar tipo de veículo' : 'Novo tipo de veículo', large: true, onClose: () => setEditTipo(null) },
             React.createElement("div", { className: "form-grid" },
                 React.createElement("div", { style: { gridColumn: '1/-1' } },
                     React.createElement("label", { htmlFor: "adm-cadastros-nome-do-tipo-de-veiculo" }, "Nome do tipo de ve\u00EDculo"),
@@ -6299,6 +6322,7 @@ function AdmCadastros({ st, setSt, toast, user }) {
                 React.createElement("div", { style: { gridColumn: '1/-1' } },
                     React.createElement("label", { htmlFor: "adm-cadastros-observacao-2" }, "Observa\u00E7\u00E3o"),
                     React.createElement("textarea", { id: "adm-cadastros-observacao-2", name: "adm-cadastros-observacao-2", value: editTipo.observacao || '', onChange: e => setEditTipo({ ...editTipo, observacao: e.target.value }) }))),
+            React.createElement(RegrasCapacidadeProduto, { tipo: editTipo, onChange: setEditTipo }),
             React.createElement("button", { className: "btn btn-p", style: { width: '100%', marginTop: 14 }, onClick: salvarTipo }, "Salvar tipo de ve\u00EDculo"))));
 }
 /* ================= ADM: SINISTROS ================= */
@@ -6802,4 +6826,5 @@ function App() {
         React.createElement(Toast, { msg: toastMsg })));
 }
 ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App, null));
+
 
