@@ -15,7 +15,7 @@ const CONFIG = {
     TIMEOUT_MS: 90000,
     RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
     MAX_TENTATIVAS: 4,
-    VERSAO: '2.8.24-homolog'
+    VERSAO: '2.8.25-homolog'
 };
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
 document.title = `Logística Bocchi — Portal do Motorista e ADM Logística (${CONFIG.VERSAO})`;
@@ -4780,7 +4780,7 @@ function AdmChecklist({ st, setSt, toast, user, foco }) {
                 frota: (x.tipoChecklist === 'LEVE' ? 'leve' : 'pesada'), data: (x.dataHoraLocal || '').slice(0, 10),
                 status: (x.status || 'PENDENTE').toLowerCase() === 'aprovado' ? 'aprovado' : ((x.status || '').toLowerCase() === 'reprovado' ? 'reprovado' : 'pendente'),
                 motivoReprova: x.motivoReprovacao || '', km: x.quilometragem, combustivel: '',
-                respostas: (x.respostas || []).map(rr => ({ pid: rr.idPergunta, pergunta: rr.pergunta || '', resp: rr.resposta, obs: rr.observacao || '', foto: rr.linkFoto || null }))
+                respostas: (x.respostas || []).map(rr => ({ pid: rr.idPergunta, pergunta: rr.pergunta || '', resp: rr.resposta, obs: rr.observacao || '', foto: rr.linkFoto || (rr.fotos?.length ? true : null) }))
             }));
             setSt(s => ({ ...s, checklists: vindos.length ? vindos : s.checklists }));
             toast('Sincronizado: ' + vindos.length + ' checklist(s) carregado(s) do servidor.');
@@ -4793,6 +4793,14 @@ function AdmChecklist({ st, setSt, toast, user, foco }) {
         }
     };
     const [ver, setVer] = useState(null);
+    const abrirDetalhe = async ck => {
+        if(CONFIG.MODO_TESTE_LOCAL){setVer(ck);return;}
+        try{
+            const r=await ApiService.admDetalhe(ck.id), detalhe=r.checklist;
+            if(!detalhe)throw new Error("Checklist não encontrado.");
+            setVer({...ck,respostas:(detalhe.respostas||[]).map(rr=>({pid:rr.idPergunta,pergunta:rr.pergunta||"",resp:rr.resposta,obs:rr.observacao||"",foto:rr.linkFoto||rr.fotos?.[0]?.conteudoBase64||null}))});
+        }catch(e){toast("Não foi possível carregar os anexos do checklist: "+e.message);}
+    };
     const [reprovando, setReprovando] = useState(null);
     const [motivoRep, setMotivoRep] = useState('');
     const [bloquearAoAprovar, setBloquearAoAprovar] = useState(false);
@@ -4981,7 +4989,7 @@ function AdmChecklist({ st, setSt, toast, user, foco }) {
                         " \u00B7 ",
                         ck.respostas.filter(r => r.resp === 'NC').length,
                         " n\u00E3o conformidade(s)")),
-                React.createElement("button", { className: "btn btn-s btn-sm", onClick: () => setVer(ck) }, "Analisar")))),
+                React.createElement("button", { className: "btn btn-s btn-sm", onClick: () => abrirDetalhe(ck) }, "Analisar")))),
         sub === 'bloqueados' && pode(user, 'checklist.aprovacao') && React.createElement(React.Fragment, null,
             React.createElement("div", { className: "card" },
                 React.createElement("div", { className: "row" },
@@ -5116,7 +5124,7 @@ function AdmChecklist({ st, setSt, toast, user, foco }) {
                         ck.respostas.filter(r => r.foto).length,
                         " foto(s)")),
                 React.createElement(StatusTag, { s: ck.status }),
-                React.createElement("button", { className: "btn btn-g btn-sm", onClick: () => setVer(ck) }, "Ver")))),
+                React.createElement("button", { className: "btn btn-g btn-sm", onClick: () => abrirDetalhe(ck) }, "Ver")))),
         ver && !reprovando &&
             React.createElement(ChecklistDetalhe, { ck: ver, perguntas: st.perguntas, onClose: () => setVer(null), acoes: ver.status === 'pendente' &&
                     React.createElement("div", null,
