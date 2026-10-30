@@ -15,7 +15,7 @@ const CONFIG = {
     TIMEOUT_MS: 90000,
     RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
     MAX_TENTATIVAS: 4,
-    VERSAO: '2.8.30-homolog'
+    VERSAO: '2.8.31-homolog'
 };
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
 document.title = `Logística Bocchi — Portal do Motorista e ADM Logística (${CONFIG.VERSAO})`;
@@ -3299,7 +3299,7 @@ function AlterarSenhaUsuario({user,onSair,toast,claro=false}){
  React.createElement("button",{className:"btn btn-sm "+(claro?"btn-g":""),style:claro?{}:{color:"rgba(255,255,255,.85)"},onClick:()=>{setErro("");setAberto(true);}},motorista?"Alterar PIN":"Alterar senha"),
  aberto&&React.createElement(Modal,{titulo:motorista?"Alterar PIN":"Alterar senha",onClose:()=>{if(!salvando){setAberto(false);setForm({senhaAtual:"",novaSenha:"",confirmacao:""});}}},
  React.createElement("form",{onSubmit:salvar},
- React.createElement("p",{className:"muted",style:{marginBottom:16}},motorista?"Use seis números. Após alterar, entre novamente.":"Use pelo menos 12 caracteres, com letras e números. Após alterar, entre novamente."),
+ React.createElement("p",{className:"muted",style:{marginBottom:16}},motorista?"Use seis números. Após alterar, entre novamente.":"Use pelo menos 8 caracteres. Pode usar uma palavra ou frase fácil de lembrar. Após alterar, entre novamente."),
  ["senhaAtual","novaSenha","confirmacao"].map((k,i)=>React.createElement("div",{key:k,style:{marginBottom:14}},React.createElement("label",{htmlFor:"conta-"+k},[motorista?"PIN atual":"Senha atual",motorista?"Novo PIN":"Nova senha","Confirmar "+(motorista?"novo PIN":"nova senha")][i]),React.createElement("input",{id:"conta-"+k,type:"password",required:true,autoComplete:i===0?"current-password":"new-password",inputMode:motorista?"numeric":undefined,maxLength:motorista?6:128,value:form[k],onChange:e=>setForm(f=>({...f,[k]:e.target.value}))}))),
  erro&&React.createElement("div",{className:"erro-box",role:"alert"},erro),
  React.createElement("button",{className:"btn btn-p",type:"submit",disabled:salvando},salvando?"Salvando...":"Salvar alteração"))));
