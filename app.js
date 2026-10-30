@@ -3859,7 +3859,7 @@ function PainelRH({ st, dados, user }) {
                             React.createElement("div", { className: "cards4" }, l.apuracoes.map((salva, i) => {
                                 const competencia = meses[i].slice(3) + '-' + meses[i].slice(0, 2);
                                 const aoVivo = auditoriasRH[idUsuario(l.u)]?.apuracoes?.[competencia];
-                                const a = aoVivo ? apuracaoMes({ ...st, apuracoes: [aoVivo] }, dados, l.u.nome, meses[i]) : salva;
+                                const a = aoVivo ? apuracaoMes({ ...st, apuracoes: [{ ...aoVivo, mes: meses[i], motoristaNome: l.u.nome }] }, dados, l.u.nome, meses[i]) : salva;
                                 return React.createElement("div", { className: "card", key: meses[i], style: { boxShadow: 'none', border: '1px solid var(--linha)' } },
                                     React.createElement("b", null, mesLabel(meses[i])),
                                     React.createElement("div", { className: "linha-item" },
