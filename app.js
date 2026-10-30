@@ -15,7 +15,7 @@ const CONFIG = {
     TIMEOUT_MS: 90000,
     RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
     MAX_TENTATIVAS: 4,
-    VERSAO: '2.8.25-homolog'
+    VERSAO: '2.8.26-homolog'
 };
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
 document.title = `Logística Bocchi — Portal do Motorista e ADM Logística (${CONFIG.VERSAO})`;
@@ -1421,6 +1421,14 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
     const [preenchendo, setPreenchendo] = useState(false);
     const [resps, setResps] = useState({});
     const [ver, setVer] = useState(null);
+    const abrirChecklistHistorico = async ck => {
+        if(CONFIG.MODO_TESTE_LOCAL){setVer(ck);return;}
+        try{
+            const r=await ApiService.consultarChecklist(ck.protocolo||ck.id),d=r.checklist;
+            if(!d)throw new Error("Checklist não encontrado.");
+            setVer({...ck,respostas:(d.respostas||[]).map(rr=>({pid:rr.idPergunta,pergunta:rr.pergunta||"",resp:rr.resposta,obs:rr.observacao||"",foto:rr.linkFoto||rr.fotos?.[0]?.conteudoBase64||null}))});
+        }catch(e){toast("Não foi possível carregar as fotos do checklist: "+e.message);}
+    };
     const mesAtualFiltro = String(HOJE || '').slice(0, 7);
     const [filtroMesHistorico, setFiltroMesHistorico] = useState(mesAtualFiltro);
     const [filtroStatusHistorico, setFiltroStatusHistorico] = useState('todos');
@@ -1987,7 +1995,7 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
             modoOcorrenciaAgendamento && React.createElement("div", { className: "card", style: { borderLeft: '4px solid var(--colheita)' } },
                 React.createElement("h3", null, "Registrar n\u00E3o conformidade do agendamento"),
                 React.createElement("div", { className: "muted", style: { margin: '4px 0 10px' } }, "Selecione o grupo e registre os itens com problema, a descrição e as evidências exigidas."),
-                ultimoChecklistValido && React.createElement("button", { className: "btn btn-g btn-sm", onClick: () => setVer(ultimoChecklistValido) }, "Visualizar \u00FAltimo checklist realizado"),
+                ultimoChecklistValido && React.createElement("button", { className: "btn btn-g btn-sm", onClick: () => abrirChecklistHistorico(ultimoChecklistValido) }, "Visualizar \u00FAltimo checklist realizado"),
                 React.createElement("div", { style: { marginTop: 12 } },
                     React.createElement("label", { htmlFor: "tela-checklist-grupo-com-problema" }, "Grupo com problema"),
                     React.createElement("select", { id: "tela-checklist-grupo-com-problema", name: "tela-checklist-grupo-com-problema", value: grupoOcorrencia, onChange: e => { setGrupoOcorrencia(e.target.value); setResps({}); } },
@@ -2071,7 +2079,7 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
                         c.respostas.filter(r => r.resp === 'NC').length,
                         " NC")),
                 React.createElement(StatusTag, { s: c.status }),
-                React.createElement("button", { className: "btn btn-g btn-sm", onClick: () => setVer(c) }, "Ver")))),
+                React.createElement("button", { className: "btn btn-g btn-sm", onClick: () => abrirChecklistHistorico(c) }, "Ver")))),
         ver && React.createElement(ChecklistDetalhe, { ck: ver, perguntas: perguntasAtivas, permitirImpressao: false, onClose: () => setVer(null) })));
 }
 function ChecklistDetalhe({ ck, perguntas, onClose, acoes, permitirImpressao = true }) {
