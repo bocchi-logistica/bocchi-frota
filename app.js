@@ -4404,7 +4404,7 @@ function AdmImportar({ st, setSt, toast }) {
                     throw new Error('Colunas não encontradas na aba "' + nomeAba + '": ' + faltando.join(', ') + '. Confira se a planilha não foi alterada.');
                 const colNota = cols.includes('N° NOTA') ? 'N° NOTA' : (cols.includes('Nº NOTA') ? 'Nº NOTA' : null);
                 const novas = [];
-                rows.forEach(r => {
+                rows.forEach((r, indiceLinha) => {
                     if (!r['DATA'] || !r['PLACA'])
                         return;
                     let dt;
@@ -4417,7 +4417,7 @@ function AdmImportar({ st, setSt, toast }) {
                     else {
                         dt = String(r['DATA']).slice(0, 10);
                     }
-                    novas.push({ data: dt, placa: String(r['PLACA'] || '').trim().toUpperCase(), origem: r['ORIGEM'] || '', destino: r['DESTINO'] || '',
+                    novas.push({ origemArquivo: file.name, linhaOrigem: indiceLinha + 2, abaOrigem: nomeAba, data: dt, placa: String(r['PLACA'] || '').trim().toUpperCase(), origem: r['ORIGEM'] || '', destino: r['DESTINO'] || '',
                         produto: r['PRODUTO'] || '', numeroNota: colNota ? String(r[colNota] || '') : '', valorTon: Number(r['R$/t']) || 0,
                         pesoTon: Number(r['PESO (t)']) || 0, pesoBruto: Number(r['PESO BRUTO']) || 0, freteTotal: Number(r['R$ TOTAL']) || 0,
                         premiacao: r['PREMIAÇÃO'] == null ? null : Number(r['PREMIAÇÃO']) || 0, maiorKM: String(r['MAIOR KM?'] || ''), distancia: Number(r['DISTANCIA']) || 0,
