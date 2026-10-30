@@ -5687,13 +5687,13 @@ function AdmCadastros({ st, setSt, toast, user }) {
         try {
             const resposta = await ApiService.salvarUsuario(dadosUsuario);
             if (!resposta?.ok && !resposta?.sucesso)
-                throw new Error(resposta?.erro || 'O SharePoint não confirmou o salvamento do usuário.');
+                throw new Error(resposta?.erro || 'O D1 de homologação não confirmou o salvamento do usuário.');
             setEdit(null);
             await carregar();
             if (novaSenha)
                 window.alert('Acesso salvo com sucesso.\n\nUsuário: ' + login + '\nSenha temporária: ' + novaSenha + '\n\nCopie agora: ela não poderá ser visualizada novamente.');
             else
-                toast('Usuário salvo no SharePoint.');
+                toast('Usuário salvo no D1 de homologação.');
         }
         catch (e) {
             toast('Erro ao salvar usuário: ' + (e?.message || String(e)));
@@ -5798,7 +5798,7 @@ function AdmCadastros({ st, setSt, toast, user }) {
         await ApiService.salvarVinculo({ ...editVinculo, usuarioId: u.usuarioId, titulo: u.usuarioId + ' - ' + v.placa });
         setEditVinculo(null);
         await carregar();
-        toast('Vínculo salvo no SharePoint.');
+        toast('Vínculo salvo no D1 de homologação.');
     }
     catch (e) {
         toast('Erro ao salvar vínculo: ' + e.message);
@@ -5817,10 +5817,10 @@ function AdmCadastros({ st, setSt, toast, user }) {
             const subtelasValidas = subtelasCanon.filter(c => areasCanon.some(a => (AREAS_E_SUBTELAS[a] || []).some(([codigo]) => codigo === c)));
             const resposta = await ApiService.salvarPerfil({ ...editPerfil, titulo: String(editPerfil.titulo).toUpperCase(), areasAcesso: areasCanon, subtelasAcesso: subtelasValidas });
             if (!resposta?.ok && !resposta?.sucesso)
-                throw new Error(resposta?.erro || 'O SharePoint não confirmou o salvamento do perfil.');
+                throw new Error(resposta?.erro || 'O D1 de homologação não confirmou o salvamento do perfil.');
             await carregar();
             setEditPerfil(null);
-            toast('Perfil salvo no SharePoint.');
+            toast('Perfil salvo no D1 de homologação.');
         }
         catch (e) {
             toast('Erro ao salvar perfil: ' + (e?.message || String(e)));
