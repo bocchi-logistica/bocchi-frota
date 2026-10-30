@@ -15,7 +15,7 @@ const CONFIG = {
     TIMEOUT_MS: 90000,
     RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
     MAX_TENTATIVAS: 4,
-    VERSAO: '2.8.28-homolog'
+    VERSAO: '2.8.29-homolog'
 };
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
 document.title = `Logística Bocchi — Portal do Motorista e ADM Logística (${CONFIG.VERSAO})`;
@@ -3291,6 +3291,20 @@ function AdmAgendamentos({ user, toast }) {
         detalhe && React.createElement(DetalheAgendamento, { item: detalhe, admin: true, onClose: () => setDetalhe(null), onAtualizar: carregar, toast: toast }));
 }
 /* ================= SHELL MOTORISTA ================= */
+function AlterarSenhaUsuario({user,onSair,toast,claro=false}){
+ const [aberto,setAberto]=useState(false),[form,setForm]=useState({senhaAtual:"",novaSenha:"",confirmacao:""}),[salvando,setSalvando]=useState(false),[erro,setErro]=useState("");
+ const motorista=normalizarPerfil(user.perfil)==="MOTORISTA";
+ const salvar=async e=>{e.preventDefault();setErro("");if(form.novaSenha!==form.confirmacao){setErro("A confirmação não corresponde à nova senha.");return;}setSalvando(true);try{await ApiService._req("POST","/me/senha",form);setForm({senhaAtual:"",novaSenha:"",confirmacao:""});setAberto(false);toast("Senha alterada. Entre novamente com a nova senha.");onSair();}catch(e){setErro(e.message);}finally{setSalvando(false);}};
+ return React.createElement(React.Fragment,null,
+ React.createElement("button",{className:"btn btn-sm "+(claro?"btn-g":""),style:claro?{}:{color:"rgba(255,255,255,.85)"},onClick:()=>{setErro("");setAberto(true);}},motorista?"Alterar PIN":"Alterar senha"),
+ aberto&&React.createElement(Modal,{titulo:motorista?"Alterar PIN":"Alterar senha",onClose:()=>{if(!salvando){setAberto(false);setForm({senhaAtual:"",novaSenha:"",confirmacao:""});}}},
+ React.createElement("form",{onSubmit:salvar},
+ React.createElement("p",{className:"muted",style:{marginBottom:16}},motorista?"Use seis números. Após alterar, entre novamente.":"Use pelo menos 12 caracteres, com letras e números. Após alterar, entre novamente."),
+ ["senhaAtual","novaSenha","confirmacao"].map((k,i)=>React.createElement("div",{key:k,style:{marginBottom:14}},React.createElement("label",{htmlFor:"conta-"+k},[motorista?"PIN atual":"Senha atual",motorista?"Novo PIN":"Nova senha","Confirmar "+(motorista?"novo PIN":"nova senha")][i]),React.createElement("input",{id:"conta-"+k,type:"password",required:true,autoComplete:i===0?"current-password":"new-password",inputMode:motorista?"numeric":undefined,maxLength:motorista?6:128,value:form[k],onChange:e=>setForm(f=>({...f,[k]:e.target.value}))}))),
+ erro&&React.createElement("div",{className:"erro-box",role:"alert"},erro),
+ React.createElement("button",{className:"btn btn-p",type:"submit",disabled:salvando},salvando?"Salvando...":"Salvar alteração"))));
+}
+
 function MotoristaApp({ st, setSt, user, onSair, toast }) {
     const dados = usarDadosMensais(st);
     const [carregandoCargas, setCarregandoCargas] = useState(!CONFIG.MODO_TESTE_LOCAL);
@@ -3377,6 +3391,7 @@ function MotoristaApp({ st, setSt, user, onSair, toast }) {
                 React.createElement("div", { className: "nome" }, primeiroNome(user.nome)),
                 React.createElement("div", { className: "sub" }, placa ? placa.tipo : 'Motorista')),
             placa && React.createElement("span", { className: "chip-placa" }, placa.placa),
+            React.createElement(AlterarSenhaUsuario,{user,onSair,toast}),
             React.createElement("button", { className: "btn btn-sm", style: { color: 'rgba(255,255,255,.8)' }, onClick: onSair }, "Sair")),
         React.createElement("div", { className: "mbody" },
             abas.length === 0 && React.createElement("div", { className: "card muted" }, "Seu usu\u00E1rio est\u00E1 sem m\u00F3dulos liberados. Fale com a log\u00EDstica."),
@@ -6793,7 +6808,7 @@ function AdmApp({ st, setSt, user, onSair, toast }) {
             React.createElement("div",{className:"admin-sidebar-footer"},React.createElement("span",null,"Bocchi Frota"),React.createElement("small",null,CONFIG.VERSAO))),
         React.createElement("header",{className:"admin-topbar"},
             React.createElement("div",{className:"row"},React.createElement("button",{className:"btn btn-g btn-sm admin-toggle","aria-label":"Abrir menu","aria-expanded":menuAberto,onClick:()=>setMenuAberto(x=>!x)},"☰"),React.createElement("span",{className:"admin-contexto"},abas.find(([id])=>id===aba)?.[1]||"Gestão de Frota")),
-            React.createElement("div",{className:"row admin-conta"},React.createElement("div",null,React.createElement("strong",null,user.nome),React.createElement("small",null,user.perfil||"Gestão")),React.createElement("button",{className:"btn btn-g btn-sm",onClick:onSair},"Sair"))),
+            React.createElement("div",{className:"row admin-conta"},React.createElement("div",null,React.createElement("strong",null,user.nome),React.createElement("small",null,user.perfil||"Gestão")),React.createElement(AlterarSenhaUsuario,{user,onSair,toast,claro:true}),React.createElement("button",{className:"btn btn-g btn-sm",onClick:onSair},"Sair"))),
         React.createElement("div", { className: "abody" },
             aba === 'rh' && React.createElement(PainelRH, { st: st, dados: dados, user: user }),
             aba === 'painel' && React.createElement(AdmPainel, { st: st, dados: dados, user: user, onNavegar: navegarPara }),
