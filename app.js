@@ -1945,13 +1945,13 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
             React.createElement("div", { className: "erro-box" },
                 "Falha ao carregar as perguntas: ",
                 erroPerguntas),
-        !preenchendo && !carregandoPerguntas && !erroPerguntas && perguntasAtivas.length === 0 && !periodoPesadoConcluido &&
-            React.createElement("div", { className: "aviso-box" }, "N\u00E3o h\u00E1 inspe\u00E7\u00F5es pendentes para este ve\u00EDculo neste per\u00EDodo."),
+        !preenchendo && !carregandoVeiculos && veiculosPermitidos.length > 0 && !carregandoPerguntas && !erroPerguntas && perguntasAtivas.length === 0 && !periodoPesadoConcluido &&
+            React.createElement("div", { className: "aviso-box" }, "Não há perguntas ativas disponíveis para a frota deste veículo. Confira o cadastro de perguntas antes de considerar o checklist dispensado."),
         !preenchendo && carregandoVeiculos && React.createElement("div", { className: "aviso-box" }, "Carregando ve\u00EDculo vinculado..."),
         !preenchendo && erroVeiculos && React.createElement("div", { className: "erro-box" },
             "Falha ao carregar ve\u00EDculos: ",
             erroVeiculos),
-        !preenchendo && !carregandoVeiculos && !erroVeiculos && veiculosPermitidos.length === 0 && !inicioAgendamento?.placa && React.createElement("div", { className: "card muted", style: { textAlign: 'center', padding: '24px 16px' } }, "Nenhum checklist pendente no momento."),
+        !preenchendo && !carregandoVeiculos && !erroVeiculos && veiculosPermitidos.length === 0 && !inicioAgendamento?.placa && React.createElement("div", { className: "card muted", style: { textAlign: 'center', padding: '24px 16px' } }, "Nenhum veículo vinculado e disponível para este usuário. A Logística deve conferir o vínculo, a vigência e o status do veículo em Cadastros → Vínculos."),
         !preenchendo && veiculosPermitidos.length > 0 && periodoPesadoConcluido &&
             React.createElement("div", { className: "card", style: { textAlign: 'center', padding: '26px 16px', borderLeft: '4px solid var(--ok)' } },
                 React.createElement("div", { style: { fontSize: 34 } }, "\u2705"),
