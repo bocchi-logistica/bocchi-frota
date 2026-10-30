@@ -375,6 +375,26 @@ th.td-num{text-align:right}
 }
 @media(max-width:560px){.admin-conta strong{max-width:140px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.admin-conta small{font-size:10px}.admin-contexto{display:none}.admin-lateral .abody{padding:16px 12px 45px}}
 
+
+/* Entrada Bocchi Frota */
+.bocchi-login{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(420px,1fr);padding:0;background:#f1f5f1;align-items:center}
+.login-apresentacao{align-self:stretch;min-height:100vh;padding:52px clamp(32px,5vw,90px);background:linear-gradient(140deg,#092e25,#194e3b);color:white;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden}
+.login-apresentacao:after{content:"";position:absolute;width:390px;height:390px;border:55px solid rgba(128,187,139,.06);border-radius:50%;right:-190px;bottom:-160px;pointer-events:none}
+.login-empresa{font-size:12px;font-weight:700;letter-spacing:.18em;color:#c0d9c4;text-decoration:none;align-self:flex-start}
+.login-empresa:hover{text-decoration:underline}.login-mensagem{position:relative;z-index:1;margin:65px 0}
+.login-eyebrow{color:#edc64a;font-size:12px;letter-spacing:.22em;font-weight:700;margin-bottom:23px}
+.login-mensagem h1{font-size:clamp(32px,3.3vw,54px);line-height:1.12;letter-spacing:-.035em;max-width:640px}
+.login-mensagem p{color:#d2e2d8;line-height:1.8;font-size:15px;max-width:540px;margin-top:25px}
+.login-servicos{display:flex;flex-wrap:wrap;gap:9px;margin-top:30px;max-width:560px}
+.login-servicos span{font-size:11px;border:1px solid rgba(214,235,219,.25);border-radius:30px;padding:8px 12px;color:#e9f2ec}
+.login-em-breve{font-size:11px;color:#a8c4b1;margin-top:15px}.login-valores{display:flex;gap:15px;align-items:center;font-size:11px;color:#aecab8}.login-valores span{color:#d8b947}
+.bocchi-login .login-card{justify-self:center;width:calc(100% - 64px);max-width:430px;padding:34px 34px 26px;margin:35px 0;border:1px solid #dfe6de;box-shadow:0 16px 55px rgba(15,49,34,.06);border-radius:20px}
+.bocchi-login .logo-login{width:160px;max-width:65%;margin:0 auto 14px}
+.login-nome-portal{text-align:center;font-size:24px;color:#173f2e}.login-assinatura{text-align:center;color:#708376;font-size:11px;margin-top:6px}
+.login-boas-vindas{font-size:20px;margin-top:30px}.bocchi-login .login-sub{text-align:left;font-size:12px;line-height:1.7;margin:10px 0 23px}
+.bocchi-login label{font-size:11px;text-transform:none;letter-spacing:0;color:#345343}.bocchi-login input{font-size:14px}
+.login-ajuda{text-align:center;font-size:11px;color:#768477;line-height:1.7;margin-top:23px}.login-versao{text-align:center;font-size:10px;color:#88938a;margin-top:23px}
+@media(max-width:800px){.bocchi-login{grid-template-columns:1fr}.login-apresentacao{min-height:auto;padding:27px 25px}.login-mensagem{margin:28px 0 18px}.login-mensagem h1{font-size:32px;max-width:510px}.login-mensagem p{font-size:13px;margin-top:16px}.login-servicos{margin-top:18px}.login-valores{display:none}.bocchi-login .login-card{width:calc(100% - 32px);margin:24px 0;padding:27px}.login-boas-vindas{margin-top:23px}}
 </style>
 </head>
 <body>
