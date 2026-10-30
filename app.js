@@ -15,7 +15,7 @@ const CONFIG = {
     TIMEOUT_MS: 90000,
     RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
     MAX_TENTATIVAS: 4,
-    VERSAO: '2.8.29-homolog'
+    VERSAO: '2.8.30-homolog'
 };
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
 document.title = `Logística Bocchi — Portal do Motorista e ADM Logística (${CONFIG.VERSAO})`;
@@ -3740,8 +3740,8 @@ function PainelRH({ st, dados, user }) {
     const linhas = motoristas.map(u => {
         const chave = idUsuario(u);
         const vindas = Array.isArray(apuracoesRH[chave]) ? apuracoesRH[chave] : [];
-        const stMotorista = { ...st, apuracoes: vindas };
-        const apuracoes = meses.map(m => apuracaoMes(stMotorista, dados, u.nome, m));
+        const stMotorista = CONFIG.MODO_TESTE_LOCAL ? { ...st, apuracoes: vindas } : { usuarios: usuariosRH, frota: {}, cargas: [], metas: [], descontos: [], apuracoes: vindas };
+        const apuracoes = meses.map(m => apuracaoMes(stMotorista, CONFIG.MODO_TESTE_LOCAL ? dados : {}, u.nome, m));
         const acumulado = apuracoes.reduce((s, a) => s + Number(a.apurado || 0), 0);
         const competenciasAplicaveis = mesesProcessaveis
             .map(m => m.slice(3) + '-' + m.slice(0, 2))
