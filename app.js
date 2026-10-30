@@ -15,7 +15,7 @@ const CONFIG = {
     TIMEOUT_MS: 90000,
     RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
     MAX_TENTATIVAS: 4,
-    VERSAO: '2.8.34-homolog'
+    VERSAO: '2.8.35-homolog'
 };
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
 document.title = `Logística Bocchi — Portal do Motorista e ADM Logística (${CONFIG.VERSAO})`;
@@ -1014,6 +1014,7 @@ function Login({ st, onLogin }) {
        O modo local de testes utiliza uma base simulada. */
     const [carregando, setCarregando] = useState(false);
     const entrar = async () => {
+        if(carregando)return;
         setErro('');
         if (CONFIG.MODO_TESTE_LOCAL) {
             const u = st.usuarios.find(x => x.login === login.trim().toLowerCase());
@@ -1054,7 +1055,7 @@ function Login({ st, onLogin }) {
             });
         }
         catch (e) {
-            setErro('Não foi possível conectar ao servidor. Verifique a internet e tente novamente.');
+            setErro(e.status ? (e.status === 401 ? 'Usuário ou senha incorretos.' : e.message) : 'Não foi possível conectar ao servidor. Verifique a internet e tente novamente.');
         }
         finally {
             setCarregando(false);
@@ -6007,7 +6008,7 @@ function AdmCadastros({ st, setSt, toast, user }) {
                             React.createElement("span", { className: "tag tag-ok" }, u.perfil)),
                         React.createElement("td", null, u.senhaCadastrada ? 'Cadastrada' : 'Pendente'),
                         React.createElement("td", null,
-                            React.createElement("span", { className: 'tag ' + (u.ativo ? 'tag-ok' : 'tag-neutro') }, u.ativo ? 'Ativo' : 'Inativo')),
+                            React.createElement("span", { className: 'tag ' + (u.bloqueado ? 'tag-neg' : u.ativo ? 'tag-ok' : 'tag-neutro') }, u.bloqueado ? 'Bloqueado' : u.ativo ? 'Ativo' : 'Inativo')),
                         React.createElement("td", null,
                             React.createElement("div", { className: "row", style: { gap: 6, flexWrap: 'nowrap' } },
                                 React.createElement("button", { className: "btn btn-s btn-sm", onClick: () => { setSenhaVisivel(false); setEdit({ ...u, novaSenha: '' }); } }, "Editar"),
