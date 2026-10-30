@@ -3725,14 +3725,11 @@ function PainelRH({ st, dados, user }) {
         const faltantes = Math.max(0, competenciasAplicaveis.length - aplicaveis.length);
         const statusSalvos = aplicaveis.map(a => String(a.status || 'PENDENTE').toUpperCase());
         const quantidadeFechada = statusSalvos.filter(s => s === 'FECHADO').length;
-        const statusMotorista = statusSalvos.some(s => s === 'ERRO') ? 'ERRO' :
-            faltantes > 0 ? 'NÃO CALCULADO' :
-                aplicaveis.some(a => a.desatualizada === true) ? 'NOVAS CARGAS — RECALCULAR' :
-                    statusSalvos.length && quantidadeFechada === statusSalvos.length ? 'FECHADO' :
-                        quantidadeFechada > 0 ? 'FECHADO PARCIAL' :
-                            statusSalvos.some(s => s === 'PENDENTE') ? 'PENDENTE' :
-                                statusSalvos.length ? 'CALCULADO' : 'AGUARDANDO';
-        return { u, apuracoes, acumulado, pagar: Math.max(0, acumulado), statusMotorista };
+        const statusMotorista = competenciasAplicaveis.length > 0 && faltantes === 0 &&
+            statusSalvos.length === competenciasAplicaveis.length &&
+            statusSalvos.every(st => st === 'FECHADO') ? 'FECHADO' :
+            aplicaveis.some(a => ['CALCULADO','FECHADO'].includes(String(a.status || '').toUpperCase())) ? 'CALCULADO' : 'PENDENTE';
+                return { u, apuracoes, acumulado, pagar: Math.max(0, acumulado), statusMotorista };
     });
     const total = linhas.reduce((s, l) => s + l.pagar, 0);
     return React.createElement(React.Fragment, null,
@@ -3795,7 +3792,7 @@ function PainelRH({ st, dados, user }) {
                     ano)),
             React.createElement("div", { className: "card kpi" },
                 React.createElement("div", { className: "l" }, "Status"),
-                React.createElement("div", { className: "v", style: { fontSize: 18 } }, quadrimestreFechado ? 'FECHADO' : fechadoComPendencias ? 'FECHADO COM PENDÊNCIAS' : periodoAindaNaoIniciado ? 'AGUARDANDO PERÍODO' : podeFechar ? 'PRONTO PARA FECHAR' : 'EM APURAÇÃO'))),
+                React.createElement("div", { className: "v", style: { fontSize: 18 } }, quadrimestreFechado ? 'FECHADO' : itensQuadrimestre.some(a => ['CALCULADO','FECHADO'].includes(String(a.status || '').toUpperCase())) ? 'EM APURAÇÃO' : 'ABERTO'))),
         totalAusentes > 0 && React.createElement("div", { className: "aviso-box" },
             React.createElement("b", null, "Confer\u00EAncia do per\u00EDodo:"),
             " ",
