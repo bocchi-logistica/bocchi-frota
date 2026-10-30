@@ -328,9 +328,9 @@ const ApiService = {
                 return { sucesso: true, protocolo: detalhe.protocolo, dataHoraRecebimento: detalhe.dataHoraRecebimento || agoraISO(), status: detalhe.status || 'PENDENTE', duplicado: true };
             }
             const mensagens = { 401: 'Sessão inválida. Entre novamente.', 403: 'Usuário sem permissão.', 413: 'Fotos ou requisição acima do limite.', 429: 'Muitas tentativas. Aguarde e tente novamente.', 500: 'Erro interno do servidor.', 503: 'Serviço temporariamente indisponível.' };
-            const err = new Error((detalhe && (detalhe.erro || detalhe.mensagem || detalhe.message))
-                || mensagens[r.status]
-                || msg);
+            const textoBase = (detalhe && (detalhe.erro || detalhe.mensagem || detalhe.message)) || mensagens[r.status] || msg;
+            const pendencias = Array.isArray(detalhe?.pendencias) ? detalhe.pendencias.filter(Boolean) : [];
+            const err = new Error(pendencias.length ? textoBase + ' Pendências: ' + pendencias.join(' | ') : textoBase);
             err.status = r.status;
             err.detalhe = detalhe;
             throw err;
