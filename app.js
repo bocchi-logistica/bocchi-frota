@@ -3879,7 +3879,7 @@ function PainelRH({ st, dados, user }) {
                                     React.createElement("div", { className: "linha-item" },
                                         React.createElement("span", null, "Apurado do m\u00EAs"),
                                         React.createElement("b", null, brl(a.apurado))),
-                                    aoVivo && React.createElement("div", { className: "muted", style: { marginTop: 6 } }, "Dados atuais conferidos na origem."));
+                                    aoVivo && React.createElement("div", { className: "muted", style: { marginTop: 6 } }, "Prévia calculada no D1; confira com a apuração salva."));
                             }))))))))),
         React.createElement("div", { className: "aviso-box" }, "O acumulado soma os quatro meses, inclusive resultados negativos. O valor a pagar nunca fica abaixo de R$ 0,00 e o saldo negativo n\u00E3o \u00E9 levado para o quadrimestre seguinte."));
 }
