@@ -15,7 +15,7 @@ const CONFIG = {
     TIMEOUT_MS: 90000,
     RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
     MAX_TENTATIVAS: 4,
-    VERSAO: '2.8.23-homolog'
+    VERSAO: '2.8.24-homolog'
 };
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
 document.title = `Logística Bocchi — Portal do Motorista e ADM Logística (${CONFIG.VERSAO})`;
@@ -1986,7 +1986,7 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
                 " Este preenchimento é opcional e será identificado separadamente no envio."),
             modoOcorrenciaAgendamento && React.createElement("div", { className: "card", style: { borderLeft: '4px solid var(--colheita)' } },
                 React.createElement("h3", null, "Registrar n\u00E3o conformidade do agendamento"),
-                React.createElement("div", { className: "muted", style: { margin: '4px 0 10px' } }, "O checklist peri\u00F3dico desta placa j\u00E1 foi realizado. Registre somente o grupo e o item com problema."),
+                React.createElement("div", { className: "muted", style: { margin: '4px 0 10px' } }, "Selecione o grupo e registre os itens com problema, a descrição e as evidências exigidas."),
                 ultimoChecklistValido && React.createElement("button", { className: "btn btn-g btn-sm", onClick: () => setVer(ultimoChecklistValido) }, "Visualizar \u00FAltimo checklist realizado"),
                 React.createElement("div", { style: { marginTop: 12 } },
                     React.createElement("label", { htmlFor: "tela-checklist-grupo-com-problema" }, "Grupo com problema"),
@@ -2798,6 +2798,7 @@ function DetalheAgendamento({ item, admin, onClose, onAtualizar, toast, onAbrirC
                         React.createElement("strong", null, "Checklist"),
                         ".")),
                 React.createElement("button", { className: "btn btn-p orientacao-ciente", onClick: () => { setAvisoRetirada(false); setKm(String(kmReferencia || item.kmInicial || '')); setAcao('retirar'); } }, "Li e estou ciente \u2014 Continuar retirada")));
+    const ncSemDetalhe = item.status === 'BLOQUEADO_NC' && !item.checklistNCProtocolo;
     const aguardando = ['AGENDADO', 'AGUARDANDO_RETIRADA'].includes(item.status), emUso = ['EM_USO', 'DEVOLUCAO_ATRASADA', 'PENDENTE_FINALIZACAO'].includes(item.status);
     const linhasDetalhe = aguardando
         ? [['Veículo', item.placa], ['Motorista', item.motorista], ['Agendado para', item.solicitante || item.motorista || '—'], ['Criado por', (item.criadoPor || item.solicitante || '—') + (item.criadoManualmente ? ' · Manual ADM' : ' · Aplicativo')], ['Previsto', fmtDataHora(item.saidaPrevista) + ' até ' + fmtDataHora(item.retornoPrevisto)], ['Real', fmtDataHora(item.saidaReal) + ' até ' + fmtDataHora(item.retornoReal)], ['Último KM registrado', kmReferencia || '—']]
@@ -2822,6 +2823,7 @@ function DetalheAgendamento({ item, admin, onClose, onAtualizar, toast, onAbrirC
                 !admin && !retiradaLiberada && React.createElement("div", { className: "muted", style: { width: '100%', fontSize: 12, textAlign: 'right' } },
                     "Dispon\u00EDvel a partir de ",
                     textoLiberacaoRetirada)),
+            !somenteLeitura && ncSemDetalhe && onAbrirChecklist && React.createElement("button", {className:"btn btn-p",onClick:()=>{onClose();onAbrirChecklist({placa:item.placa,agendamentoId:item.id,etapa:"retirar",km:Number(item.kmInicial||0),modoChecklist:"OCORRENCIA"});}}, "Registrar anomalias no checklist"),
             regularizacaoTerceiro && emUso && React.createElement(React.Fragment, null,
                 React.createElement("div", { className: "aviso-box", style: { width: '100%' } },
                     "Este ve\u00EDculo possui uma devolu\u00E7\u00E3o anterior ainda aberta por ",
