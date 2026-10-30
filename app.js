@@ -2153,6 +2153,7 @@ function TelaSinistro({ user, toast }) {
         autoridadeAcionada: false, numeroBoletim: '', responsabilidadeInicial: 'Ainda não definida'
     });
     const [arquivos, setArquivos] = useState([]);
+    const sinistroEnvioRef = useRef(null);
     const carregar = async () => {
         setCarregando(true);
         try {
@@ -2247,11 +2248,13 @@ function TelaSinistro({ user, toast }) {
         }
         if (form.possuiVitima && !window.confirm('Você informou que há vítima. Confirma o envio imediato deste registro?'))
             return;
-        if (!window.confirm('Confirma o envio da ocorrência da placa ' + form.placa + '? A Logística será notificada.'))
+        if (!window.confirm('Confirma o envio da ocorrência da placa ' + form.placa + '? A ocorrência será registrada para a Logística.'))
             return;
         setEnviando(true);
         try {
-            const r = await ApiService.criarSinistro({ ...form, arquivos });
+            if (!sinistroEnvioRef.current) sinistroEnvioRef.current = gerarUUID();
+            const r = await ApiService.criarSinistro({ ...form, arquivos, idLocal: sinistroEnvioRef.current });
+            sinistroEnvioRef.current = null;
             const avisoEmail = r.emailEnviado ? ' · E-mail disparado.' : ' · Atenção: e-mail não confirmado.';
             const avisoCampo = Array.isArray(r.avisosCampos) && r.avisosCampos.length ? ' · Registro salvo com aviso técnico.' : '';
             toast('Ocorrência enviada. Protocolo: ' + r.numeroSinistro + avisoEmail + avisoCampo);
