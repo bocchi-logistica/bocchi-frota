@@ -3875,7 +3875,7 @@ function PainelRH({ st, dados, user }) {
                                         React.createElement("span", null, brl(a.prod))),
                                     React.createElement("div", { className: "linha-item" },
                                         React.createElement("span", null, "Descontos"),
-                                        React.createElement("span", { style: { color: a.totDesc < 0 ? 'var(--erro)' : 'inherit' } }, brl(a.totDesc))),
+                                        React.createElement("span", { style: { color: Number(a.totDesc) !== 0 ? '#b42318' : 'inherit', fontWeight: Number(a.totDesc) !== 0 ? 700 : 400 } }, Number(a.totDesc) !== 0 ? brl(-Math.abs(a.totDesc)) : brl(0))),
                                     React.createElement("div", { className: "linha-item" },
                                         React.createElement("span", null, "Apurado do m\u00EAs"),
                                         React.createElement("b", null, brl(a.apurado))),
