@@ -5399,7 +5399,7 @@ function PainelAuditoriaInterna({ competencia, setCompetencia, abrir, editar }) 
         h('h2', null, 'Auditoria Interna'),
         h('div', { className: 'subtabs' }, [['avaliacoes', 'Avaliações'], ['perguntas', 'Cadastro de perguntas'], ['relatorios', 'Relatórios']].map(([id, titulo]) =>
             h('button', { key: id, className: 'subtab' + (aba === id ? ' on' : ''), onClick: () => setAba(id) }, titulo))),
-        h('label', null, 'Competência', h('input', { type: 'month', value: competencia, onChange: e => e.target.value && setCompetencia(e.target.value) })),
+        aba === 'perguntas' ? h('p', { className: 'muted' }, 'Modelo geral da auditoria, usado nas novas avaliações de qualquer competência.') : h('label', null, 'Competência', h('input', { type: 'month', value: competencia, onChange: e => e.target.value && setCompetencia(e.target.value) })),
         mensagem && h('p', { role: 'status' }, mensagem),
         !base && !mensagem && h('p', null, 'Carregando…'),
         base && aba === 'perguntas' && h(React.Fragment, null,
@@ -5455,7 +5455,7 @@ function RascunhoAuditoria({ linha, competencia, onClose, editar }) {
         try {
             const r = await ApiService._req('POST', rota, { respostas });
             setRespostas(r.rascunho.respostas);
-            setMensagem('Rascunho salvo.');
+            setMensagem('Rascunho salvo. Você pode fechar e retomar em Avaliações, na mesma competência e motorista.');
         } catch (e) { setMensagem(e.message); }
         finally { setSalvando(false); }
     };
@@ -5513,6 +5513,7 @@ function RascunhoAuditoria({ linha, competencia, onClose, editar }) {
                     )
             ))
         ),
+        modelo && h('p', { className: 'muted' }, 'A publicação da avaliação e o lançamento do desconto ainda não estão disponíveis.'),
         modelo && editar && h('button', { className: 'btn btn-p', disabled: salvando || !editar, onClick: salvar }, salvando ? 'Salvando…' : 'Salvar rascunho'));
 }
 
