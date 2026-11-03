@@ -73,7 +73,7 @@ const CONFIG = {
     TIMEOUT_MS: 90000,
     RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
     MAX_TENTATIVAS: 4,
-    VERSAO: '2.8.39-homolog'
+    VERSAO: '2.8.40-homolog'
 };
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
 document.title = `Logística Bocchi — Portal do Motorista e ADM Logística (${CONFIG.VERSAO})`;
@@ -5542,6 +5542,8 @@ function RegrasDescontoAuditoria({ editar }) {
     const [regras, setRegras] = useState([]);
     const categorias = { AUDITORIA: 'Auditoria Interna', MULTAS: 'Multas', NOTIFICACOES: 'Notificação / Advertência' };
     const [categoria, setCategoria] = useState('AUDITORIA');
+    const [edicao, setEdicao] = useState(false);
+    const [ativo, setAtivo] = useState(true);
     const [meta, setMeta] = useState('85');
     const [valor, setValor] = useState('');
     const [vigencia, setVigencia] = useState('');
@@ -5556,9 +5558,13 @@ function RegrasDescontoAuditoria({ editar }) {
         setSalvando(true);
         setMensagem('');
         try {
-            const r = await ApiService._req('POST', rota, { categoria, vigencia, vigenciaFim, meta: categoria === 'AUDITORIA' ? Number(meta) : null, valorCentavos: Math.round(Number(valor) * 100) });
-            setRegras(atuais => [...atuais, r.regra].sort((a, b) => b.vigencia.localeCompare(a.vigencia)));
-            setMensagem('Regra cadastrada.');
+            const r = await ApiService._req(edicao ? 'PATCH' : 'POST', rota, { categoria, vigencia, vigenciaFim, ativo, meta: categoria === 'AUDITORIA' ? Number(meta) : null, valorCentavos: Math.round(Number(valor) * 100) });
+            setRegras(atuais => [...atuais.filter(x => (x.categoria || 'AUDITORIA') !== categoria || x.vigencia !== vigencia), r.regra].sort((a, b) => b.vigencia.localeCompare(a.vigencia)));
+            setMensagem(edicao ? 'Regra atualizada.' : 'Regra cadastrada.');
+            setEdicao(false);
+            setAtivo(true);
+            setVigencia('');
+            setVigenciaFim('');
             setValor('');
         } catch (erro) { setMensagem(erro.message); }
         finally { setSalvando(false); }
@@ -5567,21 +5573,25 @@ function RegrasDescontoAuditoria({ editar }) {
         h('h3', null, 'Regras de desconto'),
         h('p', null, 'Defina o valor por ocorrência para multas e notificações, ou a meta e o desconto da auditoria.'),
         regras.length ? h('div', { style: { overflowX: 'auto' } }, h('table', null,
-            h('thead', null, h('tr', null, ['Categoria', 'Vigência início', 'Vigência fim', 'Conformidade mínima', 'Valor do desconto'].map(t => h('th', { key: t }, t)))),
+            h('thead', null, h('tr', null, ['Categoria', 'Vigência início', 'Vigência fim', 'Conformidade mínima', 'Valor do desconto', 'Status', 'Ações'].map(t => h('th', { key: t }, t)))),
             h('tbody', null, regras.map(r => h('tr', { key: (r.categoria || 'AUDITORIA') + r.vigencia },
                 h('td', null, categorias[r.categoria || 'AUDITORIA']),
                 h('td', null, r.vigencia.split('-').reverse().join('/')),
                 h('td', null, r.vigenciaFim ? r.vigenciaFim.split('-').reverse().join('/') : 'Sem fim cadastrado'),
                 h('td', null, r.meta == null ? '—' : r.meta + '%'),
-                h('td', null, brl(r.valorCentavos / 100) + (r.meta == null ? ' por ocorrência' : ' abaixo da meta')))))))
+                h('td', null, brl(r.valorCentavos / 100) + (r.meta == null ? ' por ocorrência' : ' abaixo da meta')),
+                h('td', null, h('span', { className: 'tag ' + (r.ativo === false ? 'tag-neutro' : 'tag-ok') }, r.ativo === false ? 'Inativa' : 'Ativa')),
+                h('td', null, editar && h('button', { className: 'btn btn-s btn-sm', onClick: () => { setEdicao(true); setCategoria(r.categoria || 'AUDITORIA'); setVigencia(r.vigencia); setVigenciaFim(r.vigenciaFim || ''); setMeta(String(r.meta ?? 85)); setValor(String(r.valorCentavos / 100)); setAtivo(r.ativo !== false); } }, 'Editar')))))))
             : h('p', { className: 'muted' }, 'Nenhuma regra cadastrada.'),
         editar && h('form', { className: 'form-grid', onSubmit: salvar },
-            h('label', null, 'Categoria', h('select', { value: categoria, onChange: e => { setCategoria(e.target.value); setValor(e.target.value === 'AUDITORIA' ? '' : '50'); } }, Object.entries(categorias).map(([id, nome]) => h('option', { key: id, value: id }, nome)))),
+            h('label', null, 'Categoria', h('select', { value: categoria, disabled: edicao, onChange: e => { setCategoria(e.target.value); setValor(e.target.value === 'AUDITORIA' ? '' : '50'); } }, Object.entries(categorias).map(([id, nome]) => h('option', { key: id, value: id }, nome)))),
             categoria === 'AUDITORIA' && h('label', null, 'Conformidade mínima (%)', h('input', { required: true, type: 'number', min: 0.01, max: 100, step: 0.01, value: meta, onChange: e => setMeta(e.target.value) })),
             h('label', null, categoria === 'AUDITORIA' ? 'Valor do desconto (R$)' : 'Valor por ocorrência (R$)', h('input', { required: true, type: 'number', min: 0.01, max: 10000000, step: 0.01, value: valor, onChange: e => setValor(e.target.value) })),
-            h('label', null, 'Vigência início', h('input', { required: true, type: 'month', value: vigencia, onChange: e => setVigencia(e.target.value) })),
+            h('label', null, 'Vigência início', h('input', { required: true, type: 'month', disabled: edicao, value: vigencia, onChange: e => setVigencia(e.target.value) })),
             h('label', null, 'Vigência fim', h('input', { required: true, type: 'month', min: vigencia || undefined, value: vigenciaFim, onChange: e => setVigenciaFim(e.target.value) })),
-            h('button', { className: 'btn btn-p', disabled: salvando }, salvando ? 'Salvando…' : 'Cadastrar regra')),
+            h('label', null, 'Status', h('select', { value: ativo ? 's' : 'n', onChange: e => setAtivo(e.target.value === 's') }, h('option', { value: 's' }, 'Ativa'), h('option', { value: 'n' }, 'Inativa'))),
+            h('button', { className: 'btn btn-p', disabled: salvando }, salvando ? 'Salvando…' : edicao ? 'Salvar alterações' : 'Cadastrar regra'),
+            edicao && h('button', { type: 'button', className: 'btn btn-s', onClick: () => { setEdicao(false); setAtivo(true); setVigencia(''); setVigenciaFim(''); setValor(''); } }, 'Cancelar edição')),
         mensagem && h('p', { role: 'status' }, mensagem));
 }
 
