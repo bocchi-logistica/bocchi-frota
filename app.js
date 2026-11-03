@@ -73,7 +73,7 @@ const CONFIG = {
     TIMEOUT_MS: 90000,
     RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
     MAX_TENTATIVAS: 4,
-    VERSAO: '2.8.40-homolog'
+    VERSAO: '2.8.41-homolog'
 };
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
 document.title = `Logística Bocchi — Portal do Motorista e ADM Logística (${CONFIG.VERSAO})`;
@@ -5349,7 +5349,7 @@ async function imprimirAuditoria(linha, competencia, janela) {
         return el;
     };
     adicionar('p', 'Carregando avaliação…');
-    const { modelo, rascunho } = await ApiService._req('GET', rota);
+    const { modelo, rascunho, automaticas } = await ApiService._req('GET', rota);
     if (!rascunho) throw new Error('Ainda não há avaliação salva para este motorista e competência.');
     doc.body.replaceChildren();
     const estilo = doc.createElement('style');
@@ -5359,12 +5359,13 @@ async function imprimirAuditoria(linha, competencia, janela) {
     adicionar('p', modelo.formulario + ' · Revisão ' + modelo.revisao);
     adicionar('p', linha.motoristaNome + ' · Competência ' + competencia);
     adicionar('strong', 'Rascunho · Avaliação não publicada');
-    adicionar('p', resumoConformidadeAuditoria(modelo, rascunho.respostas));
+    adicionar('p', resumoConformidadeAuditoria(modelo, Object.fromEntries(modelo.perguntas.map(p => [p.id, automaticas?.[p.tipo] || rascunho.respostas[p.id]]))));
     const urls = [];
     janela.addEventListener('pagehide', () => urls.forEach(url => URL.revokeObjectURL(url)), { once: true });
     for (const pergunta of modelo.perguntas) {
-        const item = rascunho.respostas[pergunta.id];
+        const item = automaticas?.[pergunta.tipo] || rascunho.respostas[pergunta.id];
         const secao = adicionar('section', '');
+        if (item?.motivo) adicionar('p', item.motivo, secao);
         adicionar('strong', pergunta.ordem + '. ' + pergunta.titulo, secao);
         adicionar('p', pergunta.descricao, secao);
         adicionar('p', 'Peso ' + pergunta.peso + ' · Nota ' + (item?.nota ?? 'pendente'), secao);
@@ -5453,6 +5454,7 @@ function RascunhoAuditoria({ linha, competencia, onClose, editar }) {
     const h = React.createElement;
     const [modelo, setModelo] = useState(null);
     const [respostas, setRespostas] = useState({});
+    const [automaticas, setAutomaticas] = useState({});
     const [mensagem, setMensagem] = useState('');
     const [salvando, setSalvando] = useState(false);
     const [fotoAberta, setFotoAberta] = useState(null);
@@ -5463,6 +5465,7 @@ function RascunhoAuditoria({ linha, competencia, onClose, editar }) {
         ApiService._req('GET', rota).then(r => {
             if (!ativo) return;
             setModelo(r.modelo);
+            setAutomaticas(r.automaticas || {});
             setRespostas(r.rascunho?.respostas || {});
         }).catch(e => { if (ativo) setMensagem(e.message); });
         return () => { ativo = false; };
@@ -5512,7 +5515,14 @@ function RascunhoAuditoria({ linha, competencia, onClose, editar }) {
             modelo.perguntas.map(p => h('section', { className: 'card', key: p.id },
                 h('strong', null, p.ordem + '. ' + p.titulo),
                 h('p', { className: 'muted' }, p.descricao),
-                p.tipo !== 'MANUAL' ? h('p', null, 'Pontuação automática pendente de integração.') :
+                p.tipo !== 'MANUAL' ? h(React.Fragment, null,
+                    h('p', null, 'Nota automática: ' + (automaticas[p.tipo]?.nota ?? 'Pendente')),
+                    h('p', { className: 'muted' }, automaticas[p.tipo]?.motivo || 'Dados automáticos indisponíveis.'),
+                    automaticas[p.tipo]?.evidencias?.length > 0 && h('details', null,
+                        h('summary', null, 'Ver evidências'),
+                        automaticas[p.tipo].evidencias.map((item, indice) => h('p', { key: indice }, p.tipo === 'PBT'
+                            ? [item.data, item.placa, item.notaFiscal ? 'NF ' + item.notaFiscal : 'Carga ' + item.cargaId, item.pesoKg + ' kg', item.minimo + ' a ' + item.maximo + ' kg', item.situacao.replaceAll('_', ' ')].join(' · ')
+                            : [item.periodo, item.frequencia, 'Veículo ' + item.veiculoId, item.cumprido ? 'Cumprido' : 'Faltante'].join(' · '))))) :
                     h(React.Fragment, null,
                         h('label', null, 'Nota', h('select', {
                             disabled: salvando || !editar, value: respostas[p.id]?.nota ?? '',
@@ -5532,7 +5542,7 @@ function RascunhoAuditoria({ linha, competencia, onClose, editar }) {
             ))
         ),
         modelo && h('p', { className: 'muted' }, 'A publicação da avaliação e o lançamento do desconto ainda não estão disponíveis.'),
-        modelo && h('p', { role: 'status' }, resumoConformidadeAuditoria(modelo, respostas)),
+        modelo && h('p', { role: 'status' }, resumoConformidadeAuditoria(modelo, Object.fromEntries(modelo.perguntas.map(p => [p.id, automaticas[p.tipo] || respostas[p.id]])))),
         modelo && editar && h('button', { className: 'btn btn-p', disabled: salvando || !editar, onClick: salvar }, salvando ? 'Salvando…' : 'Salvar rascunho'));
 }
 
