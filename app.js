@@ -1,3 +1,20 @@
+function useAtualizacaoPortal(atualizar) {
+    const callback = React.useRef(atualizar);
+    callback.current = atualizar;
+    useEffect(() => {
+        if (CONFIG.MODO_TESTE_LOCAL) return;
+        let ocupado = false;
+        const executar = async () => {
+            if (document.hidden || ocupado || !ApiService.token) return;
+            ocupado = true;
+            try { await callback.current(); } catch {} finally { ocupado = false; }
+        };
+        const timer = setInterval(executar, 15000);
+        document.addEventListener('visibilitychange', executar);
+        return () => { clearInterval(timer); document.removeEventListener('visibilitychange', executar); };
+    }, []);
+}
+
 const { useState, useMemo, useRef, useEffect } = React;
 /* ============================================================================
    CONFIGURAÇÕES GERAIS DA PLATAFORMA
@@ -15,7 +32,7 @@ const CONFIG = {
     TIMEOUT_MS: 90000,
     RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
     MAX_TENTATIVAS: 4,
-    VERSAO: '2.8.36-homolog'
+    VERSAO: '2.8.37-homolog'
 };
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
 document.title = `Logística Bocchi — Portal do Motorista e ADM Logística (${CONFIG.VERSAO})`;
@@ -297,7 +314,8 @@ function otimizarArquivoBinario(arquivo) {
    O acesso ao banco D1 de homologação é responsabilidade exclusiva do backend.
    Em MODO_TESTE_LOCAL, as funções simulam o servidor localmente.
    ========================================================================== */
-let _token = null; // token de sessão em memória (nunca gravar senha no navegador)
+let _expiraSessao = null;
+let _token = null;
 let _loginSessao = null; // identifica o proprietário do token atual
 const ApiService = {
     get token() { return _token; },
@@ -314,6 +332,7 @@ const ApiService = {
             body: corpo ? JSON.stringify(corpo) : undefined
         });
         if (!r.ok) {
+            if (r.status === 401 && caminho !== '/login' && _token) window.dispatchEvent(new Event('bocchi:sessao-invalida'));
             let detalhe = null;
             let msg = 'Erro ' + r.status;
             try {
@@ -346,6 +365,7 @@ const ApiService = {
         });
         if (r && r.ok) {
             _token = r.token;
+            _expiraSessao = r.expiraEm;
             _loginSessao = String(r.motorista.login || login || '').trim().toLowerCase();
             return {
                 sucesso: true,
@@ -380,7 +400,7 @@ const ApiService = {
             erro: r?.erro || 'Login ou PIN inválido.'
         };
     },
-    sair() { _token = null; _loginSessao = null; },
+    sair() { _token = null; _loginSessao = null; _expiraSessao = null; try { sessionStorage.removeItem('bocchi.portal.sessao'); } catch {} },
     enviarChecklist(registro) {
         if (CONFIG.MODO_TESTE_LOCAL) {
             // Simula o servidor com prefixo DEMO, sem confundir com protocolos reais
@@ -1010,7 +1030,7 @@ function Login({ st, onLogin }) {
     const [erro, setErro] = useState('');
     const [senhaLoginVisivel, setSenhaLoginVisivel] = useState(false);
     /* Em produção, a autenticação é feita pelo endpoint POST /auth/login.
-       O token permanece somente em memória e a senha não é gravada no navegador.
+       O token expira no prazo informado pelo servidor. A senha não é gravada.
        O modo local de testes utiliza uma base simulada. */
     const [carregando, setCarregando] = useState(false);
     const entrar = async () => {
@@ -1539,7 +1559,7 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
             return 'reprovado';
         return 'pendente';
     };
-    const carregarHistorico = async () => {
+    const carregarHistorico = async (silencioso = false) => {
         if (CONFIG.MODO_TESTE_LOCAL)
             return;
         try {
@@ -1565,10 +1585,11 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
             setSt(s => ({ ...s, checklists: vindos }));
         }
         catch (e) {
-            toast('O checklist foi salvo, mas não foi possível atualizar o histórico: ' + (e.message || e));
+            if (!silencioso) toast('O checklist foi salvo, mas não foi possível atualizar o histórico: ' + (e.message || e));
         }
     };
     useEffect(() => { carregarHistorico(); }, []);
+    useAtualizacaoPortal(() => carregarHistorico(true));
     useEffect(() => {
         let ativo = true;
         const carregar = async () => {
@@ -2228,6 +2249,7 @@ function TelaSinistro({ user, toast }) {
         }
     };
     useEffect(() => { carregar(); }, []);
+    useAtualizacaoPortal(async () => { const r = await ApiService.obterMeusSinistros(); setHistorico(r.sinistros || []); });
     const veiculoSelecionado = veiculos.find(v => normalizar(v.placa) === normalizar(form.placa)) || null;
     const ehFrotaPesada = Boolean(veiculoSelecionado && normalizar(veiculoSelecionado.tipoFrota).includes('pesada'));
     const exigeAgendamento = Boolean(veiculoSelecionado && !ehFrotaPesada && veiculoSelecionado.usoCompartilhado === true);
@@ -4738,6 +4760,7 @@ function AdmContestacoes({ st, setSt, toast, foco }) {
         }
     };
     useEffect(() => { carregar(); }, []);
+    useAtualizacaoPortal(async () => { const r = await ApiService.admListarContestacoes(); setSt(s => ({ ...s, contestacoes: r.contestacoes || [] })); });
     const responder = async () => {
         if (!resposta.trim()) {
             toast('Informe a justificativa da decisão.');
@@ -5766,6 +5789,10 @@ function AdmCadastros({ st, setSt, toast, user }) {
         }
     };
     useEffect(() => { carregar(); }, []);
+    useAtualizacaoPortal(async () => {
+        const r = await ApiService.admCadastros();
+        setCad({ usuarios: r.usuarios || [], tiposVeiculo: r.tiposVeiculo || [], veiculos: r.veiculos || [], vinculos: r.vinculos || [], perfis: r.perfis || [] });
+    });
     const salvarUser = async () => {
         if (salvandoUsuario || !edit)
             return;
@@ -6460,6 +6487,11 @@ function AdmSinistros({ toast, user, foco }) {
     finally {
         setCarregando(false);
     } };
+    useAtualizacaoPortal(async () => {
+        if (!podeGestao || sub !== 'gestao') return;
+        const r = await ApiService.admListarSinistros();
+        setLista(r.sinistros || []);
+    });
     const carregarConfig = async () => { if (!podeConfig)
         return; try {
         const r = await ApiService.admObterConfiguracoesSinistros();
@@ -6895,9 +6927,29 @@ function AdmApp({ st, setSt, user, onSair, toast }) {
             aba === 'cad' && React.createElement(AdmCadastros, { st: st, setSt: setSt, toast: toast, user: user }))));
 }
 /* ================= APP ================= */
+function restaurarSessaoPortal() {
+    try {
+        const sessao = JSON.parse(sessionStorage.getItem('bocchi.portal.sessao') || 'null');
+        if (!CONFIG.MODO_TESTE_LOCAL && sessao?.token && sessao.usuario?.login && Date.parse(sessao.expiraEm) > Date.now()) {
+            _token = sessao.token;
+            _expiraSessao = sessao.expiraEm;
+            _loginSessao = sessao.usuario.login.trim().toLowerCase();
+            return sessao.usuario;
+        }
+        sessionStorage.removeItem('bocchi.portal.sessao');
+    } catch {}
+    return null;
+}
 function App() {
     const [st, setSt] = useState(estadoInicial);
-    const [user, setUser] = useState(null);
+    const [user, setUser] = useState(restaurarSessaoPortal);
+    useEffect(() => {
+        if (!user || !_expiraSessao) return;
+        const expirar = () => { ApiService.sair(); setUser(null); };
+        const timer = setTimeout(expirar, Math.max(0, Date.parse(_expiraSessao) - Date.now()));
+        window.addEventListener('bocchi:sessao-invalida', expirar);
+        return () => { clearTimeout(timer); window.removeEventListener('bocchi:sessao-invalida', expirar); };
+    }, [user]);
     const [toastMsg, setToastMsg] = useState('');
     const tRef = useRef(null);
     const toast = (m) => { setToastMsg(m); clearTimeout(tRef.current); const tempo = Math.max(3800, Math.min(6500, String(m || '').length * 45)); tRef.current = setTimeout(() => setToastMsg(''), tempo); };
@@ -6927,7 +6979,10 @@ function App() {
     ].some(permissao => pode(userAtual, permissao)) ||
         permissoesDoUsuario(userAtual).has('*');
     return (React.createElement(React.Fragment, null,
-        !userAtual && React.createElement(Login, { st: st, onLogin: setUser }),
+        !userAtual && React.createElement(Login, { st: st, onLogin: usuario => {
+            try { if (_token && _expiraSessao) sessionStorage.setItem('bocchi.portal.sessao', JSON.stringify({token: _token, expiraEm: _expiraSessao, usuario})); } catch {}
+            setUser(usuario);
+        } }),
         userAtual && ehMotorista && !acessoGestao && React.createElement(MotoristaApp, { st: st, setSt: setSt, user: userAtual, onSair: () => { ApiService.sair(); setUser(null); }, toast: toast }),
         userAtual && acessoGestao && React.createElement(AdmApp, { st: st, setSt: setSt, user: userAtual, onSair: () => { ApiService.sair(); setUser(null); }, toast: toast }),
         userAtual && !ehMotorista && !acessoGestao && (React.createElement("div", { className: "login-wrap" },
