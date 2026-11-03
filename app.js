@@ -457,7 +457,16 @@ const ApiService = {
             erro: r?.erro || 'Login ou PIN inválido.'
         };
     },
-    sair() { _token = null; _loginSessao = null; _expiraSessao = null; try { sessionStorage.removeItem('bocchi.portal.sessao'); } catch {} },
+    sair() {
+        const token = _token;
+        if (token) {
+            void fetch(CONFIG.API_URL + '/logout', {
+                method: 'POST',
+                headers: { Authorization: 'Bearer ' + token },
+                keepalive: true
+            }).catch(() => {});
+        }
+        _token = null; _loginSessao = null; _expiraSessao = null; try { sessionStorage.removeItem('bocchi.portal.sessao'); } catch {} },
     enviarChecklist(registro) {
         if (CONFIG.MODO_TESTE_LOCAL) {
             // Simula o servidor com prefixo DEMO, sem confundir com protocolos reais
