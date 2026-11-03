@@ -1474,7 +1474,13 @@ function TelaPremiacao({ st, user, dados }) {
                                 React.createElement("div", { className: "ocorrencia-motivo" },
                                     React.createElement("b", null, "Motivo:"),
                                     " ",
-                                    String(d.motivo || d.origem || 'Não informado')));
+                                    String(d.motivo || d.origem || 'Não informado')),
+                                d.auditoriaResumo && React.createElement("div", { className: "ocorrencia-motivo" },
+                                    d.auditoriaResumo.meta != null && React.createElement("p", null, "Meta de conformidade: " + brn(d.auditoriaResumo.meta, 2) + "%"),
+                                    d.auditoriaResumo.itens.length > 0 && React.createElement(React.Fragment, null,
+                                        React.createElement("b", null, "Itens que reduziram a nota"),
+                                        React.createElement("ul", null, d.auditoriaResumo.itens.map((item, indice) =>
+                                            React.createElement("li", { key: indice }, item.titulo + " · " + item.nota + "/" + item.maximo + (item.motivo ? " · " + item.motivo : "")))))));
                         }))));
             }),
             React.createElement("div", { className: "linha-item", style: { fontSize: 15.5 } },
