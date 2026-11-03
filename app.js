@@ -15,7 +15,7 @@ const CONFIG = {
     TIMEOUT_MS: 90000,
     RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
     MAX_TENTATIVAS: 4,
-    VERSAO: '2.8.35-homolog'
+    VERSAO: '2.8.36-homolog'
 };
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
 document.title = `Logística Bocchi — Portal do Motorista e ADM Logística (${CONFIG.VERSAO})`;
@@ -2911,17 +2911,38 @@ function DetalheAgendamento({ item, admin, onClose, onAtualizar, toast, onAbrirC
 }
 function TelaAgendamento({ user, toast, onAbrirChecklist }) {
     const [base, setBase] = useState({ veiculos: [], agendamentos: [], parametros: {} }), [carregando, setCarregando] = useState(true), [mes, setMes] = useState(new Date()), [form, setForm] = useState(false), [detalhe, setDetalhe] = useState(null), [visual, setVisual] = useState('todos'), [veiculoFiltro, setVeiculoFiltro] = useState(''), [modoVisao, setModoVisao] = useState('mes'), [diaSelecionado, setDiaSelecionado] = useState(new Date()), [filtroRapido, setFiltroRapido] = useState('proximo');
-    const carregar = async () => { setCarregando(true); try {
+    const leituraAgenda = React.useRef(0);
+    const carregar = async (silencioso = false) => {
+        const leitura = ++leituraAgenda.current;
+        if (!silencioso) setCarregando(true);
+        try {
         const r = await ApiService.obterAgendamentos();
+        if (leitura !== leituraAgenda.current) return;
         setBase({ veiculos: r.veiculos || [], agendamentos: r.agendamentos || [], parametros: r.parametros || {} });
     }
     catch (e) {
-        toast(e.message);
+        if (!silencioso && leitura === leituraAgenda.current) toast(e.message);
     }
     finally {
-        setCarregando(false);
+        if (leitura === leituraAgenda.current) setCarregando(false);
     } };
-    useEffect(() => { carregar(); }, []);
+    useEffect(() => {
+        let sincronizando = false;
+        const atualizar = async () => {
+            if (document.hidden || sincronizando) return;
+            sincronizando = true;
+            try { await carregar(true); }
+            finally { sincronizando = false; }
+        };
+        carregar();
+        const intervalo = setInterval(atualizar, 10000);
+        document.addEventListener('visibilitychange', atualizar);
+        return () => {
+            clearInterval(intervalo);
+            document.removeEventListener('visibilitychange', atualizar);
+            leituraAgenda.current++;
+        };
+    }, []);
     const norm = v => String(v || '').trim().toLocaleLowerCase('pt-BR');
     // Agenda compartilhada visível; as ações continuam restritas ao responsável.
     const meus = base.agendamentos.filter(a => a.meuAgendamento === true);
@@ -3063,19 +3084,40 @@ function AdmAgendamentos({ user, toast }) {
     const podeAgenda = pode(user, 'agendamentos.agenda'), podeMonitor = pode(user, 'agendamentos.monitoramento'), podeRel = pode(user, 'agendamentos.relatorio'), podeParam = pode(user, 'agendamentos.parametros');
     const inicial = podeAgenda ? 'agenda' : podeMonitor ? 'monitor' : podeRel ? 'relatorio' : 'parametros';
     const [sub, setSub] = useState(inicial), [base, setBase] = useState({ veiculos: [], usuarios: [], agendamentos: [], parametros: {}, diagnosticoVeiculos: {} }), [carregando, setCarregando] = useState(true), [mes, setMes] = useState(new Date()), [detalhe, setDetalhe] = useState(null), [form, setForm] = useState(false), [monitorFiltro, setMonitorFiltro] = useState('AGUARDANDO_RETIRADA'), [fStatus, setFStatus] = useState('TODOS'), [fPlacaRel, setFPlacaRel] = useState('TODAS'), [fDataIniRel, setFDataIniRel] = useState(''), [fDataFimRel, setFDataFimRel] = useState(''), [paramForm, setParamForm] = useState({}), [salvandoParam, setSalvandoParam] = useState(false), [modoVisao, setModoVisao] = useState('mes'), [diaSelecionado, setDiaSelecionado] = useState(new Date());
-    const carregar = async () => { setCarregando(true); try {
+    const leituraAgenda = React.useRef(0);
+    const carregar = async (silencioso = false) => {
+        const leitura = ++leituraAgenda.current;
+        if (!silencioso) setCarregando(true);
+        try {
         const r = await ApiService.admAgendamentos();
+        if (leitura !== leituraAgenda.current) return;
         const dados = { veiculos: r.veiculos || [], usuarios: r.usuarios || [], agendamentos: r.agendamentos || [], parametros: r.parametros || {}, diagnosticoVeiculos: r.diagnosticoVeiculos || {} };
         setBase(dados);
-        setParamForm(dados.parametros);
+        if (!silencioso) setParamForm(dados.parametros);
     }
     catch (e) {
-        toast(e.message);
+        if (!silencioso && leitura === leituraAgenda.current) toast(e.message);
     }
     finally {
-        setCarregando(false);
+        if (leitura === leituraAgenda.current) setCarregando(false);
     } };
-    useEffect(() => { carregar(); }, []);
+    useEffect(() => {
+        let sincronizando = false;
+        const atualizar = async () => {
+            if (document.hidden || sincronizando) return;
+            sincronizando = true;
+            try { await carregar(true); }
+            finally { sincronizando = false; }
+        };
+        carregar();
+        const intervalo = setInterval(atualizar, 10000);
+        document.addEventListener('visibilitychange', atualizar);
+        return () => {
+            clearInterval(intervalo);
+            document.removeEventListener('visibilitychange', atualizar);
+            leituraAgenda.current++;
+        };
+    }, []);
     const placasRel = [...new Set(base.agendamentos.map(a => a.placa).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
     const filtrados = base.agendamentos.filter(a => {
         if (fStatus !== 'TODOS' && a.status !== fStatus)
