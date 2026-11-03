@@ -5321,6 +5321,56 @@ function AdmChecklist({ st, setSt, toast, user, foco }) {
             React.createElement("button", { className: "btn btn-p", style: { width: '100%', marginTop: 12 }, onClick: liberarVeiculo }, "Confirmar libera\u00E7\u00E3o"))));
 }
 /* ================= ADM: PREMIAÇÃO (metas + descontos) ================= */
+async function imprimirAuditoria(linha, competencia, janela) {
+    const rota = '/admin/premiacao/auditoria?' + new URLSearchParams({ motoristaId: linha.motoristaId, competencia });
+    const doc = janela.document;
+    doc.title = 'FO 4.1.1.2 · Auditoria Interna';
+    const adicionar = (tag, texto, pai = doc.body) => {
+        const el = doc.createElement(tag);
+        el.textContent = texto;
+        pai.append(el);
+        return el;
+    };
+    adicionar('p', 'Carregando avaliação…');
+    const { modelo, rascunho } = await ApiService._req('GET', rota);
+    if (!rascunho) throw new Error('Ainda não há avaliação salva para este motorista e competência.');
+    doc.body.replaceChildren();
+    const estilo = doc.createElement('style');
+    estilo.textContent = 'body{font:14px system-ui;color:#142c24;margin:32px auto;max-width:800px;padding:0 20px} h1{font-size:23px} section{border-top:1px solid #ddd;padding:12px 0;break-inside:avoid} p{white-space:pre-wrap} img{display:block;max-width:65mm;max-height:45mm;object-fit:contain} @media print{button{display:none}body{margin:0;padding:0}}';
+    doc.head.append(estilo);
+    adicionar('h1', 'Auditoria Interna da Logística');
+    adicionar('p', modelo.formulario + ' · Revisão ' + modelo.revisao);
+    adicionar('p', linha.motoristaNome + ' · Competência ' + competencia);
+    adicionar('strong', 'Rascunho · Avaliação não publicada');
+    const urls = [];
+    janela.addEventListener('pagehide', () => urls.forEach(url => URL.revokeObjectURL(url)), { once: true });
+    for (const pergunta of modelo.perguntas) {
+        const item = rascunho.respostas[pergunta.id];
+        const secao = adicionar('section', '');
+        adicionar('strong', pergunta.ordem + '. ' + pergunta.titulo, secao);
+        adicionar('p', pergunta.descricao, secao);
+        adicionar('p', 'Peso ' + pergunta.peso + ' · Nota ' + (item?.nota ?? 'pendente'), secao);
+        if (item?.justificativa) adicionar('p', item.justificativa, secao);
+        if (!item?.foto) continue;
+        try {
+            const foto = await fetch(CONFIG.API_URL + rota + '&foto=' + encodeURIComponent(pergunta.id), {
+                headers: { Authorization: 'Bearer ' + ApiService.token }
+            });
+            if (!foto.ok) throw new Error();
+            const url = URL.createObjectURL(await foto.blob());
+            urls.push(url);
+            const img = adicionar('img', '', secao);
+            img.alt = 'Evidência da pergunta ' + pergunta.ordem;
+            img.src = url;
+            await img.decode();
+        } catch {
+            adicionar('p', 'Foto salva indisponível na impressão.', secao);
+        }
+    }
+    const botao = adicionar('button', 'Imprimir ou salvar como PDF');
+    botao.onclick = () => janela.print();
+}
+ 
 function PainelAuditoriaInterna({ competencia, setCompetencia, abrir, editar }) {
     const h = React.createElement;
     const [aba, setAba] = useState('avaliacoes');
@@ -5366,7 +5416,19 @@ function PainelAuditoriaInterna({ competencia, setCompetencia, abrir, editar }) 
             base.avaliacoes.filter(l => l.motoristaNome.toLowerCase().includes(filtro.toLowerCase())).map(l =>
                 h('div', { className: 'card row', key: l.motoristaId },
                     h('strong', null, l.motoristaNome), h('span', null, l.status),
-                    h('button', { className: 'btn btn-s', onClick: () => abrir(l) }, aba === 'relatorios' || !editar ? 'Consultar' : 'Abrir avaliação')))));
+                    h('button', { className: 'btn btn-s', onClick: () => abrir(l) }, aba === 'relatorios' || !editar ? 'Consultar' : 'Abrir avaliação'),
+                    aba === 'relatorios' && l.status !== 'Não realizada' && h('button', {
+                        className: 'btn btn-s',
+                        onClick: () => {
+                            const janela = window.open('', '_blank');
+                            if (!janela) { setMensagem('Permita a abertura de janelas para gerar o relatório.'); return; }
+                            janela.opener = null;
+                            imprimirAuditoria(l, competencia, janela).catch(e => {
+                                if (!janela.closed) janela.close();
+                                setMensagem(e.message);
+                            });
+                        }
+                    }, 'Gerar relatório')))));
 }
 
 function RascunhoAuditoria({ linha, competencia, onClose, editar }) {
