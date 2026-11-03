@@ -5319,6 +5319,59 @@ function AdmChecklist({ st, setSt, toast, user, foco }) {
             React.createElement("button", { className: "btn btn-p", style: { width: '100%', marginTop: 12 }, onClick: liberarVeiculo }, "Confirmar libera\u00E7\u00E3o"))));
 }
 /* ================= ADM: PREMIAÇÃO (metas + descontos) ================= */
+function RascunhoAuditoria({ linha, competencia, onClose }) {
+    const h = React.createElement;
+    const [modelo, setModelo] = useState(null);
+    const [respostas, setRespostas] = useState({});
+    const [mensagem, setMensagem] = useState('');
+    const [salvando, setSalvando] = useState(false);
+    const rota = '/admin/premiacao/auditoria?' + new URLSearchParams({ motoristaId: linha.motoristaId, competencia });
+    useEffect(() => {
+        let ativo = true;
+        ApiService._req('GET', rota).then(r => {
+            if (!ativo) return;
+            setModelo(r.modelo);
+            setRespostas(r.rascunho?.respostas || {});
+        }).catch(e => { if (ativo) setMensagem(e.message); });
+        return () => { ativo = false; };
+    }, [rota]);
+    const salvar = async () => {
+        setSalvando(true);
+        setMensagem('');
+        try {
+            await ApiService._req('POST', rota, { respostas });
+            setMensagem('Rascunho salvo.');
+        } catch (e) { setMensagem(e.message); }
+        finally { setSalvando(false); }
+    };
+    const atualizar = (id, campo, valor) => setRespostas(atual => ({
+        ...atual, [id]: { nota: null, ...atual[id], [campo]: valor }
+    }));
+    return h(Modal, { titulo: 'Auditoria interna mensal', onClose },
+        h('p', null, linha.motoristaNome + ' · ' + competencia),
+        mensagem && h('p', { role: 'status' }, mensagem),
+        !modelo && !mensagem && h('p', null, 'Carregando formulário…'),
+        modelo && h('div', { style: { maxHeight: '55vh', overflowY: 'auto' } },
+            h('p', { className: 'muted' }, modelo.formulario + ' · Revisão ' + modelo.revisao),
+            modelo.perguntas.map(p => h('section', { className: 'card', key: p.id },
+                h('strong', null, p.ordem + '. ' + p.titulo),
+                h('p', { className: 'muted' }, p.descricao),
+                p.tipo !== 'MANUAL' ? h('p', null, 'Pontuação automática pendente de integração.') :
+                    h(React.Fragment, null,
+                        h('label', null, 'Nota', h('select', {
+                            disabled: salvando, value: respostas[p.id]?.nota ?? '',
+                            onChange: e => atualizar(p.id, 'nota', e.target.value ? Number(e.target.value) : null)
+                        }, h('option', { value: '' }, 'Selecione'), modelo.notas.map(n => h('option', { key: n, value: n }, n)))),
+                        h('label', null, 'Justificativa', h('textarea', {
+                            disabled: salvando, maxLength: 1500, value: respostas[p.id]?.justificativa || '',
+                            onChange: e => atualizar(p.id, 'justificativa', e.target.value)
+                        }))
+                    )
+            ))
+        ),
+        modelo && h('button', { className: 'btn btn-p', disabled: salvando, onClick: salvar }, salvando ? 'Salvando…' : 'Salvar rascunho'));
+}
+
 function AdmPremiacao({ st, setSt, toast, user }) {
     const podeEditarMetas = pode(user, 'metas.editar');
     const podeEditarDescontos = pode(user, 'descontos.editar');
@@ -5471,7 +5524,12 @@ function AdmPremiacao({ st, setSt, toast, user }) {
         setFSituacaoDesc('');
         setNovoDesc(v => ({ ...v, itemId: undefined, motoristaId: '', motoristaNome: '', categoria, situacao: 'Sem ocorrência', quantidade: 0, valor: 0, percentual: 0, dataOcorrencia: '', motivo: '' }));
     };
+    const [rascunhoAuditoria, setRascunhoAuditoria] = useState(null);
     const prepararConferencia = linha => {
+        if (linha.categoria === 'Auditoria Interna') {
+            setRascunhoAuditoria(linha);
+            return;
+        }
         if (linha.registro) {
             const d = linha.registro;
             setNovoDesc({ itemId: d.itemId, motoristaId: d.motoristaId, motoristaNome: d.motoristaNome, categoria: d.categoria, situacao: d.situacao || 'Sem ocorrência', quantidade: d.quantidade || 0, valor: d.valor || 0, percentual: d.percentual || 0, dataOcorrencia: d.dataOcorrencia || '', motivo: d.motivo || '', exibir: d.exibir !== false });
@@ -5675,6 +5733,7 @@ function AdmPremiacao({ st, setSt, toast, user }) {
                         }),
                         !acompanhamentoDescontos.length && React.createElement("tr", null,
                             React.createElement("td", { colSpan: "7", className: "muted", style: { textAlign: 'center', padding: 24 } }, "Nenhum registro encontrado para os filtros selecionados.")))))),
+        rascunhoAuditoria && React.createElement(RascunhoAuditoria, { linha: rascunhoAuditoria, competencia, onClose: () => setRascunhoAuditoria(null) }),
         edit &&
             React.createElement(Modal, { titulo: edit.itemId ? 'Editar meta' : 'Incluir meta', onClose: () => setEdit(null) },
                 React.createElement("div", { className: "form-grid" },
