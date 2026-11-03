@@ -4902,11 +4902,11 @@ function AdmContestacoes({ st, setSt, toast, foco }) {
                         React.createElement("b", null, "Data da carga:"),
                         " ",
                         dataBR(ct.dataCarga || (c && c.data))),
-                    ct.status !== 'pendente' && React.createElement("span", null,
+                    String(ct.status || '').trim().toLowerCase() !== 'pendente' && React.createElement("span", null,
                         React.createElement("b", null, "Analisado por:"),
                         " ",
                         ct.analisadoPor || 'Não informado'),
-                    ct.status !== 'pendente' && React.createElement("span", null,
+                    String(ct.status || '').trim().toLowerCase() !== 'pendente' && React.createElement("span", null,
                         React.createElement("b", null, "Data da an\u00E1lise:"),
                         " ",
                         dataBR(ct.dataAnalise) || 'Não informada')),
@@ -4918,7 +4918,7 @@ function AdmContestacoes({ st, setSt, toast, foco }) {
                     React.createElement("b", null, "Justificativa da an\u00E1lise:"),
                     " ",
                     ct.resposta),
-                ct.status === 'pendente' &&
+                String(ct.status || '').trim().toLowerCase() === 'pendente' &&
                     React.createElement("button", { className: "btn btn-s btn-sm", style: { marginTop: 10 }, onClick: () => { setRespondendo(ct); setDecisao('procede'); setResposta(''); } }, "Responder")));
         }),
         respondendo &&
