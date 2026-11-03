@@ -4826,11 +4826,19 @@ function AdmContestacoes({ st, setSt, toast, foco }) {
         }
         setSalvando(true);
         try {
-            const r = await ApiService.admAnalisarContestacao(respondendo.id ?? respondendo.itemId, decisao, resposta.trim());
-            setSt(s => ({ ...s, contestacoes: s.contestacoes.map(c => c.id === respondendo.id ? r.contestacao : c) }));
+            const id = respondendo.id ?? respondendo.itemId;
+            const justificativa = resposta.trim();
+            const r = await ApiService.admAnalisarContestacao(id, decisao, justificativa);
+            setSt(s => ({
+                ...s,
+                contestacoes: s.contestacoes.map(c => String(c.id ?? c.itemId) === String(id)
+                    ? { ...c, status: decisao, resposta: justificativa, ...r.contestacao }
+                    : c)
+            }));
             setRespondendo(null);
             setResposta('');
             toast('Contestação respondida.');
+            void carregar();
         }
         catch (e) {
             toast('Não foi possível concluir a análise: ' + e.message);
