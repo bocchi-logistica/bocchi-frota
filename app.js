@@ -141,6 +141,8 @@ const ACESSO_NOVO_POR_PERMISSAO = {
     'premiacao.visualizar': { area: 'PREMIACAO', subtela: 'PREMIACAO_PAINEL' },
     'metas.visualizar': { area: 'PREMIACAO', subtela: 'PREMIACAO_METAS' },
     'metas.editar': { area: 'PREMIACAO', subtela: 'PREMIACAO_METAS', editar: true },
+    'auditoria.visualizar': { area: 'PREMIACAO', subtela: 'PREMIACAO_AUDITORIA' },
+    'auditoria.editar': { area: 'PREMIACAO', subtela: 'PREMIACAO_AUDITORIA', editar: true },
     'descontos.visualizar': { area: 'PREMIACAO', subtela: 'PREMIACAO_DESCONTOS' },
     'descontos.editar': { area: 'PREMIACAO', subtela: 'PREMIACAO_DESCONTOS', editar: true },
     'cadastro.usuarios': { area: 'CADASTROS', subtela: 'CADASTRO_USUARIOS' },
@@ -5319,7 +5321,55 @@ function AdmChecklist({ st, setSt, toast, user, foco }) {
             React.createElement("button", { className: "btn btn-p", style: { width: '100%', marginTop: 12 }, onClick: liberarVeiculo }, "Confirmar libera\u00E7\u00E3o"))));
 }
 /* ================= ADM: PREMIAÇÃO (metas + descontos) ================= */
-function RascunhoAuditoria({ linha, competencia, onClose }) {
+function PainelAuditoriaInterna({ competencia, setCompetencia, abrir, editar }) {
+    const h = React.createElement;
+    const [aba, setAba] = useState('avaliacoes');
+    const [base, setBase] = useState(null);
+    const [perguntas, setPerguntas] = useState([]);
+    const [mensagem, setMensagem] = useState('');
+    const [filtro, setFiltro] = useState('');
+    const rota = '/admin/premiacao/auditoria?competencia=' + encodeURIComponent(competencia);
+    useEffect(() => {
+        let ativo = true;
+        setBase(null);
+        setMensagem('');
+        ApiService._req('GET', rota).then(r => {
+            if (!ativo) return;
+            setBase(r);
+            setPerguntas(r.modelo.perguntas);
+        }).catch(e => { if (ativo) setMensagem(e.message); });
+        return () => { ativo = false; };
+    }, [rota, aba]);
+    const alterar = (id, campo, valor) => setPerguntas(v => v.map(p => p.id === id ? { ...p, [campo]: valor } : p));
+    const salvar = async () => {
+        try { await ApiService._req('PATCH', rota, { perguntas }); setMensagem('Cadastro atualizado.'); }
+        catch (e) { setMensagem(e.message); }
+    };
+    return h('section', { className: 'card' },
+        h('h2', null, 'Auditoria Interna'),
+        h('div', { className: 'subtabs' }, [['avaliacoes', 'Avaliações'], ['perguntas', 'Cadastro de perguntas'], ['relatorios', 'Relatórios']].map(([id, titulo]) =>
+            h('button', { key: id, className: 'subtab' + (aba === id ? ' on' : ''), onClick: () => setAba(id) }, titulo))),
+        h('label', null, 'Competência', h('input', { type: 'month', value: competencia, onChange: e => e.target.value && setCompetencia(e.target.value) })),
+        mensagem && h('p', { role: 'status' }, mensagem),
+        !base && !mensagem && h('p', null, 'Carregando…'),
+        base && aba === 'perguntas' && h(React.Fragment, null,
+            perguntas.map(p => h('div', { className: 'card', key: p.id },
+                h('label', null, 'Título', h('input', { disabled: !editar, value: p.titulo, onChange: e => alterar(p.id, 'titulo', e.target.value) })),
+                h('label', null, 'Descrição', h('textarea', { disabled: !editar, value: p.descricao, onChange: e => alterar(p.id, 'descricao', e.target.value) })),
+                h('label', null, 'Peso', h('input', { type: 'number', min: 1, max: 100, disabled: !editar, value: p.peso, onChange: e => alterar(p.id, 'peso', Number(e.target.value)) })),
+                h('label', null, h('input', { type: 'checkbox', checked: p.ativa, disabled: !editar, onChange: e => alterar(p.id, 'ativa', e.target.checked) }), ' Ativa'),
+                h('p', null, 'Notas 1, 3 e 5 · ' + p.tipo))),
+            editar && h('button', { className: 'btn btn-p', onClick: salvar }, 'Salvar cadastro')),
+        base && aba !== 'perguntas' && h(React.Fragment, null,
+            h('label', null, 'Motorista', h('input', { value: filtro, onChange: e => setFiltro(e.target.value) })),
+            aba === 'relatorios' && h('p', { className: 'muted' }, 'Acompanhamento mensal das avaliações.'),
+            base.avaliacoes.filter(l => l.motoristaNome.toLowerCase().includes(filtro.toLowerCase())).map(l =>
+                h('div', { className: 'card row', key: l.motoristaId },
+                    h('strong', null, l.motoristaNome), h('span', null, l.status),
+                    h('button', { className: 'btn btn-s', onClick: () => abrir(l) }, aba === 'relatorios' || !editar ? 'Consultar' : 'Abrir avaliação')))));
+}
+
+function RascunhoAuditoria({ linha, competencia, onClose, editar }) {
     const h = React.createElement;
     const [modelo, setModelo] = useState(null);
     const [respostas, setRespostas] = useState({});
@@ -5385,15 +5435,15 @@ function RascunhoAuditoria({ linha, competencia, onClose }) {
                 p.tipo !== 'MANUAL' ? h('p', null, 'Pontuação automática pendente de integração.') :
                     h(React.Fragment, null,
                         h('label', null, 'Nota', h('select', {
-                            disabled: salvando, value: respostas[p.id]?.nota ?? '',
+                            disabled: salvando || !editar, value: respostas[p.id]?.nota ?? '',
                             onChange: e => atualizar(p.id, 'nota', e.target.value ? Number(e.target.value) : null)
                         }, h('option', { value: '' }, 'Selecione'), modelo.notas.map(n => h('option', { key: n, value: n }, n)))),
                         h('label', null, 'Justificativa', h('textarea', {
-                            disabled: salvando, maxLength: 1500, value: respostas[p.id]?.justificativa || '',
+                            disabled: salvando || !editar, maxLength: 1500, value: respostas[p.id]?.justificativa || '',
                             onChange: e => atualizar(p.id, 'justificativa', e.target.value)
                         })),
                         h('label', null, 'Foto da evidência (JPEG ou PNG, até 500 KB)', h('input', {
-                            type: 'file', accept: 'image/jpeg,image/png', disabled: salvando,
+                            type: 'file', accept: 'image/jpeg,image/png', disabled: salvando || !editar,
                             onChange: e => selecionarFoto(p.id, e.target.files?.[0])
                         })),
                         respostas[p.id]?.fotoNova && h('img', { src: respostas[p.id].fotoNova, alt: 'Foto selecionada', style: { maxWidth: 160, maxHeight: 120 } }),
@@ -5401,13 +5451,13 @@ function RascunhoAuditoria({ linha, competencia, onClose }) {
                     )
             ))
         ),
-        modelo && h('button', { className: 'btn btn-p', disabled: salvando, onClick: salvar }, salvando ? 'Salvando…' : 'Salvar rascunho'));
+        modelo && editar && h('button', { className: 'btn btn-p', disabled: salvando || !editar, onClick: salvar }, salvando ? 'Salvando…' : 'Salvar rascunho'));
 }
 
 function AdmPremiacao({ st, setSt, toast, user }) {
     const podeEditarMetas = pode(user, 'metas.editar');
     const podeEditarDescontos = pode(user, 'descontos.editar');
-    const [sub, setSub] = useState(pode(user, 'premiacao.visualizar') ? 'painel' : pode(user, 'metas.visualizar') ? 'metas' : 'desc');
+    const [sub, setSub] = useState(pode(user, 'premiacao.visualizar') ? 'painel' : pode(user, 'metas.visualizar') ? 'metas' : pode(user, 'descontos.visualizar') ? 'desc' : 'auditoria');
     const [edit, setEdit] = useState(null);
     const [editTipo, setEditTipo] = useState(null);
     const [competencia, setCompetencia] = useState(MES_ATUAL.slice(3) + '-' + MES_ATUAL.slice(0, 2));
@@ -5558,7 +5608,8 @@ function AdmPremiacao({ st, setSt, toast, user }) {
     };
     const [rascunhoAuditoria, setRascunhoAuditoria] = useState(null);
     const prepararConferencia = linha => {
-        if (linha.categoria === 'Auditoria Interna') {
+        if (linha.categoria === 'Auditoria Interna' && pode(user, 'auditoria.visualizar')) {
+            setSub('auditoria');
             setRascunhoAuditoria(linha);
             return;
         }
@@ -5577,7 +5628,8 @@ function AdmPremiacao({ st, setSt, toast, user }) {
             React.createElement("div", { className: "subtabs" },
                 pode(user, 'premiacao.visualizar') && React.createElement("button", { className: 'subtab' + (sub === 'painel' ? ' on' : ''), onClick: () => setSub('painel') }, "Painel"),
                 pode(user, 'metas.visualizar') && React.createElement("button", { className: 'subtab' + (sub === 'metas' ? ' on' : ''), onClick: () => setSub('metas') }, "Metas"),
-                pode(user, 'descontos.visualizar') && React.createElement("button", { className: 'subtab' + (sub === 'desc' ? ' on' : ''), onClick: () => setSub('desc') }, "Descontos"))),
+                pode(user, 'descontos.visualizar') && React.createElement("button", { className: 'subtab' + (sub === 'desc' ? ' on' : ''), onClick: () => setSub('desc') }, "Descontos"),
+                pode(user, "auditoria.visualizar") && React.createElement("button", { className: "subtab" + (sub === "auditoria" ? " on" : ""), onClick: () => setSub("auditoria") }, "Auditoria Interna"))),
         sub === 'painel' && pode(user, 'premiacao.visualizar') && React.createElement(React.Fragment, null,
             React.createElement("div", { className: "form-grid", style: { marginBottom: 12 } },
                 React.createElement("div", null,
@@ -5765,7 +5817,8 @@ function AdmPremiacao({ st, setSt, toast, user }) {
                         }),
                         !acompanhamentoDescontos.length && React.createElement("tr", null,
                             React.createElement("td", { colSpan: "7", className: "muted", style: { textAlign: 'center', padding: 24 } }, "Nenhum registro encontrado para os filtros selecionados.")))))),
-        rascunhoAuditoria && React.createElement(RascunhoAuditoria, { linha: rascunhoAuditoria, competencia, onClose: () => setRascunhoAuditoria(null) }),
+        sub === 'auditoria' && pode(user, 'auditoria.visualizar') && React.createElement(PainelAuditoriaInterna, { competencia, setCompetencia, abrir: setRascunhoAuditoria, editar: pode(user, 'auditoria.editar') }),
+        rascunhoAuditoria && React.createElement(RascunhoAuditoria, { linha: rascunhoAuditoria, competencia, editar: pode(user, 'auditoria.editar'), onClose: () => setRascunhoAuditoria(null) }),
         edit &&
             React.createElement(Modal, { titulo: edit.itemId ? 'Editar meta' : 'Incluir meta', onClose: () => setEdit(null) },
                 React.createElement("div", { className: "form-grid" },
@@ -5827,7 +5880,7 @@ const AREAS_E_SUBTELAS = {
     PREMIACAO: [
         ['PREMIACAO_PAINEL', 'Painel da premiação'],
         ['PREMIACAO_METAS', 'Metas'],
-        ['PREMIACAO_DESCONTOS', 'Descontos']
+        ['PREMIACAO_DESCONTOS', 'Descontos'], ['PREMIACAO_AUDITORIA', 'Auditoria Interna']
     ],
     CHECKLIST: [
         ['CHECKLIST_APROVACAO', 'Aprovação'],
@@ -7007,7 +7060,7 @@ function AdmApp({ st, setSt, user, onSair, toast }) {
         (pode(user, 'sinistros.visualizar') || pode(user, 'sinistros.configuracoes')) && ['sinistros', 'Sinistros'],
         (pode(user, 'agendamentos.agenda') || pode(user, 'agendamentos.monitoramento') || pode(user, 'agendamentos.relatorio')) && ['agendamentos', 'Agendamentos'],
         (pode(user, 'checklist.aprovacao') || pode(user, 'checklist.perguntas') || pode(user, 'checklist.relatorio')) && ['check', 'Check list'],
-        (pode(user, 'premiacao.visualizar') || pode(user, 'metas.visualizar') || pode(user, 'descontos.visualizar')) && ['prem', 'Premiação'],
+        (pode(user, 'premiacao.visualizar') || pode(user, 'metas.visualizar') || pode(user, 'descontos.visualizar') || pode(user, 'auditoria.visualizar')) && ['prem', 'Premiação'],
         (pode(user, 'cadastro.usuarios') || pode(user, 'cadastro.tipos_veiculo') || pode(user, 'cadastro.veiculos') || pode(user, 'cadastro.vinculos') || pode(user, 'cadastro.perfis')) && ['cad', 'Cadastros']
     ].filter(Boolean);
     const [aba, setAba] = useState(abas[0]?.[0] || '');
@@ -7106,6 +7159,7 @@ function App() {
         'premiacao.visualizar',
         'metas.visualizar',
         'descontos.visualizar',
+        'auditoria.visualizar',
         'cadastro.usuarios',
         'cadastro.tipos_veiculo',
         'cadastro.veiculos',
