@@ -5540,6 +5540,8 @@ function RegrasDescontoAuditoria({ editar }) {
     const h = React.createElement;
     const rota = '/admin/premiacao/regras-auditoria';
     const [regras, setRegras] = useState([]);
+    const categorias = { AUDITORIA: 'Auditoria Interna', MULTAS: 'Multas', NOTIFICACOES: 'Notificação / Advertência' };
+    const [categoria, setCategoria] = useState('AUDITORIA');
     const [meta, setMeta] = useState('85');
     const [valor, setValor] = useState('');
     const [vigencia, setVigencia] = useState('');
@@ -5553,7 +5555,7 @@ function RegrasDescontoAuditoria({ editar }) {
         setSalvando(true);
         setMensagem('');
         try {
-            const r = await ApiService._req('POST', rota, { vigencia, meta: Number(meta), valorCentavos: Math.round(Number(valor) * 100) });
+            const r = await ApiService._req('POST', rota, { categoria, vigencia, meta: categoria === 'AUDITORIA' ? Number(meta) : null, valorCentavos: Math.round(Number(valor) * 100) });
             setRegras(atuais => [...atuais, r.regra].sort((a, b) => b.vigencia.localeCompare(a.vigencia)));
             setMensagem('Regra cadastrada.');
             setValor('');
@@ -5561,12 +5563,13 @@ function RegrasDescontoAuditoria({ editar }) {
         finally { setSalvando(false); }
     };
     return h('section', { className: 'card' },
-        h('h3', null, 'Regras de desconto · Auditoria Interna'),
-        h('p', null, 'Cadastre a conformidade mínima e o valor previsto para avaliações abaixo da meta. Cada regra vale a partir da competência informada.'),
-        regras.map(r => h('p', { key: r.vigencia }, r.vigencia + ' · Mínimo ' + r.meta + '% · Desconto ' + brl(r.valorCentavos / 100))),
+        h('h3', null, 'Regras de desconto'),
+        h('p', null, 'Defina o valor por ocorrência para multas e notificações, ou a meta e o desconto da auditoria.'),
+        regras.map(r => h('p', { key: (r.categoria || 'AUDITORIA') + r.vigencia }, categorias[r.categoria || 'AUDITORIA'] + ' · ' + r.vigencia + ' · ' + ((r.categoria || 'AUDITORIA') === 'AUDITORIA' ? 'Mínimo ' + r.meta + '% · ' : 'Por ocorrência · ') + brl(r.valorCentavos / 100))),
         editar && h('form', { className: 'form-grid', onSubmit: salvar },
-            h('label', null, 'Conformidade mínima (%)', h('input', { required: true, type: 'number', min: 0.01, max: 100, step: 0.01, value: meta, onChange: e => setMeta(e.target.value) })),
-            h('label', null, 'Valor do desconto (R$)', h('input', { required: true, type: 'number', min: 0.01, max: 10000000, step: 0.01, value: valor, onChange: e => setValor(e.target.value) })),
+            h('label', null, 'Categoria', h('select', { value: categoria, onChange: e => { setCategoria(e.target.value); setValor(e.target.value === 'AUDITORIA' ? '' : '50'); } }, Object.entries(categorias).map(([id, nome]) => h('option', { key: id, value: id }, nome)))),
+            categoria === 'AUDITORIA' && h('label', null, 'Conformidade mínima (%)', h('input', { required: true, type: 'number', min: 0.01, max: 100, step: 0.01, value: meta, onChange: e => setMeta(e.target.value) })),
+            h('label', null, categoria === 'AUDITORIA' ? 'Valor do desconto (R$)' : 'Valor por ocorrência (R$)', h('input', { required: true, type: 'number', min: 0.01, max: 10000000, step: 0.01, value: valor, onChange: e => setValor(e.target.value) })),
             h('label', null, 'Competência inicial', h('input', { required: true, type: 'month', value: vigencia, onChange: e => setVigencia(e.target.value) })),
             h('button', { className: 'btn btn-p', disabled: salvando }, salvando ? 'Salvando…' : 'Cadastrar regra')),
         mensagem && h('p', { role: 'status' }, mensagem));
@@ -5674,7 +5677,7 @@ function AdmPremiacao({ st, setSt, toast, user }) {
             }
             return;
         }
-        if (novoDesc.situacao === 'Com ocorrência' && !Number(novoDesc.valor) && !Number(novoDesc.percentual)) {
+        if (novoDesc.situacao === 'Com ocorrência' && novoDesc.categoria === 'Auditoria Interna' && !Number(novoDesc.valor) && !Number(novoDesc.percentual)) {
             toast('Informe o valor ou percentual do desconto.');
             return;
         }
@@ -5878,12 +5881,13 @@ function AdmPremiacao({ st, setSt, toast, user }) {
                         React.createElement("label", { htmlFor: "adm-premiacao-quantidade" }, "Quantidade"),
                         React.createElement("input", { id: "adm-premiacao-quantidade", name: "adm-premiacao-quantidade", autoComplete: "off", type: "number", min: "0", value: novoDesc.quantidade, onChange: e => setNovoDesc({ ...novoDesc, quantidade: e.target.value }) })),
                     novoDesc.situacao === 'Com ocorrência' && React.createElement(React.Fragment, null,
+                        novoDesc.categoria === 'Auditoria Interna' ? React.createElement(React.Fragment, null,
                         React.createElement("div", null,
                             React.createElement("label", { htmlFor: "adm-premiacao-valor-do-desconto-r" }, "Valor do desconto (R$)"),
                             React.createElement("input", { id: "adm-premiacao-valor-do-desconto-r", name: "adm-premiacao-valor-do-desconto-r", autoComplete: "off", type: "number", min: "0", value: novoDesc.valor, onChange: e => setNovoDesc({ ...novoDesc, valor: e.target.value }) })),
                         React.createElement("div", null,
                             React.createElement("label", { htmlFor: "adm-premiacao-percentual" }, "Percentual (%)"),
-                            React.createElement("input", { id: "adm-premiacao-percentual", name: "adm-premiacao-percentual", autoComplete: "off", type: "number", min: "0", max: "100", value: novoDesc.percentual, onChange: e => setNovoDesc({ ...novoDesc, percentual: e.target.value }) })),
+                            React.createElement("input", { id: "adm-premiacao-percentual", name: "adm-premiacao-percentual", autoComplete: "off", type: "number", min: "0", max: "100", value: novoDesc.percentual, onChange: e => setNovoDesc({ ...novoDesc, percentual: e.target.value }) }))) : React.createElement('p', { className: 'muted' }, 'O valor será calculado ao salvar pela quantidade e pela regra vigente em Metas.'),
                         React.createElement("div", null,
                             React.createElement("label", { htmlFor: "adm-premiacao-data-da-ocorrencia" }, "Data da ocorr\u00EAncia"),
                             React.createElement("input", { id: "adm-premiacao-data-da-ocorrencia", name: "adm-premiacao-data-da-ocorrencia", autoComplete: "off", type: "date", value: novoDesc.dataOcorrencia, onChange: e => setNovoDesc({ ...novoDesc, dataOcorrencia: e.target.value }) })),
