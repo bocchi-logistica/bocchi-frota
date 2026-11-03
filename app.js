@@ -5483,6 +5483,21 @@ function RascunhoAuditoria({ linha, competencia, onClose, editar }) {
         } catch (e) { setMensagem(e.message); }
         finally { setSalvando(false); }
     };
+    const reabrir = async () => {
+        setSalvando(true);
+        setMensagem('');
+        try {
+            await ApiService._req('POST', rota, { reabrir: true });
+            setFechada(null);
+            setAutomaticas({});
+            const r = await ApiService._req('GET', rota);
+            setModelo(r.modelo);
+            setRespostas(r.rascunho?.respostas || {});
+            setAutomaticas(r.automaticas || {});
+            setMensagem('Auditoria reaberta. Faça as correções e feche novamente.');
+        } catch (e) { setMensagem(e.message); }
+        finally { setSalvando(false); }
+    };
     const atualizar = (id, campo, valor) => setRespostas(atual => ({
         ...atual, [id]: { nota: null, ...atual[id], [campo]: valor }
     }));
@@ -5535,15 +5550,16 @@ function RascunhoAuditoria({ linha, competencia, onClose, editar }) {
                             disabled: salvando || !editar || !!fechada, maxLength: 1500, value: respostas[p.id]?.justificativa || '',
                             onChange: e => atualizar(p.id, 'justificativa', e.target.value)
                         })),
-                        h('label', null, 'Foto da evidência (JPEG ou PNG, até 500 KB)', h('input', {
+                        respostas[p.id]?.nota === 1 && h('label', null, 'Foto da evidência (JPEG ou PNG, até 500 KB)', h('input', {
                             type: 'file', accept: 'image/jpeg,image/png', disabled: salvando || !editar || !!fechada,
                             onChange: e => selecionarFoto(p.id, e.target.files?.[0])
                         })),
-                        respostas[p.id]?.fotoNova && h('img', { src: respostas[p.id].fotoNova, alt: 'Foto selecionada', style: { maxWidth: 160, maxHeight: 120 } }),
-                        respostas[p.id]?.foto && h('button', { type: 'button', className: 'btn btn-s', onClick: () => verFoto(p.id) }, 'Ver foto salva')
+                        respostas[p.id]?.nota === 1 && respostas[p.id]?.fotoNova && h('img', { src: respostas[p.id].fotoNova, alt: 'Foto selecionada', style: { maxWidth: 160, maxHeight: 120 } }),
+                        respostas[p.id]?.nota === 1 && respostas[p.id]?.foto && h('button', { type: 'button', className: 'btn btn-s', onClick: () => verFoto(p.id) }, 'Ver foto salva')
                     )
             ))
         ),
+        fechada && editar && h('button', { className: 'btn btn-s', disabled: salvando, onClick: reabrir }, 'Reabrir auditoria'),
         fechada && h('p', null, 'Auditoria fechada · Desconto ' + brl(fechada.valorCentavos / 100)),
         modelo && h('p', { role: 'status' }, resumoConformidadeAuditoria(modelo, Object.fromEntries(modelo.perguntas.map(p => [p.id, automaticas[p.tipo] || respostas[p.id]])))),
         modelo && editar && !fechada && h('button', { className: 'btn btn-p', disabled: salvando || !editar || !!fechada, onClick: () => salvar() }, salvando ? 'Salvando…' : 'Salvar rascunho'),
