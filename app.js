@@ -951,6 +951,15 @@ function historicoSinistroApresentacao(h) {
     }
     const obs = String(h?.observacao || '').trim();
     const acao = String(h?.acao || '').trim();
+    if (acao === 'ANDAMENTO') {
+        const status = h.statusSinistro || h.status || '';
+        const detalhes = [
+            status && ('Situação registrada: ' + (SINISTRO_STATUS_ROTULOS[normalizarPerfil(status)] || status)),
+            h.gravidade && ('Gravidade: ' + h.gravidade),
+            obs
+        ].filter(Boolean);
+        return { tipoEvento: 'STATUS', acao: 'Atualização do sinistro', observacao: detalhes.join(' · ') || 'Detalhes indisponíveis neste registro.', statusEvento: '', exibirStatusSinistro: false };
+    }
     const tirar = prefixo => obs.replace(new RegExp('^' + prefixo + '\\s*:\\s*', 'i'), '').trim();
     if (/^Documento reenviado\s*:/i.test(obs))
         return { tipoEvento: 'DOCUMENTO_REENVIADO', acao: 'Documento reenviado', observacao: tirar('Documento reenviado'), statusEvento: 'Enviado', exibirStatusSinistro: false };
