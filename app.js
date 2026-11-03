@@ -4826,7 +4826,7 @@ function AdmContestacoes({ st, setSt, toast, foco }) {
         }
         setSalvando(true);
         try {
-            const r = await ApiService.admAnalisarContestacao(respondendo.id, decisao, resposta.trim());
+            const r = await ApiService.admAnalisarContestacao(respondendo.id ?? respondendo.itemId, decisao, resposta.trim());
             setSt(s => ({ ...s, contestacoes: s.contestacoes.map(c => c.id === respondendo.id ? r.contestacao : c) }));
             setRespondendo(null);
             setResposta('');
