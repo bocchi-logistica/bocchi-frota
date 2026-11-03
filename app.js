@@ -1,18 +1,59 @@
-function useAtualizacaoPortal(atualizar) {
+function useAtualizacaoPortal(modulos, atualizar) {
     const callback = React.useRef(atualizar);
     callback.current = atualizar;
     useEffect(() => {
         if (CONFIG.MODO_TESTE_LOCAL) return;
         let ocupado = false;
+        let pendente = false;
+        let ativo = true;
         const executar = async () => {
-            if (document.hidden || ocupado || !ApiService.token) return;
+            if (!ativo || !pendente || document.hidden || ocupado || !ApiService.token) return;
+            pendente = false;
             ocupado = true;
-            try { await callback.current(); } catch {} finally { ocupado = false; }
+            try { await callback.current(); } catch {} finally {
+                ocupado = false;
+                if (pendente) executar();
+            }
         };
-        const timer = setInterval(executar, 15000);
+        const avisar = event => {
+            if (event.detail && !event.detail.some(modulo => modulos.includes(modulo))) return;
+            pendente = true;
+            executar();
+        };
+        window.addEventListener('bocchi:atualizacao', avisar);
         document.addEventListener('visibilitychange', executar);
-        return () => { clearInterval(timer); document.removeEventListener('visibilitychange', executar); };
+        return () => {
+            ativo = false;
+            window.removeEventListener('bocchi:atualizacao', avisar);
+            document.removeEventListener('visibilitychange', executar);
+        };
     }, []);
+}
+
+function useConexaoPortal(usuario) {
+    useEffect(() => {
+        if (!usuario || !ApiService.token || CONFIG.MODO_TESTE_LOCAL) return;
+        const url = new URL(CONFIG.API_URL + '/atualizacoes', location.href);
+        url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+        let socket, timer, encerrado = false, atraso = 1000;
+        const avisar = modulos => window.dispatchEvent(new CustomEvent('bocchi:atualizacao', { detail: modulos }));
+        const conectar = () => {
+            if (encerrado || !ApiService.token) return;
+            socket = new WebSocket(url.href, ['bocchi.atualizacoes', 'sessao.' + ApiService.token]);
+            socket.onopen = () => { if (!encerrado) { atraso = 1000; avisar(null); } };
+            socket.onmessage = event => {
+                if (encerrado) return;
+                try { const modulos = JSON.parse(event.data); if (Array.isArray(modulos)) avisar(modulos); } catch {}
+            };
+            socket.onclose = () => {
+                if (encerrado) return;
+                timer = setTimeout(conectar, atraso);
+                atraso = Math.min(atraso * 2, 60000);
+            };
+        };
+        conectar();
+        return () => { encerrado = true; clearTimeout(timer); socket?.close(); };
+    }, [usuario]);
 }
 
 const { useState, useMemo, useRef, useEffect } = React;
@@ -32,7 +73,7 @@ const CONFIG = {
     TIMEOUT_MS: 90000,
     RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
     MAX_TENTATIVAS: 4,
-    VERSAO: '2.8.37-homolog'
+    VERSAO: '2.8.38-homolog'
 };
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
 document.title = `Logística Bocchi — Portal do Motorista e ADM Logística (${CONFIG.VERSAO})`;
@@ -1589,7 +1630,7 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
         }
     };
     useEffect(() => { carregarHistorico(); }, []);
-    useAtualizacaoPortal(() => carregarHistorico(true));
+    useAtualizacaoPortal(['checklists'], () => carregarHistorico(true));
     useEffect(() => {
         let ativo = true;
         const carregar = async () => {
@@ -2249,7 +2290,7 @@ function TelaSinistro({ user, toast }) {
         }
     };
     useEffect(() => { carregar(); }, []);
-    useAtualizacaoPortal(async () => { const r = await ApiService.obterMeusSinistros(); setHistorico(r.sinistros || []); });
+    useAtualizacaoPortal(['sinistros'], async () => { const r = await ApiService.obterMeusSinistros(); setHistorico(r.sinistros || []); });
     const veiculoSelecionado = veiculos.find(v => normalizar(v.placa) === normalizar(form.placa)) || null;
     const ehFrotaPesada = Boolean(veiculoSelecionado && normalizar(veiculoSelecionado.tipoFrota).includes('pesada'));
     const exigeAgendamento = Boolean(veiculoSelecionado && !ehFrotaPesada && veiculoSelecionado.usoCompartilhado === true);
@@ -2949,22 +2990,10 @@ function TelaAgendamento({ user, toast, onAbrirChecklist }) {
         if (leitura === leituraAgenda.current) setCarregando(false);
     } };
     useEffect(() => {
-        let sincronizando = false;
-        const atualizar = async () => {
-            if (document.hidden || sincronizando) return;
-            sincronizando = true;
-            try { await carregar(true); }
-            finally { sincronizando = false; }
-        };
         carregar();
-        const intervalo = setInterval(atualizar, 10000);
-        document.addEventListener('visibilitychange', atualizar);
-        return () => {
-            clearInterval(intervalo);
-            document.removeEventListener('visibilitychange', atualizar);
-            leituraAgenda.current++;
-        };
+        return () => { leituraAgenda.current++; };
     }, []);
+    useAtualizacaoPortal(['agendamentos'], () => carregar(true));
     const norm = v => String(v || '').trim().toLocaleLowerCase('pt-BR');
     // Agenda compartilhada visível; as ações continuam restritas ao responsável.
     const meus = base.agendamentos.filter(a => a.meuAgendamento === true);
@@ -3124,22 +3153,10 @@ function AdmAgendamentos({ user, toast }) {
         if (leitura === leituraAgenda.current) setCarregando(false);
     } };
     useEffect(() => {
-        let sincronizando = false;
-        const atualizar = async () => {
-            if (document.hidden || sincronizando) return;
-            sincronizando = true;
-            try { await carregar(true); }
-            finally { sincronizando = false; }
-        };
         carregar();
-        const intervalo = setInterval(atualizar, 10000);
-        document.addEventListener('visibilitychange', atualizar);
-        return () => {
-            clearInterval(intervalo);
-            document.removeEventListener('visibilitychange', atualizar);
-            leituraAgenda.current++;
-        };
+        return () => { leituraAgenda.current++; };
     }, []);
+    useAtualizacaoPortal(['agendamentos'], () => carregar(true));
     const placasRel = [...new Set(base.agendamentos.map(a => a.placa).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
     const filtrados = base.agendamentos.filter(a => {
         if (fStatus !== 'TODOS' && a.status !== fStatus)
@@ -3452,6 +3469,32 @@ function MotoristaApp({ st, setSt, user, onSair, toast }) {
         });
         return () => { ativo = false; };
     }, [user.id]);
+    useAtualizacaoPortal(['cargas','premiacao','contestacoes'], () => {
+        return Promise.allSettled([
+            user.perms.cargas ? ApiService.obterCargas() : Promise.resolve({cargas:[]}),
+            user.perms.premiacao ? ApiService.obterPremiacao() : Promise.resolve({metas:[],descontos:[],apuracoes:[]}),
+            user.perms.cargas ? ApiService.obterMinhasContestacoes() : Promise.resolve({contestacoes:[]})
+        ]).then(([cargasResult, premiacaoResult, contestacoesResult]) => {
+            setSt(s => {
+                const proximo = { ...s };
+                if (cargasResult.status === 'fulfilled') {
+                    const r = cargasResult.value;
+                    proximo.cargas = Array.isArray(r.cargas) ? r.cargas : [];
+                }
+                if (premiacaoResult.status === 'fulfilled') {
+                    const p = premiacaoResult.value;
+                    proximo.metas = Array.isArray(p.metas) ? p.metas : s.metas;
+                    proximo.descontos = Array.isArray(p.descontos) ? p.descontos : s.descontos;
+                    proximo.apuracoes = Array.isArray(p.apuracoes) ? p.apuracoes : [];
+                }
+                if (contestacoesResult.status === 'fulfilled') {
+                    const ct = contestacoesResult.value;
+                    proximo.contestacoes = Array.isArray(ct.contestacoes) ? ct.contestacoes : [];
+                }
+                return proximo;
+            });
+        });
+    });
     const abas = [
         user.perms.cargas && { id: 'cargas', ic: '🚛', nome: 'Cargas' },
         user.perms.premiacao && { id: 'prem', ic: '🏆', nome: 'Premiação' },
@@ -4760,7 +4803,7 @@ function AdmContestacoes({ st, setSt, toast, foco }) {
         }
     };
     useEffect(() => { carregar(); }, []);
-    useAtualizacaoPortal(async () => { const r = await ApiService.admListarContestacoes(); setSt(s => ({ ...s, contestacoes: r.contestacoes || [] })); });
+    useAtualizacaoPortal(['contestacoes','cargas'], async () => { const r = await ApiService.admListarContestacoes(); setSt(s => ({ ...s, contestacoes: r.contestacoes || [] })); });
     const responder = async () => {
         if (!resposta.trim()) {
             toast('Informe a justificativa da decisão.');
@@ -5789,7 +5832,7 @@ function AdmCadastros({ st, setSt, toast, user }) {
         }
     };
     useEffect(() => { carregar(); }, []);
-    useAtualizacaoPortal(async () => {
+    useAtualizacaoPortal(['cadastros'], async () => {
         const r = await ApiService.admCadastros();
         setCad({ usuarios: r.usuarios || [], tiposVeiculo: r.tiposVeiculo || [], veiculos: r.veiculos || [], vinculos: r.vinculos || [], perfis: r.perfis || [] });
     });
@@ -6487,7 +6530,7 @@ function AdmSinistros({ toast, user, foco }) {
     finally {
         setCarregando(false);
     } };
-    useAtualizacaoPortal(async () => {
+    useAtualizacaoPortal(['sinistros'], async () => {
         if (!podeGestao || sub !== 'gestao') return;
         const r = await ApiService.admListarSinistros();
         setLista(r.sinistros || []);
@@ -6943,6 +6986,7 @@ function restaurarSessaoPortal() {
 function App() {
     const [st, setSt] = useState(estadoInicial);
     const [user, setUser] = useState(restaurarSessaoPortal);
+    useConexaoPortal(user);
     useEffect(() => {
         if (!user || !_expiraSessao) return;
         const expirar = () => { ApiService.sair(); setUser(null); };
