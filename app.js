@@ -4828,13 +4828,7 @@ function AdmContestacoes({ st, setSt, toast, foco }) {
         try {
             const id = respondendo.id ?? respondendo.itemId;
             const justificativa = resposta.trim();
-            const r = await ApiService.admAnalisarContestacao(id, decisao, justificativa);
-            setSt(s => ({
-                ...s,
-                contestacoes: s.contestacoes.map(c => String(c.id ?? c.itemId) === String(id)
-                    ? { ...c, status: decisao, resposta: justificativa, ...r.contestacao }
-                    : c)
-            }));
+            await ApiService.admAnalisarContestacao(id, decisao, justificativa);
             setRespondendo(null);
             setResposta('');
             toast('Contestação respondida.');
