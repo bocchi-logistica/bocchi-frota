@@ -485,7 +485,11 @@ const ApiService = {
         return this._req('PATCH', '/admin/contestacoes/' + encodeURIComponent(id) + '/status', { status, justificativaAnalise });
     },
     criarSinistro(dados) { return this._req('POST', '/sinistros', dados); },
-    obterMeusSinistros() { return this._req('GET', '/sinistros/me'); },
+    async obterMeusSinistros() {
+        const resposta = await this._req('GET', '/sinistros/me');
+        return { ...resposta, sinistros: (resposta.sinistros || []).map(s =>
+            /^[1-9]\d*$/.test(String(s.id)) ? { ...s, numeroSinistro: 'SIN-' + String(s.id).padStart(4, '0') } : s) };
+    },
     obterSinistro(id) { return this._req('GET', '/sinistros/' + encodeURIComponent(id)); },
     async enviarArquivoDocumentoSinistro(id, documentoId, arquivo) {
         const headers = { Authorization: 'Bearer ' + (_token || ''), 'X-File-Name': encodeURIComponent(arquivo.nome || 'arquivo'), 'X-File-Type': arquivo.tipo || 'application/octet-stream', 'X-File-Size': String(arquivo.tamanho || arquivo.blob?.size || 0), 'X-File-Key': encodeURIComponent(arquivo.chave || '') };
