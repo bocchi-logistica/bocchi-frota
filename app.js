@@ -4789,8 +4789,8 @@ function AdmContestacoes({ st, setSt, toast, foco }) {
     }, [foco?.chave]);
     const motoristasContestacoes = [...new Set((st.contestacoes || []).map(c => c.motorista).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
     const lista = (st.contestacoes || [])
-        .filter(c => filtro === 'todas' || c.status === filtro)
-        .filter(c => tipoFiltro === 'todos' || c.tipoContestacao === tipoFiltro)
+        .filter(c => filtro === 'todas' || String(c.status || '').trim().toLowerCase() === filtro)
+        .filter(c => tipoFiltro === 'todos' || String(c.tipoContestacao || 'ERRO_CARGA').trim().toUpperCase() === tipoFiltro)
         .filter(c => !motoristaFiltro || c.motorista === motoristaFiltro)
         .filter(c => !competenciaFiltro || String(c.dataCarga || c.data || '').slice(0, 7) === competenciaFiltro)
         .sort((a, b) => String(b.data || '').localeCompare(String(a.data || '')));
