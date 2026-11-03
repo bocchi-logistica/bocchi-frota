@@ -5558,8 +5558,8 @@ function RegrasDescontoAuditoria({ editar }) {
         setSalvando(true);
         setMensagem('');
         try {
-            const r = await ApiService._req(edicao ? 'PATCH' : 'POST', rota, { categoria, vigencia, vigenciaFim, ativo, meta: categoria === 'AUDITORIA' ? Number(meta) : null, valorCentavos: Math.round(Number(valor) * 100) });
-            setRegras(atuais => [...atuais.filter(x => (x.categoria || 'AUDITORIA') !== categoria || x.vigencia !== vigencia), r.regra].sort((a, b) => b.vigencia.localeCompare(a.vigencia)));
+            const r = await ApiService._req(edicao ? 'PATCH' : 'POST', rota, { categoria, vigencia, vigenciaOriginal: edicao || undefined, vigenciaFim, ativo, meta: categoria === 'AUDITORIA' ? Number(meta) : null, valorCentavos: Math.round(Number(valor) * 100) });
+            setRegras(atuais => [...atuais.filter(x => (x.categoria || 'AUDITORIA') !== categoria || x.vigencia !== (edicao || vigencia)), r.regra].sort((a, b) => b.vigencia.localeCompare(a.vigencia)));
             setMensagem(edicao ? 'Regra atualizada.' : 'Regra cadastrada.');
             setEdicao(false);
             setAtivo(true);
@@ -5581,13 +5581,13 @@ function RegrasDescontoAuditoria({ editar }) {
                 h('td', null, r.meta == null ? '—' : r.meta + '%'),
                 h('td', null, brl(r.valorCentavos / 100) + (r.meta == null ? ' por ocorrência' : ' abaixo da meta')),
                 h('td', null, h('span', { className: 'tag ' + (r.ativo === false ? 'tag-neutro' : 'tag-ok') }, r.ativo === false ? 'Inativa' : 'Ativa')),
-                h('td', null, editar && h('button', { className: 'btn btn-s btn-sm', onClick: () => { setEdicao(true); setCategoria(r.categoria || 'AUDITORIA'); setVigencia(r.vigencia); setVigenciaFim(r.vigenciaFim || ''); setMeta(String(r.meta ?? 85)); setValor(String(r.valorCentavos / 100)); setAtivo(r.ativo !== false); } }, 'Editar')))))))
+                h('td', null, editar && h('button', { className: 'btn btn-s btn-sm', onClick: () => { setEdicao(r.vigencia); setCategoria(r.categoria || 'AUDITORIA'); setVigencia(r.vigencia); setVigenciaFim(r.vigenciaFim || ''); setMeta(String(r.meta ?? 85)); setValor(String(r.valorCentavos / 100)); setAtivo(r.ativo !== false); } }, 'Editar')))))))
             : h('p', { className: 'muted' }, 'Nenhuma regra cadastrada.'),
         editar && h('form', { className: 'form-grid', onSubmit: salvar },
             h('label', null, 'Categoria', h('select', { value: categoria, disabled: edicao, onChange: e => { setCategoria(e.target.value); setValor(e.target.value === 'AUDITORIA' ? '' : '50'); } }, Object.entries(categorias).map(([id, nome]) => h('option', { key: id, value: id }, nome)))),
             categoria === 'AUDITORIA' && h('label', null, 'Conformidade mínima (%)', h('input', { required: true, type: 'number', min: 0.01, max: 100, step: 0.01, value: meta, onChange: e => setMeta(e.target.value) })),
             h('label', null, categoria === 'AUDITORIA' ? 'Valor do desconto (R$)' : 'Valor por ocorrência (R$)', h('input', { required: true, type: 'number', min: 0.01, max: 10000000, step: 0.01, value: valor, onChange: e => setValor(e.target.value) })),
-            h('label', null, 'Vigência início', h('input', { required: true, type: 'month', disabled: edicao, value: vigencia, onChange: e => setVigencia(e.target.value) })),
+            h('label', null, 'Vigência início', h('input', { required: true, type: 'month', value: vigencia, onChange: e => setVigencia(e.target.value) })),
             h('label', null, 'Vigência fim', h('input', { required: true, type: 'month', min: vigencia || undefined, value: vigenciaFim, onChange: e => setVigenciaFim(e.target.value) })),
             h('label', null, 'Status', h('select', { value: ativo ? 's' : 'n', onChange: e => setAtivo(e.target.value === 's') }, h('option', { value: 's' }, 'Ativa'), h('option', { value: 'n' }, 'Inativa'))),
             h('button', { className: 'btn btn-p', disabled: salvando }, salvando ? 'Salvando…' : edicao ? 'Salvar alterações' : 'Cadastrar regra'),
