@@ -5321,6 +5321,23 @@ function AdmChecklist({ st, setSt, toast, user, foco }) {
             React.createElement("button", { className: "btn btn-p", style: { width: '100%', marginTop: 12 }, onClick: liberarVeiculo }, "Confirmar libera\u00E7\u00E3o"))));
 }
 /* ================= ADM: PREMIAÇÃO (metas + descontos) ================= */
+function resumoConformidadeAuditoria(modelo, respostas) {
+    let pontos = 0, maximo = 0, pendentes = 0;
+    for (const pergunta of modelo.perguntas) {
+        const peso = Number(pergunta.peso);
+        const nota = respostas[pergunta.id]?.nota;
+        maximo += Math.max(...modelo.notas) * peso;
+        if (modelo.notas.includes(nota)) pontos += nota * peso;
+        else pendentes++;
+    }
+    const meta = Number(modelo.limitePercentual ?? 85);
+    const percentual = !pendentes && maximo > 0 ? 100 * pontos / maximo : null;
+    const texto = percentual === null
+        ? pontos + ' de ' + maximo + ' pontos registrados · ' + pendentes + ' item(ns) sem nota · Meta ' + meta + '%'
+        : pontos + ' de ' + maximo + ' pontos · Conformidade ' + percentual.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + '% · Meta ' + meta + '% · ' + (pontos * 100 >= maximo * meta ? 'Meta atingida' : 'Abaixo da meta');
+    return texto;
+}
+
 async function imprimirAuditoria(linha, competencia, janela) {
     const rota = '/admin/premiacao/auditoria?' + new URLSearchParams({ motoristaId: linha.motoristaId, competencia });
     const doc = janela.document;
@@ -5342,6 +5359,7 @@ async function imprimirAuditoria(linha, competencia, janela) {
     adicionar('p', modelo.formulario + ' · Revisão ' + modelo.revisao);
     adicionar('p', linha.motoristaNome + ' · Competência ' + competencia);
     adicionar('strong', 'Rascunho · Avaliação não publicada');
+    adicionar('p', resumoConformidadeAuditoria(modelo, rascunho.respostas));
     const urls = [];
     janela.addEventListener('pagehide', () => urls.forEach(url => URL.revokeObjectURL(url)), { once: true });
     for (const pergunta of modelo.perguntas) {
@@ -5514,6 +5532,7 @@ function RascunhoAuditoria({ linha, competencia, onClose, editar }) {
             ))
         ),
         modelo && h('p', { className: 'muted' }, 'A publicação da avaliação e o lançamento do desconto ainda não estão disponíveis.'),
+        modelo && h('p', { role: 'status' }, resumoConformidadeAuditoria(modelo, respostas)),
         modelo && editar && h('button', { className: 'btn btn-p', disabled: salvando || !editar, onClick: salvar }, salvando ? 'Salvando…' : 'Salvar rascunho'));
 }
 
