@@ -5325,6 +5325,8 @@ function RascunhoAuditoria({ linha, competencia, onClose }) {
     const [respostas, setRespostas] = useState({});
     const [mensagem, setMensagem] = useState('');
     const [salvando, setSalvando] = useState(false);
+    const [fotoAberta, setFotoAberta] = useState(null);
+    useEffect(() => () => { if (fotoAberta) URL.revokeObjectURL(fotoAberta); }, [fotoAberta]);
     const rota = '/admin/premiacao/auditoria?' + new URLSearchParams({ motoristaId: linha.motoristaId, competencia });
     useEffect(() => {
         let ativo = true;
@@ -5339,7 +5341,8 @@ function RascunhoAuditoria({ linha, competencia, onClose }) {
         setSalvando(true);
         setMensagem('');
         try {
-            await ApiService._req('POST', rota, { respostas });
+            const r = await ApiService._req('POST', rota, { respostas });
+            setRespostas(r.rascunho.respostas);
             setMensagem('Rascunho salvo.');
         } catch (e) { setMensagem(e.message); }
         finally { setSalvando(false); }
@@ -5347,9 +5350,32 @@ function RascunhoAuditoria({ linha, competencia, onClose }) {
     const atualizar = (id, campo, valor) => setRespostas(atual => ({
         ...atual, [id]: { nota: null, ...atual[id], [campo]: valor }
     }));
+    const selecionarFoto = (id, arquivo) => {
+        if (!arquivo) return;
+        if (!['image/jpeg', 'image/png'].includes(arquivo.type) || arquivo.size > 512000) {
+            setMensagem('Selecione uma foto JPEG ou PNG de até 500 KB.');
+            return;
+        }
+        const leitor = new FileReader();
+        leitor.onload = () => atualizar(id, 'fotoNova', leitor.result);
+        leitor.onerror = () => setMensagem('Não foi possível ler a foto.');
+        leitor.readAsDataURL(arquivo);
+    };
+    const verFoto = async id => {
+        try {
+            const r = await fetch(CONFIG.API_URL + rota + '&foto=' + encodeURIComponent(id), {
+                headers: { Authorization: 'Bearer ' + ApiService.token }
+            });
+            if (!r.ok) throw new Error('Não foi possível carregar a foto.');
+            setFotoAberta(URL.createObjectURL(await r.blob()));
+        } catch (e) { setMensagem(e.message); }
+    };
     return h(Modal, { titulo: 'Auditoria interna mensal', onClose },
         h('p', null, linha.motoristaNome + ' · ' + competencia),
         mensagem && h('p', { role: 'status' }, mensagem),
+        fotoAberta && h('div', null,
+            h('img', { src: fotoAberta, alt: 'Evidência da auditoria', style: { maxWidth: '100%', maxHeight: '35vh' } }),
+            h('button', { type: 'button', className: 'btn btn-s', onClick: () => setFotoAberta(null) }, 'Fechar foto')),
         !modelo && !mensagem && h('p', null, 'Carregando formulário…'),
         modelo && h('div', { style: { maxHeight: '55vh', overflowY: 'auto' } },
             h('p', { className: 'muted' }, modelo.formulario + ' · Revisão ' + modelo.revisao),
@@ -5365,7 +5391,13 @@ function RascunhoAuditoria({ linha, competencia, onClose }) {
                         h('label', null, 'Justificativa', h('textarea', {
                             disabled: salvando, maxLength: 1500, value: respostas[p.id]?.justificativa || '',
                             onChange: e => atualizar(p.id, 'justificativa', e.target.value)
-                        }))
+                        })),
+                        h('label', null, 'Foto da evidência (JPEG ou PNG, até 500 KB)', h('input', {
+                            type: 'file', accept: 'image/jpeg,image/png', disabled: salvando,
+                            onChange: e => selecionarFoto(p.id, e.target.files?.[0])
+                        })),
+                        respostas[p.id]?.fotoNova && h('img', { src: respostas[p.id].fotoNova, alt: 'Foto selecionada', style: { maxWidth: 160, maxHeight: 120 } }),
+                        respostas[p.id]?.foto && h('button', { type: 'button', className: 'btn btn-s', onClick: () => verFoto(p.id) }, 'Ver foto salva')
                     )
             ))
         ),
