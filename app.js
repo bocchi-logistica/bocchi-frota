@@ -1,3 +1,16 @@
+function useModuloPortal(area, user, modulos) {
+    const chave = 'bocchi.portal.modulo.' + area + '.' + (user.id || user.login);
+    const [selecionado, setSelecionado] = useState(() => {
+        try { return sessionStorage.getItem(chave); } catch { return null; }
+    });
+    const modulo = modulos.includes(selecionado) ? selecionado : (modulos[0] || '');
+    const selecionar = id => {
+        if (!modulos.includes(id)) return;
+        setSelecionado(id);
+        try { sessionStorage.setItem(chave, id); } catch {}
+    };
+    return [modulo, selecionar];
+}
 function useAtualizacaoPortal(modulos, atualizar) {
     const callback = React.useRef(atualizar);
     callback.current = atualizar;
@@ -3514,7 +3527,7 @@ function MotoristaApp({ st, setSt, user, onSair, toast }) {
         user.perms.sinistros && { id: 'sinistro', ic: '🚨', nome: 'Sinistro' },
         user.perms.agendamentos && { id: 'agendamento', ic: '📅', nome: 'Agendamento' },
     ].filter(Boolean);
-    const [aba, setAba] = useState(abas.length ? abas[0].id : '');
+    const [aba, setAba] = useModuloPortal('motorista', user, abas.map(a => a.id));
     const [inicioChecklistAgendamento, setInicioChecklistAgendamento] = useState(null);
     const abrirChecklistDoAgendamento = dados => { setInicioChecklistAgendamento(dados); setAba('check'); };
     const placa = Object.values(st.frota).find(f => f.motorista === user.nome && f.frota !== 'leve');
@@ -7248,7 +7261,7 @@ function AdmApp({ st, setSt, user, onSair, toast }) {
         (pode(user, 'premiacao.visualizar') || pode(user, 'metas.visualizar') || pode(user, 'descontos.visualizar') || pode(user, 'auditoria.visualizar')) && ['prem', 'Premiação'],
         (pode(user, 'cadastro.usuarios') || pode(user, 'cadastro.tipos_veiculo') || pode(user, 'cadastro.veiculos') || pode(user, 'cadastro.vinculos') || pode(user, 'cadastro.perfis')) && ['cad', 'Cadastros']
     ].filter(Boolean);
-    const [aba, setAba] = useState(abas[0]?.[0] || '');
+    const [aba, setAba] = useModuloPortal('admin', user, abas.map(([id]) => id));
     const [destino, setDestino] = useState(null);
     const [menuAberto,setMenuAberto]=useState(false);
     const navegarPara = (id, parametros = {}) => {
