@@ -5358,7 +5358,7 @@ async function imprimirAuditoria(linha, competencia, janela) {
     adicionar('h1', 'Auditoria Interna da Logística');
     adicionar('p', modelo.formulario + ' · Revisão ' + modelo.revisao);
     adicionar('p', linha.motoristaNome + ' · Competência ' + competencia);
-    adicionar('strong', 'Rascunho · Avaliação não publicada');
+    adicionar('strong', rascunho.fechadaEm ? 'Auditoria fechada · Desconto ' + brl(rascunho.resultado.valorCentavos / 100) : 'Rascunho · Avaliação não publicada');
     adicionar('p', resumoConformidadeAuditoria(modelo, Object.fromEntries(modelo.perguntas.map(p => [p.id, automaticas?.[p.tipo] || rascunho.respostas[p.id]]))));
     const urls = [];
     janela.addEventListener('pagehide', () => urls.forEach(url => URL.revokeObjectURL(url)), { once: true });
@@ -5452,6 +5452,7 @@ function PainelAuditoriaInterna({ competencia, setCompetencia, abrir, editar }) 
 
 function RascunhoAuditoria({ linha, competencia, onClose, editar }) {
     const h = React.createElement;
+    const [fechada, setFechada] = useState(null);
     const [modelo, setModelo] = useState(null);
     const [respostas, setRespostas] = useState({});
     const [automaticas, setAutomaticas] = useState({});
@@ -5465,18 +5466,20 @@ function RascunhoAuditoria({ linha, competencia, onClose, editar }) {
         ApiService._req('GET', rota).then(r => {
             if (!ativo) return;
             setModelo(r.modelo);
+            setFechada(r.rascunho?.resultado || null);
             setAutomaticas(r.automaticas || {});
             setRespostas(r.rascunho?.respostas || {});
         }).catch(e => { if (ativo) setMensagem(e.message); });
         return () => { ativo = false; };
     }, [rota]);
-    const salvar = async () => {
+    const salvar = async (fechar = false) => {
         setSalvando(true);
         setMensagem('');
         try {
-            const r = await ApiService._req('POST', rota, { respostas });
+            const r = await ApiService._req('POST', rota, { respostas, fechar });
+            if (r.rascunho.resultado) { setFechada(r.rascunho.resultado); setModelo(r.rascunho.modelo); setAutomaticas(r.rascunho.automaticas); }
             setRespostas(r.rascunho.respostas);
-            setMensagem('Rascunho salvo. Você pode fechar e retomar em Avaliações, na mesma competência e motorista.');
+            setMensagem(fechar ? 'Auditoria fechada e conferência registrada em Descontos.' : 'Rascunho salvo. Você pode fechar e retomar em Avaliações, na mesma competência e motorista.');
         } catch (e) { setMensagem(e.message); }
         finally { setSalvando(false); }
     };
@@ -5525,15 +5528,15 @@ function RascunhoAuditoria({ linha, competencia, onClose, editar }) {
                             : [item.periodo, item.frequencia, 'Veículo ' + item.veiculoId, item.cumprido ? 'Cumprido' : 'Faltante'].join(' · '))))) :
                     h(React.Fragment, null,
                         h('label', null, 'Nota', h('select', {
-                            disabled: salvando || !editar, value: respostas[p.id]?.nota ?? '',
+                            disabled: salvando || !editar || !!fechada, value: respostas[p.id]?.nota ?? '',
                             onChange: e => atualizar(p.id, 'nota', e.target.value ? Number(e.target.value) : null)
                         }, h('option', { value: '' }, 'Selecione'), modelo.notas.map(n => h('option', { key: n, value: n }, n)))),
                         h('label', null, 'Justificativa', h('textarea', {
-                            disabled: salvando || !editar, maxLength: 1500, value: respostas[p.id]?.justificativa || '',
+                            disabled: salvando || !editar || !!fechada, maxLength: 1500, value: respostas[p.id]?.justificativa || '',
                             onChange: e => atualizar(p.id, 'justificativa', e.target.value)
                         })),
                         h('label', null, 'Foto da evidência (JPEG ou PNG, até 500 KB)', h('input', {
-                            type: 'file', accept: 'image/jpeg,image/png', disabled: salvando || !editar,
+                            type: 'file', accept: 'image/jpeg,image/png', disabled: salvando || !editar || !!fechada,
                             onChange: e => selecionarFoto(p.id, e.target.files?.[0])
                         })),
                         respostas[p.id]?.fotoNova && h('img', { src: respostas[p.id].fotoNova, alt: 'Foto selecionada', style: { maxWidth: 160, maxHeight: 120 } }),
@@ -5541,9 +5544,10 @@ function RascunhoAuditoria({ linha, competencia, onClose, editar }) {
                     )
             ))
         ),
-        modelo && h('p', { className: 'muted' }, 'A publicação da avaliação e o lançamento do desconto ainda não estão disponíveis.'),
+        fechada && h('p', null, 'Auditoria fechada · Desconto ' + brl(fechada.valorCentavos / 100)),
         modelo && h('p', { role: 'status' }, resumoConformidadeAuditoria(modelo, Object.fromEntries(modelo.perguntas.map(p => [p.id, automaticas[p.tipo] || respostas[p.id]])))),
-        modelo && editar && h('button', { className: 'btn btn-p', disabled: salvando || !editar, onClick: salvar }, salvando ? 'Salvando…' : 'Salvar rascunho'));
+        modelo && editar && !fechada && h('button', { className: 'btn btn-p', disabled: salvando || !editar || !!fechada, onClick: () => salvar() }, salvando ? 'Salvando…' : 'Salvar rascunho'),
+        modelo && editar && !fechada && h('button', { className: 'btn btn-p', disabled: salvando, onClick: () => salvar(true) }, 'Fechar auditoria'));
 }
 
 function RegrasDescontoAuditoria({ editar }) {
