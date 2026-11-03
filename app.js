@@ -5545,6 +5545,7 @@ function RegrasDescontoAuditoria({ editar }) {
     const [meta, setMeta] = useState('85');
     const [valor, setValor] = useState('');
     const [vigencia, setVigencia] = useState('');
+    const [vigenciaFim, setVigenciaFim] = useState('');
     const [mensagem, setMensagem] = useState('');
     const [salvando, setSalvando] = useState(false);
     useEffect(() => {
@@ -5555,7 +5556,7 @@ function RegrasDescontoAuditoria({ editar }) {
         setSalvando(true);
         setMensagem('');
         try {
-            const r = await ApiService._req('POST', rota, { categoria, vigencia, meta: categoria === 'AUDITORIA' ? Number(meta) : null, valorCentavos: Math.round(Number(valor) * 100) });
+            const r = await ApiService._req('POST', rota, { categoria, vigencia, vigenciaFim, meta: categoria === 'AUDITORIA' ? Number(meta) : null, valorCentavos: Math.round(Number(valor) * 100) });
             setRegras(atuais => [...atuais, r.regra].sort((a, b) => b.vigencia.localeCompare(a.vigencia)));
             setMensagem('Regra cadastrada.');
             setValor('');
@@ -5565,12 +5566,21 @@ function RegrasDescontoAuditoria({ editar }) {
     return h('section', { className: 'card' },
         h('h3', null, 'Regras de desconto'),
         h('p', null, 'Defina o valor por ocorrência para multas e notificações, ou a meta e o desconto da auditoria.'),
-        regras.map(r => h('p', { key: (r.categoria || 'AUDITORIA') + r.vigencia }, categorias[r.categoria || 'AUDITORIA'] + ' · ' + r.vigencia + ' · ' + ((r.categoria || 'AUDITORIA') === 'AUDITORIA' ? 'Mínimo ' + r.meta + '% · ' : 'Por ocorrência · ') + brl(r.valorCentavos / 100))),
+        regras.length ? h('div', { style: { overflowX: 'auto' } }, h('table', null,
+            h('thead', null, h('tr', null, ['Categoria', 'Vigência início', 'Vigência fim', 'Conformidade mínima', 'Valor do desconto'].map(t => h('th', { key: t }, t)))),
+            h('tbody', null, regras.map(r => h('tr', { key: (r.categoria || 'AUDITORIA') + r.vigencia },
+                h('td', null, categorias[r.categoria || 'AUDITORIA']),
+                h('td', null, r.vigencia.split('-').reverse().join('/')),
+                h('td', null, r.vigenciaFim ? r.vigenciaFim.split('-').reverse().join('/') : 'Sem fim cadastrado'),
+                h('td', null, r.meta == null ? '—' : r.meta + '%'),
+                h('td', null, brl(r.valorCentavos / 100) + (r.meta == null ? ' por ocorrência' : ' abaixo da meta')))))))
+            : h('p', { className: 'muted' }, 'Nenhuma regra cadastrada.'),
         editar && h('form', { className: 'form-grid', onSubmit: salvar },
             h('label', null, 'Categoria', h('select', { value: categoria, onChange: e => { setCategoria(e.target.value); setValor(e.target.value === 'AUDITORIA' ? '' : '50'); } }, Object.entries(categorias).map(([id, nome]) => h('option', { key: id, value: id }, nome)))),
             categoria === 'AUDITORIA' && h('label', null, 'Conformidade mínima (%)', h('input', { required: true, type: 'number', min: 0.01, max: 100, step: 0.01, value: meta, onChange: e => setMeta(e.target.value) })),
             h('label', null, categoria === 'AUDITORIA' ? 'Valor do desconto (R$)' : 'Valor por ocorrência (R$)', h('input', { required: true, type: 'number', min: 0.01, max: 10000000, step: 0.01, value: valor, onChange: e => setValor(e.target.value) })),
-            h('label', null, 'Competência inicial', h('input', { required: true, type: 'month', value: vigencia, onChange: e => setVigencia(e.target.value) })),
+            h('label', null, 'Vigência início', h('input', { required: true, type: 'month', value: vigencia, onChange: e => setVigencia(e.target.value) })),
+            h('label', null, 'Vigência fim', h('input', { required: true, type: 'month', min: vigencia || undefined, value: vigenciaFim, onChange: e => setVigenciaFim(e.target.value) })),
             h('button', { className: 'btn btn-p', disabled: salvando }, salvando ? 'Salvando…' : 'Cadastrar regra')),
         mensagem && h('p', { role: 'status' }, mensagem));
 }
