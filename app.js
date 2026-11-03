@@ -5536,6 +5536,42 @@ function RascunhoAuditoria({ linha, competencia, onClose, editar }) {
         modelo && editar && h('button', { className: 'btn btn-p', disabled: salvando || !editar, onClick: salvar }, salvando ? 'Salvando…' : 'Salvar rascunho'));
 }
 
+function RegrasDescontoAuditoria({ editar }) {
+    const h = React.createElement;
+    const rota = '/admin/premiacao/regras-auditoria';
+    const [regras, setRegras] = useState([]);
+    const [meta, setMeta] = useState('85');
+    const [valor, setValor] = useState('');
+    const [vigencia, setVigencia] = useState('');
+    const [mensagem, setMensagem] = useState('');
+    const [salvando, setSalvando] = useState(false);
+    useEffect(() => {
+        ApiService._req('GET', rota).then(r => setRegras(r.regras)).catch(e => setMensagem(e.message));
+    }, []);
+    const salvar = async e => {
+        e.preventDefault();
+        setSalvando(true);
+        setMensagem('');
+        try {
+            const r = await ApiService._req('POST', rota, { vigencia, meta: Number(meta), valorCentavos: Math.round(Number(valor) * 100) });
+            setRegras(atuais => [...atuais, r.regra].sort((a, b) => b.vigencia.localeCompare(a.vigencia)));
+            setMensagem('Regra cadastrada.');
+            setValor('');
+        } catch (erro) { setMensagem(erro.message); }
+        finally { setSalvando(false); }
+    };
+    return h('section', { className: 'card' },
+        h('h3', null, 'Regras de desconto · Auditoria Interna'),
+        h('p', null, 'Cadastre a conformidade mínima e o valor previsto para avaliações abaixo da meta. Cada regra vale a partir da competência informada.'),
+        regras.map(r => h('p', { key: r.vigencia }, r.vigencia + ' · Mínimo ' + r.meta + '% · Desconto ' + brl(r.valorCentavos / 100))),
+        editar && h('form', { className: 'form-grid', onSubmit: salvar },
+            h('label', null, 'Conformidade mínima (%)', h('input', { required: true, type: 'number', min: 0.01, max: 100, step: 0.01, value: meta, onChange: e => setMeta(e.target.value) })),
+            h('label', null, 'Valor do desconto (R$)', h('input', { required: true, type: 'number', min: 0.01, max: 10000000, step: 0.01, value: valor, onChange: e => setValor(e.target.value) })),
+            h('label', null, 'Competência inicial', h('input', { required: true, type: 'month', value: vigencia, onChange: e => setVigencia(e.target.value) })),
+            h('button', { className: 'btn btn-p', disabled: salvando }, salvando ? 'Salvando…' : 'Cadastrar regra')),
+        mensagem && h('p', { role: 'status' }, mensagem));
+}
+
 function AdmPremiacao({ st, setSt, toast, user }) {
     const podeEditarMetas = pode(user, 'metas.editar');
     const podeEditarDescontos = pode(user, 'descontos.editar');
@@ -5729,6 +5765,7 @@ function AdmPremiacao({ st, setSt, toast, user }) {
                     React.createElement("b", null, (painel.descontos || []).filter(d => d.competencia === competencia).length))),
             React.createElement("div", { className: "aviso-box" }, "Vis\u00E3o geral da premia\u00E7\u00E3o na compet\u00EAncia selecionada. O acesso a Metas e Descontos \u00E9 controlado separadamente pelo perfil.")),
         sub === 'metas' && pode(user, 'metas.visualizar') && React.createElement(React.Fragment, null,
+            React.createElement(RegrasDescontoAuditoria, { editar: pode(user, 'metas.editar') }),
             React.createElement("div", { className: "row", style: { marginBottom: 12, flexWrap: 'wrap' } },
                 React.createElement("select", { style: { width: 'auto' }, value: fTipoMeta, onChange: e => setFTipoMeta(e.target.value) },
                     React.createElement("option", { value: "" }, "Todos os tipos de ve\u00EDculo"),
