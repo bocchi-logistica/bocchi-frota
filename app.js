@@ -1020,14 +1020,14 @@ function resumoDocumentosSinistroCliente(s) {
         return s.documentosResumo;
     const docs = (s?.solicitacoesDocumentos || []).filter(d => d.ativo !== false);
     const contar = rotulo => docs.filter(d => normalizarPerfil(d.statusDocumento) === normalizarPerfil(rotulo)).length;
-    return { totalAtivos: docs.length, pendentesEnvio: contar('Pendente de envio'), enviados: contar('Enviado'), aceitos: contar('Aceito'), rejeitados: contar('Rejeitado'), dispensados: contar('Dispensado') };
+    return { totalAtivos: docs.length, pendentesEnvio: contar('Pendente de envio') + contar('Pendente'), enviados: contar('Enviado'), aceitos: contar('Aceito'), rejeitados: contar('Rejeitado'), dispensados: contar('Dispensado') };
 }
 function situacaoMotoristaSinistro(s) {
     const status = normalizarPerfil(s?.statusSinistro);
     const r = resumoDocumentosSinistroCliente(s);
     if (status === 'AGUARDANDO_DOCUMENTOS') {
         if ((r.rejeitados || 0) > 0 || (r.pendentesEnvio || 0) > 0)
-            return { chave: 'ACAO_NECESSARIA', rotulo: 'Ação necessária', descricao: 'A Logística solicitou documento(s).' };
+            return { chave: 'ACAO_NECESSARIA', rotulo: 'Aguardando documentos', descricao: 'A Logística solicitou documento(s).' };
         if ((r.enviados || 0) > 0)
             return { chave: 'DOCUMENTOS_ENVIADOS', rotulo: 'Entregue à Logística', descricao: 'Aguardando conferência da Logística.' };
         if ((r.totalAtivos || 0) > 0 && (r.aceitos + r.dispensados) >= r.totalAtivos)
@@ -2669,7 +2669,7 @@ function TelaSinistro({ user, toast }) {
             (registroAberto.solicitacoesDocumentos || []).length > 0 && React.createElement("div", { className: "card", style: { marginTop: 10 } },
                 React.createElement("h3", null, "Solicita\u00E7\u00F5es da Log\u00EDstica"),
                 React.createElement("div", { className: "muted", style: { marginTop: 3 } }, "Envie somente os documentos solicitados abaixo. Cada item possui acompanhamento pr\u00F3prio."),
-                registroAberto.solicitacoesDocumentos.map(doc => { const chave = normalizarPerfil(doc.statusDocumento); const podeEnviar = normalizarPerfil(registroAberto.statusSinistro) === 'AGUARDANDO_DOCUMENTOS' && ['PENDENTE_DE_ENVIO', 'REJEITADO'].includes(chave); const dados = complementos[doc.id] || {}; return React.createElement("div", { className: 'sinistro-documento-item ' + (chave === 'REJEITADO' ? 'rejeitado' : chave === 'PENDENTE_DE_ENVIO' ? 'pendente' : chave === 'ENVIADO' ? 'enviado' : chave === 'ACEITO' ? 'aceito' : 'dispensado'), key: doc.id },
+                registroAberto.solicitacoesDocumentos.map(doc => { const chave = normalizarPerfil(doc.statusDocumento); const podeEnviar = normalizarPerfil(registroAberto.statusSinistro) === 'AGUARDANDO_DOCUMENTOS' && ['PENDENTE', 'PENDENTE_DE_ENVIO', 'REJEITADO'].includes(chave); const dados = complementos[doc.id] || {}; return React.createElement("div", { className: 'sinistro-documento-item ' + (chave === 'REJEITADO' ? 'rejeitado' : chave === 'PENDENTE_DE_ENVIO' ? 'pendente' : chave === 'ENVIADO' ? 'enviado' : chave === 'ACEITO' ? 'aceito' : 'dispensado'), key: doc.id },
                     React.createElement("div", { className: "row" },
                         React.createElement("div", { className: "grow" },
                             React.createElement("b", null, doc.tipoDocumento),
