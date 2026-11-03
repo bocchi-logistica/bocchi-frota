@@ -45,7 +45,7 @@ function useAtualizacaoPortal(modulos, atualizar) {
 
 function useConexaoPortal(usuario) {
     useEffect(() => {
-        if (!usuario || !ApiService.token || CONFIG.MODO_TESTE_LOCAL) return;
+        if (!CONFIG.ATUALIZACAO_TEMPO_REAL || !usuario || !ApiService.token || CONFIG.MODO_TESTE_LOCAL) return;
         const url = new URL(CONFIG.API_URL + '/atualizacoes', location.href);
         url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
         let socket, timer, encerrado = false, atraso = 1000;
@@ -80,6 +80,7 @@ const CONFIG = {
     API_URL: "https://bocchi-frota-api-homolog.logistica-951.workers.dev",
     // Modo local de testes, desativado em produção: não grava na API.
     MODO_TESTE_LOCAL: false,
+    ATUALIZACAO_TEMPO_REAL: false,
     MAX_FOTO_MB: 2,
     QUALIDADE_FOTO: 0.7,
     FOTO_MAX_PX: 1600,
