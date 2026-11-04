@@ -6434,15 +6434,15 @@ function AdmCadastros({ st, setSt, toast, user }) {
         const acesso = normalizarPerfil(u.tipoFrotaAcesso);
         return Object.hasOwn(acessosFrota, acesso) ? acesso : 'SEM_ACESSO';
     };
-    const usuariosAtivos = cad.usuarios.filter(u => u.ativo);
-    const indicadoresUsuarios = [
-        ['Usuários ativos', usuariosAtivos.length],
-        ['Usuários inativos', cad.usuarios.length - usuariosAtivos.length],
-        ...Object.entries(acessosFrota).map(([acesso, titulo]) => [titulo, usuariosAtivos.filter(u => acessoFrota(u) === acesso).length])
-    ];
     const usuariosFiltrados = cad.usuarios
         .filter(u => String(u.nome || '').toLocaleLowerCase('pt-BR').includes(fUsuario.nome.toLocaleLowerCase('pt-BR')) && (!fUsuario.perfil || u.perfil === fUsuario.perfil) && (!fUsuario.frota || acessoFrota(u) === fUsuario.frota))
         .sort((a, b) => (fUsuario.ordem.endsWith('desc') ? -1 : 1) * compararTexto(fUsuario.ordem.startsWith('perfil') ? a.perfil : a.nome, fUsuario.ordem.startsWith('perfil') ? b.perfil : b.nome));
+    const usuariosAtivos = usuariosFiltrados.filter(u => u.ativo);
+    const indicadoresUsuarios = [
+        ['Usuários ativos', usuariosAtivos.length],
+        ['Usuários inativos', usuariosFiltrados.length - usuariosAtivos.length],
+        ...Object.entries(acessosFrota).map(([acesso, titulo]) => [titulo, usuariosAtivos.filter(u => acessoFrota(u) === acesso).length])
+    ];
     const veiculosFiltrados = cad.veiculos
         .filter(v => String(v.placa || '').toUpperCase().includes(fVeiculo.placa.toUpperCase()) &&
         (!fVeiculo.frota || v.tipoFrota === fVeiculo.frota) &&
