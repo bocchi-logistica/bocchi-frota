@@ -3599,11 +3599,6 @@ const FilaApuracaoRH = (() => {
     let estado = { rodando: false, total: 0, atual: 0, motorista: '', falhas: [], concluidos: 0, finalizadaEm: '' };
     const ouvintes = new Set();
     const publicar = () => ouvintes.forEach(fn => fn({ ...estado }));
-    const confirmarGravacao = async (motoristaId, competencias) => {
-        const r = await ApiService.obterApuracoesSalvas('', motoristaId, { somenteSalvas: true });
-        const existentes = new Set((r.apuracoes || []).map(a => String(a.competencia || '')));
-        return competencias.every(c => existentes.has(c));
-    };
     const iniciar = async ({ motoristas, competenciasPorMotorista }) => {
         if (estado.rodando || !motoristas.length)
             return false;
@@ -3614,33 +3609,24 @@ const FilaApuracaoRH = (() => {
             const competencias = competenciasPorMotorista.get(idUsuario(u));
             estado = { ...estado, atual: i + 1, motorista: u.nome };
             publicar();
-            try {
-                await executarComRetentativaGraph(async () => {
-                    const r = await ApiService.obterPremiacaoMotorista(u.nome, competencias);
-                    const conjunto = new Set(competencias);
-                    const apuracoes = (r.apuracoes || []).filter(a => conjunto.has(String(a.competencia || '')));
-                    if (apuracoes.length !== competencias.length) {
-                        const recebidas = new Set(apuracoes.map(a => String(a.competencia || '')));
-                        const faltantes = competencias.filter(c => !recebidas.has(c));
-                        throw new Error('A API não calculou as competências: ' + faltantes.join(', '));
-                    }
-                    await ApiService.salvarApuracoes(idUsuario(u), apuracoes, 'RH_QUADRIMESTRE');
-                });
-                estado = { ...estado, concluidos: estado.concluidos + 1 };
-                publicar();
-            }
-            catch (e) {
-                let gravado = false;
-                if (/failed to fetch|network|fetch/i.test(String(e?.message || e))) {
-                    try {
-                        gravado = await confirmarGravacao(idUsuario(u), competencias);
-                    }
-                    catch (_) { }
+            let concluiu = true;
+            for (const competencia of competencias) {
+                try {
+                    await executarComRetentativaGraph(async () => {
+                        const resposta = await ApiService.obterPremiacaoMotorista(u.nome, [competencia]);
+                        const apuracao = (resposta.apuracoes || []).find(a => a.competencia === competencia);
+                        if (!apuracao)
+                            throw new Error('A API não retornou a apuração.');
+                        await ApiService.salvarApuracoes(idUsuario(u), [apuracao], 'RH_QUADRIMESTRE');
+                    });
+                } catch (e) {
+                    concluiu = false;
+                    estado = { ...estado, falhas: [...estado.falhas, `${u.nome} · ${competencia}: ${e.message}`] };
+                    publicar();
                 }
-                if (gravado)
-                    estado = { ...estado, concluidos: estado.concluidos + 1 };
-                else
-                    estado = { ...estado, falhas: [...estado.falhas, `${u.nome}: ${e.message}`] };
+            }
+            if (concluiu) {
+                estado = { ...estado, concluidos: estado.concluidos + 1 };
                 publicar();
             }
             if (i < motoristas.length - 1)
@@ -3671,6 +3657,7 @@ function PainelRH({ st, dados, user }) {
     const [progressoRH, setProgressoRH] = useState('');
     const [sucessoRH, setSucessoRH] = useState('');
     const [modoAtualizacao, setModoAtualizacao] = useState('PENDENTES');
+    const [selecaoMesesRH, setSelecaoMesesRH] = useState(null);
     const [selecionados, setSelecionados] = useState([]);
     const [filaRH, setFilaRH] = useState(FilaApuracaoRH.obter());
     const [auditoriasRH, setAuditoriasRH] = useState({});
@@ -3754,7 +3741,7 @@ function PainelRH({ st, dados, user }) {
                 });
                 setApuracoesRH(porMotorista);
                 if (filaRH.falhas.length)
-                    setErroRH(`${filaRH.falhas.length} motorista(s) não puderam ser atualizados: ${filaRH.falhas.join(' | ')}`);
+                    setErroRH(`${filaRH.falhas.length} apuração(ões) mensal(is) pendente(s): ${filaRH.falhas.join(' | ')}`);
                 else
                     setErroRH('');
             }).catch(e => setErroRH('A atualização terminou, mas não foi possível recarregar a tabela: ' + e.message))
@@ -3774,6 +3761,13 @@ function PainelRH({ st, dados, user }) {
     const competenciasParaCalcular = new Map([...competenciasPorMotorista].map(([id, competencias]) => [
         id, competencias.filter(c => competenciasProcessaveis.has(c))
     ]));
+    const chavePeriodoRH = ano + '-' + quadrimestre;
+    const mesesAtualizacaoRH = selecaoMesesRH?.periodo === chavePeriodoRH
+        ? selecaoMesesRH.meses.filter(c => competenciasProcessaveis.has(c))
+        : [...competenciasProcessaveis];
+    const competenciasSelecionadasRH = new Map([...competenciasParaCalcular].map(([id, competencias]) => [
+        id, competencias.filter(c => mesesAtualizacaoRH.includes(c))
+    ]));
     const competenciasEsperadas = motoristasPeriodo.flatMap(u => competenciasParaCalcular.get(idUsuario(u))
         .map(competencia => ({ u, competencia, chave: idUsuario(u) + '|' + competencia })));
     const recalcularQuadrimestre = async () => {
@@ -3783,13 +3777,16 @@ function PainelRH({ st, dados, user }) {
             setErroRH(`O ${quadrimestre}º quadrimestre de ${ano} ainda não começou. Não há competências disponíveis para atualizar.`);
             return;
         }
-        const elegiveis = motoristas.filter(u => competenciasParaCalcular.get(idUsuario(u)).length > 0);
-        const pendentes = elegiveis.filter(u => {
-            const competencias = competenciasParaCalcular.get(idUsuario(u));
-            const itens = (apuracoesRH[idUsuario(u)] || []).filter(a => competencias.includes(String(a.competencia || '')));
-            return itens.length < competencias.length || itens.some(a => a.desatualizada === true ||
-                ['PENDENTE', 'ERRO'].includes(String(a.status || '').toUpperCase()));
-        });
+        if (!mesesAtualizacaoRH.length) {
+            setErroRH('Selecione pelo menos uma competência para atualizar.');
+            return;
+        }
+        const elegiveis = motoristas.filter(u => competenciasSelecionadasRH.get(idUsuario(u)).length > 0);
+        const pendentesPorMotorista = new Map(elegiveis.map(u => {
+            const id = idUsuario(u);
+            return [id, competenciasSelecionadasRH.get(id).filter(c => !apuracaoProntaRH(apuracoesPorChave.get(id + '|' + c)))];
+        }));
+        const pendentes = elegiveis.filter(u => pendentesPorMotorista.get(idUsuario(u)).length > 0);
         const escolhidos = modoAtualizacao === 'TODOS' ? elegiveis :
             modoAtualizacao === 'PENDENTES' ? pendentes :
                 elegiveis.filter(u => selecionados.includes(idUsuario(u)));
@@ -3798,7 +3795,8 @@ function PainelRH({ st, dados, user }) {
             return;
         }
         setErroRH('');
-        await FilaApuracaoRH.iniciar({ motoristas: escolhidos, competenciasPorMotorista: competenciasParaCalcular });
+        setAuditoriasRH({});
+        await FilaApuracaoRH.iniciar({ motoristas: escolhidos, competenciasPorMotorista: modoAtualizacao === 'PENDENTES' ? pendentesPorMotorista : competenciasSelecionadasRH });
     };
     const apuracoesPorChave = new Map();
     motoristasPeriodo.forEach(u => (apuracoesRH[idUsuario(u)] || []).forEach(a => {
@@ -3807,14 +3805,18 @@ function PainelRH({ st, dados, user }) {
             apuracoesPorChave.set(idUsuario(u) + '|' + competencia, a);
         }
     }));
-    const itensQuadrimestre = [...apuracoesPorChave.values()];
+    const apuracaoProntaRH = a => ['CALCULADO', 'FECHADO'].includes(String(a?.status || '').toUpperCase()) && a?.desatualizada !== true;
+    const apuracoesEsperadasQuadrimestre = motoristasPeriodo.flatMap(u => competenciasPorMotorista.get(idUsuario(u))
+        .map(c => apuracoesPorChave.get(idUsuario(u) + '|' + c)));
+    const totalProntoRH = apuracoesEsperadasQuadrimestre.filter(apuracaoProntaRH).length;
+    const totalAplicavelRH = apuracoesEsperadasQuadrimestre.length;
     const ausentes = competenciasEsperadas.filter(item => !apuracoesPorChave.has(item.chave));
     const totalEsperado = competenciasEsperadas.length;
     const totalAusentes = ausentes.length;
     const totalEncontrado = totalEsperado - totalAusentes;
     const totalFechados = competenciasEsperadas.filter(item => String(apuracoesPorChave.get(item.chave)?.status || '').toUpperCase() === 'FECHADO').length;
     const haRegistrosFechados = totalFechados > 0;
-    const quadrimestreFechado = totalEsperado > 0 && totalAusentes === 0 && totalFechados === totalEsperado;
+    const quadrimestreFechado = totalAplicavelRH > 0 && totalFechados === totalAplicavelRH;
     const fechadoComPendencias = haRegistrosFechados && !quadrimestreFechado;
     const periodoBloqueado = haRegistrosFechados;
     const podeFechar = totalEsperado > 0 && totalAusentes === 0 &&
@@ -3928,11 +3930,20 @@ function PainelRH({ st, dados, user }) {
                 setAuditoriasRH(v => ({ ...v, [motoristaId]: { carregando: false, erro: '', apuracoes: {} } }));
                 return;
             }
-            const resposta = await ApiService.obterPremiacaoMotorista(linha.u.nome, competenciasAuditoria);
             const porCompetencia = {};
-            (resposta.apuracoes || []).forEach(a => { porCompetencia[String(a.competencia || '')] = a; });
+            const erros = [];
+            for (const competencia of competenciasAuditoria) {
+                try {
+                    const resposta = await ApiService.obterPremiacaoMotorista(linha.u.nome, [competencia]);
+                    const apuracao = (resposta.apuracoes || []).find(a => a.competencia === competencia);
+                    if (apuracao)
+                        porCompetencia[competencia] = apuracao;
+                } catch (e) {
+                    erros.push(e.message || String(e));
+                }
+            }
             setAuditoriasRH(v => ({ ...v, [motoristaId]: {
-                    carregando: false, erro: '', apuracoes: porCompetencia, carregadoEm: agoraISO()
+                    carregando: false, erro: erros.join(' | '), apuracoes: porCompetencia, carregadoEm: agoraISO()
                 } }));
         }
         catch (e) {
@@ -3949,16 +3960,13 @@ function PainelRH({ st, dados, user }) {
             ? apuracaoMes(stMotorista, CONFIG.MODO_TESTE_LOCAL ? dados : {}, u.nome, m)
             : null);
         const acumulado = apuracoes.reduce((s, a) => s + Number(a?.apurado || 0), 0);
-        const competenciasAplicaveis = competenciasParaCalcular.get(chave);
-        const aplicaveis = vindas.filter(a => competenciasAplicaveis.includes(String(a.competencia || '')));
-        const faltantes = Math.max(0, competenciasAplicaveis.length - aplicaveis.length);
-        const statusSalvos = aplicaveis.map(a => String(a.status || 'PENDENTE').toUpperCase());
-        const quantidadeFechada = statusSalvos.filter(s => s === 'FECHADO').length;
-        const statusMotorista = competenciasAplicaveis.length > 0 && faltantes === 0 &&
-            statusSalvos.length === competenciasAplicaveis.length &&
-            statusSalvos.every(st => st === 'FECHADO') ? 'FECHADO' :
-            aplicaveis.some(a => ['CALCULADO','FECHADO'].includes(String(a.status || '').toUpperCase())) ? 'CALCULADO' : 'PENDENTE';
-                return { u, apuracoes, acumulado, pagar: Math.max(0, acumulado), statusMotorista };
+        const competenciasAplicaveis = competenciasPorMotorista.get(chave);
+        const aplicaveis = competenciasAplicaveis.map(c => apuracoesPorChave.get(chave + '|' + c));
+        const prontas = aplicaveis.filter(apuracaoProntaRH).length;
+        const totalMeses = competenciasAplicaveis.length;
+        const statusMotorista = totalMeses && aplicaveis.every(a => String(a?.status || '').toUpperCase() === 'FECHADO') ? 'FECHADO' :
+            totalMeses && prontas === totalMeses ? 'CALCULADO' : prontas ? 'EM APURAÇÃO' : 'PENDENTE';
+        return { u, apuracoes, acumulado, pagar: Math.max(0, acumulado), statusMotorista, prontas, totalMeses };
     });
     const total = linhas.reduce((s, l) => s + l.pagar, 0);
     return React.createElement(React.Fragment, null,
@@ -3994,6 +4002,18 @@ function PainelRH({ st, dados, user }) {
                         React.createElement("option", { value: "PENDENTES" }, "Somente pendentes/erros"),
                         React.createElement("option", { value: "TODOS" }, "Todos os motoristas"),
                         React.createElement("option", { value: "SELECIONADOS" }, "Motoristas selecionados")))),
+            React.createElement("fieldset", { style: { border: 0, margin: '12px 0 0', padding: 0 }, disabled: filaRH.rodando },
+                React.createElement("legend", null, "Competências para atualizar"),
+                React.createElement("div", { className: "row", style: { flexWrap: 'wrap', gap: 12 } },
+                    React.createElement("button", { type: "button", className: "btn btn-g btn-sm", disabled: periodoAindaNaoIniciado, onClick: () => setSelecaoMesesRH(null) }, "Todos os meses disponíveis"),
+                    mesesProcessaveis.map(m => {
+                        const c = competenciaRH(m);
+                        return React.createElement("label", { key: c },
+                            React.createElement("input", { type: "checkbox", checked: mesesAtualizacaoRH.includes(c), onChange: e => setSelecaoMesesRH({
+                                periodo: chavePeriodoRH,
+                                meses: e.target.checked ? [...mesesAtualizacaoRH, c] : mesesAtualizacaoRH.filter(item => item !== c)
+                            }) }), " ", mesLabel(m));
+                    }))),
             React.createElement("div", { className: "muted", style: { marginTop: 8 } },
                 "A sele\u00E7\u00E3o de motoristas vale somente para ",
                 React.createElement("b", null, "Atualizar selecionados"),
@@ -4021,7 +4041,7 @@ function PainelRH({ st, dados, user }) {
                     ano)),
             React.createElement("div", { className: "card kpi" },
                 React.createElement("div", { className: "l" }, "Status"),
-                React.createElement("div", { className: "v", style: { fontSize: 18 } }, quadrimestreFechado ? 'FECHADO' : itensQuadrimestre.some(a => ['CALCULADO','FECHADO'].includes(String(a.status || '').toUpperCase())) ? 'EM APURAÇÃO' : 'ABERTO'))),
+                React.createElement("div", { className: "v", style: { fontSize: 18 } }, quadrimestreFechado ? 'FECHADO' : podeFechar && new Date().toISOString().slice(0, 10) > fimPeriodo ? 'PRONTO PARA FECHAR' : totalProntoRH ? 'EM APURAÇÃO' : 'ABERTO'))),
         totalAusentes > 0 && React.createElement("div", { className: "aviso-box" },
             React.createElement("b", null, "Confer\u00EAncia do per\u00EDodo:"),
             " ",
@@ -4068,7 +4088,7 @@ function PainelRH({ st, dados, user }) {
                             React.createElement("b", null, l.u.nome)),
                         React.createElement("td", null,
                             React.createElement("span", { className: 'tag ' + (l.statusMotorista === 'CALCULADO' || l.statusMotorista === 'FECHADO' ? 'tag-ok' :
-                                    l.statusMotorista === 'ERRO' ? 'tag-neg' : 'tag-pend') }, l.statusMotorista)),
+                                    'tag-pend') }, l.statusMotorista === 'EM APURAÇÃO' ? `Em apuração · ${l.prontas}/${l.totalMeses}` : l.statusMotorista)),
                         l.apuracoes.map((a, i) => React.createElement("td", { key: meses[i], className: "td-num num", style: { color: a?.apurado < 0 ? 'var(--erro)' : 'inherit' } }, a ? (apuracoesPorChave.get(idUsuario(l.u) + '|' + competenciaRH(meses[i]))?.semMovimento ? 'Sem movimento' : brl(a.apurado)) : 'Sem vínculo')),
                         React.createElement("td", { className: "td-num num" },
                             React.createElement("b", { style: { color: l.acumulado < 0 ? 'var(--erro)' : 'var(--mata)' } }, brl(l.acumulado))),
@@ -4080,7 +4100,7 @@ function PainelRH({ st, dados, user }) {
                         React.createElement("td", { colSpan: modoAtualizacao === 'SELECIONADOS' ? "10" : "9" },
                             auditoriasRH[idUsuario(l.u)]?.carregando && React.createElement("div", { className: "aviso-box" }, "Carregando faturamento e mem\u00F3ria de c\u00E1lculo..."),
                             auditoriasRH[idUsuario(l.u)]?.erro && React.createElement("div", { className: "aviso-box", style: { color: 'var(--erro)' } },
-                                "N\u00E3o foi poss\u00EDvel carregar a auditoria: ",
+                                "Pendências na auditoria: ",
                                 auditoriasRH[idUsuario(l.u)].erro),
                             React.createElement("div", { className: "cards4" }, l.apuracoes.map((salva, i) => {
                                 if (!salva)
@@ -4101,7 +4121,10 @@ function PainelRH({ st, dados, user }) {
                                             a.meta ? ' · ' + brl(a.meta.meta) : '')),
                                     React.createElement("div", { className: "linha-item" },
                                         React.createElement("span", null, "Faturamento"),
-                                        React.createElement("b", null, brl(a.fat))),
+                                        React.createElement("b", null, aoVivo ? brl(a.fat) : '—')),
+                                    Number(aoVivo?.meta?.meta) > 0 && React.createElement("div", { className: "linha-item" },
+                                        React.createElement("span", null, "Meta atingida"),
+                                        React.createElement("b", null, (100 * a.fat / Number(aoVivo.meta.meta)).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%')),
                                     React.createElement("div", { className: "linha-item" },
                                         React.createElement("span", null, "Premia\u00E7\u00E3o calculada"),
                                         React.createElement("span", null, brl(a.prod))),
