@@ -4323,9 +4323,12 @@ function AdmPainel({ st, dados, user, onNavegar }) {
         return resumir(u, uid, cargas);
     }).sort((a, b) => b.frete - a.frete || a.u.nome.localeCompare(b.u.nome, 'pt-BR'));
     const tipos = [...new Set(linhas.map(l => l.tipo).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
-    const linhasFiltradas = linhas.filter(l => (!fMotorista || l.uid === fMotorista) && (!fTipo || l.tipo === fTipo) && (!fSituacao || l.situacao === fSituacao));
+    const linhasComMovimento = linhas.filter(l => l.cargas.length > 0);
+    const linhasDisponiveis = fSituacao === 'SEM_MOVIMENTO' ? linhas : linhasComMovimento;
+    const motoristaSelecionado = linhasDisponiveis.some(l => l.uid === fMotorista) ? fMotorista : '';
+    const linhasFiltradas = linhasDisponiveis.filter(l => (!motoristaSelecionado || l.uid === motoristaSelecionado) && (!fTipo || l.tipo === fTipo) && (!fSituacao || l.situacao === fSituacao));
     const [visaoAnalitica, setVisaoAnalitica] = useState(false);
-    const linhasTabela = visaoAnalitica ? linhasFiltradas.flatMap(l => {
+    const linhasTabela = visaoAnalitica && fSituacao !== 'SEM_MOVIMENTO' ? linhasFiltradas.flatMap(l => {
         const meses = new Map();
         for (const carga of l.cargas) {
             const mesCarga = String(carga.data || '').slice(0, 7);
@@ -4400,9 +4403,9 @@ function AdmPainel({ st, dados, user, onNavegar }) {
                         setMes(e.target.value); } }, MESES_2026.map(m => React.createElement("option", { key: m, value: m }, mesLabel(m))))),
             React.createElement("div", null,
                 React.createElement("label", { htmlFor: "adm-painel-motorista" }, "Motorista"),
-                React.createElement("select", { id: "adm-painel-motorista", name: "adm-painel-motorista", value: fMotorista, onChange: e => setFMotorista(e.target.value) },
+                React.createElement("select", { id: "adm-painel-motorista", name: "adm-painel-motorista", value: motoristaSelecionado, onChange: e => setFMotorista(e.target.value) },
                     React.createElement("option", { value: "" }, "Todos"),
-                    linhas.map(l => React.createElement("option", { key: l.uid, value: l.uid }, l.u.nome)))),
+                    linhasDisponiveis.map(l => React.createElement("option", { key: l.uid, value: l.uid }, l.u.nome)))),
             React.createElement("div", null,
                 React.createElement("label", { htmlFor: "adm-painel-tipo-de-veiculo" }, "Tipo de ve\u00EDculo"),
                 React.createElement("select", { id: "adm-painel-tipo-de-veiculo", name: "adm-painel-tipo-de-veiculo", value: fTipo, onChange: e => setFTipo(e.target.value) },
@@ -4548,7 +4551,7 @@ function AdmPainel({ st, dados, user, onNavegar }) {
             React.createElement("div", { className: "cards4", style: { marginTop: 12 } },
                 React.createElement("div", { className: "card kpi" },
                     React.createElement("div", { className: "l" }, "Motoristas"),
-                    React.createElement("div", { className: "v num" }, linhasFiltradas.length)),
+                    React.createElement("div", { className: "v num" }, new Set(linhasFiltradas.filter(l => l.cargas.length > 0).map(l => l.uid)).size)),
                 React.createElement("div", { className: "card kpi" },
                     React.createElement("div", { className: "l" }, "Cargas"),
                     React.createElement("div", { className: "v num" }, totalCargas)),
