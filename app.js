@@ -4289,14 +4289,12 @@ function AdmPainel({ st, dados, user, onNavegar }) {
             cargasPorMotorista.set(chave, []);
         cargasPorMotorista.get(chave).push(carga);
     }
-    const pendenciasNome = nome => {
-        const contestacoes = contestacoesPainel.filter(c => String(c.status || '').toLowerCase() === 'pendente' && String(c.dataCarga || c.data || '').slice(0, 7) >= competenciaInicio && String(c.dataCarga || c.data || '').slice(0, 7) <= competenciaFim && normalizar(c.motorista) === normalizar(nome)).length;
-        const checklists = checklistsPainel.filter(c => String(c.status || '').toLowerCase() === 'pendente' && String(c.data || '').slice(0, 7) >= competenciaInicio && String(c.data || '').slice(0, 7) <= competenciaFim && normalizar(c.motoristaNome || c.motorista) === normalizar(nome)).length;
+    const pendenciasNome = (nome, inicio = competenciaInicio, fim = competenciaFim) => {
+        const contestacoes = contestacoesPainel.filter(c => String(c.status || '').toLowerCase() === 'pendente' && String(c.dataCarga || c.data || '').slice(0, 7) >= inicio && String(c.dataCarga || c.data || '').slice(0, 7) <= fim && normalizar(c.motorista) === normalizar(nome)).length;
+        const checklists = checklistsPainel.filter(c => String(c.status || '').toLowerCase() === 'pendente' && String(c.data || '').slice(0, 7) >= inicio && String(c.data || '').slice(0, 7) <= fim && normalizar(c.motoristaNome || c.motorista) === normalizar(nome)).length;
         return contestacoes + checklists;
     };
-    const linhas = motoristas.map(u => {
-        const uid = idUsuario(u);
-        const cargas = (cargasPorMotorista.get(uid) || cargasPorMotorista.get(normalizar(u.nome)) || []).slice().sort((a, b) => String(b.data || '').localeCompare(String(a.data || '')));
+    const resumir = (u, uid, cargas, mesLinha = '') => {
         const peso = cargas.reduce((s, c) => s + Number(c.peso || c.pesoTon || 0), 0);
         const frete = cargas.reduce((s, c) => s + Number(c.freteTotal || 0), 0);
         const premiacao = cargas.reduce((s, c) => s + Number(c.valor || c.premiacao || 0), 0);
@@ -4306,7 +4304,7 @@ function AdmPainel({ st, dados, user, onNavegar }) {
             }).filter(Boolean))];
         const tipo = tipos.join(' / ');
         const oficial = apuracoesPainel[uid];
-        const pendencias = pendenciasNome(u.nome);
+        const pendencias = pendenciasNome(u.nome, mesLinha || competenciaInicio, mesLinha || competenciaFim);
         const inconsistencias = cargas.filter(c => !Number(c.peso || c.pesoTon || 0) || !Number(c.freteTotal || 0) || !String(c.tipoVeiculo || veiculoPorPlaca.get(String(c.placa || '').trim().toUpperCase())?.tipoModelo || '').trim()).length;
         let situacao = 'CONFERIDO';
         if (oficial && String(oficial.status || '').toUpperCase() === 'FECHADO')
@@ -4317,10 +4315,26 @@ function AdmPainel({ st, dados, user, onNavegar }) {
             situacao = 'DIVERGENTE';
         else if (pendencias > 0)
             situacao = 'PENDENTE';
-        return { u, uid, cargas, peso, frete, premiacao, tipo, pendencias, inconsistencias, oficial, situacao };
+        return { u, uid, mesLinha, cargas, peso, frete, premiacao, tipo, pendencias, inconsistencias, oficial, situacao };
+    };
+    const linhas = motoristas.map(u => {
+        const uid = idUsuario(u);
+        const cargas = (cargasPorMotorista.get(uid) || cargasPorMotorista.get(normalizar(u.nome)) || []).slice().sort((a, b) => String(b.data || '').localeCompare(String(a.data || '')));
+        return resumir(u, uid, cargas);
     }).sort((a, b) => b.frete - a.frete || a.u.nome.localeCompare(b.u.nome, 'pt-BR'));
     const tipos = [...new Set(linhas.map(l => l.tipo).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
     const linhasFiltradas = linhas.filter(l => (!fMotorista || l.uid === fMotorista) && (!fTipo || l.tipo === fTipo) && (!fSituacao || l.situacao === fSituacao));
+    const [visaoAnalitica, setVisaoAnalitica] = useState(false);
+    const linhasTabela = visaoAnalitica ? linhasFiltradas.flatMap(l => {
+        const meses = new Map();
+        for (const carga of l.cargas) {
+            const mesCarga = String(carga.data || '').slice(0, 7);
+            if (!meses.has(mesCarga)) meses.set(mesCarga, []);
+            meses.get(mesCarga).push(carga);
+        }
+        return [...meses].map(([mesCarga, cargas]) => resumir(l.u, l.uid, cargas, mesCarga));
+    }).sort((a, b) => b.mesLinha.localeCompare(a.mesLinha) || b.frete - a.frete) : linhasFiltradas;
+    const rotuloMesLinha = mesLinha => mesLabel(mesLinha.slice(5) + '/' + mesLinha.slice(0, 4));
     const totalPeso = linhasFiltradas.reduce((s, l) => s + l.peso, 0);
     const totalFrete = linhasFiltradas.reduce((s, l) => s + l.frete, 0);
     const totalCargas = linhasFiltradas.reduce((s, l) => s + l.cargas.length, 0);
@@ -4400,7 +4414,12 @@ function AdmPainel({ st, dados, user, onNavegar }) {
                     React.createElement("option", { value: "" }, "Todas"),
                     ['CONFERIDO', 'PENDENTE', 'DIVERGENTE', 'SEM_MOVIMENTO', 'FECHADO'].map(s => React.createElement("option", { key: s, value: s }, rotuloSituacao(s))))),
             React.createElement("div", null,
-                React.createElement("button", { className: "btn btn-s", style: { width: '100%' }, onClick: limparFiltros }, "Limpar filtros"))));
+                React.createElement("button", { className: "btn btn-s", style: { width: '100%' }, onClick: limparFiltros }, "Limpar filtros")),
+            React.createElement("div", null,
+                React.createElement("label", { htmlFor: "adm-painel-visao" }, "Visualização"),
+                React.createElement("select", { id: "adm-painel-visao", value: visaoAnalitica ? "analitica" : "unificada", onChange: e => setVisaoAnalitica(e.target.value === "analitica") },
+                    React.createElement("option", { value: "unificada" }, "Unificada"),
+                    React.createElement("option", { value: "analitica" }, "Analítica")))));
     if (subPainel === 'detalhes' && motoristaDetalhe) {
         return React.createElement(React.Fragment, null,
             React.createElement(Cabecalho, null),
@@ -4410,7 +4429,7 @@ function AdmPainel({ st, dados, user, onNavegar }) {
                 React.createElement("div", { className: "grow" },
                     React.createElement("h3", { style: { margin: 0 } }, motoristaDetalhe.u.nome),
                     React.createElement("div", { className: "muted" },
-                        rotuloPeriodo,
+                        motoristaDetalhe.mesLinha ? rotuloMesLinha(motoristaDetalhe.mesLinha) : rotuloPeriodo,
                         " \u00B7 ",
                         motoristaDetalhe.tipo || 'Tipo não identificado'))),
             React.createElement("div", { className: "cards4" },
@@ -4550,11 +4569,12 @@ function AdmPainel({ st, dados, user, onNavegar }) {
                     React.createElement("div", { className: "v num", style: { color: totalDivergencias ? 'var(--erro)' : 'var(--mata)' } }, totalDivergencias)),
                 React.createElement("div", { className: "card kpi" },
                     React.createElement("div", { className: "l" }, "Compet\u00EAncia"),
-                    React.createElement("div", { className: "v", style: { fontSize: 18 } }, mesLabel(mes)))),
+                    React.createElement("div", { className: "v", style: { fontSize: 18 } }, rotuloPeriodo))),
             React.createElement("div", { className: "card", style: { overflowX: 'auto' } },
                 React.createElement("table", null,
                     React.createElement("thead", null,
                         React.createElement("tr", null,
+                            visaoAnalitica && React.createElement("th", null, "Competência"),
                             React.createElement("th", null, "Motorista"),
                             React.createElement("th", null, "Tipo"),
                             React.createElement("th", { className: "td-num" }, "Cargas"),
@@ -4565,7 +4585,8 @@ function AdmPainel({ st, dados, user, onNavegar }) {
                             React.createElement("th", null, "Situa\u00E7\u00E3o"),
                             React.createElement("th", null))),
                     React.createElement("tbody", null,
-                        linhasFiltradas.map(l => React.createElement("tr", { key: l.uid || l.u.nome },
+                        linhasTabela.map(l => React.createElement("tr", { key: (l.uid || l.u.nome) + ":" + l.mesLinha },
+                            visaoAnalitica && React.createElement("td", null, l.mesLinha ? rotuloMesLinha(l.mesLinha) : "—"),
                             React.createElement("td", null,
                                 React.createElement("b", null, l.u.nome)),
                             React.createElement("td", { className: "muted" }, l.tipo || '—'),
@@ -4578,8 +4599,8 @@ function AdmPainel({ st, dados, user, onNavegar }) {
                                 React.createElement("b", { style: { color: corSituacao(l.situacao) } }, rotuloSituacao(l.situacao))),
                             React.createElement("td", null,
                                 React.createElement("button", { className: "btn btn-s btn-sm", onClick: () => abrirDetalhe(l) }, "Detalhar")))),
-                        !linhasFiltradas.length && React.createElement("tr", null,
-                            React.createElement("td", { colSpan: "9", className: "muted", style: { textAlign: 'center', padding: 24 } }, "Nenhum motorista encontrado para os filtros selecionados."))))),
+                        !linhasTabela.length && React.createElement("tr", null,
+                            React.createElement("td", { colSpan: visaoAnalitica ? 10 : 9, className: "muted", style: { textAlign: 'center', padding: 24 } }, "Nenhum motorista encontrado para os filtros selecionados."))))),
             React.createElement("div", { className: "aviso-box" }, "O resumo consulta os dados existentes. O detalhamento abre em uma subtela pr\u00F3pria para evitar uma p\u00E1gina extensa.")));
 }
 /* ================= ADM: IMPORTAÇÃO ================= */
