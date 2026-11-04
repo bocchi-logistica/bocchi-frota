@@ -1306,9 +1306,7 @@ function TelaCargas({ st, setSt, user, dados, toast }) {
                                 " t"),
                             " \u00B7 ",
                             React.createElement("span", { className: "num" },
-                                "R$ ",
-                                brn(c.rt),
-                                "/t")),
+                                c.valor != null && c.peso > 0 ? brl(c.valor / c.peso) + '/t' : '—')),
                         c.pbtForaFaixa && React.createElement("div", { className: "tag tag-neg", style: { marginTop: 7 } },
                             "PBT fora da faixa \u2014 limite ",
                             React.createElement("span", { style: { whiteSpace: 'nowrap' } },
@@ -4246,7 +4244,7 @@ function AdmPainel({ st, dados, user, onNavegar }) {
     const resumir = (u, uid, cargas, mesLinha = '') => {
         const peso = cargas.reduce((s, c) => s + Number(c.peso || c.pesoTon || 0), 0);
         const frete = cargas.reduce((s, c) => s + Number(c.freteTotal || 0), 0);
-        const premiacao = cargas.reduce((s, c) => s + Number(c.valor || c.premiacao || 0), 0);
+        const premiacao = cargas.reduce((s, c) => s + Number(c.premiacao ?? 0), 0);
         const tipos = [...new Set(cargas.map(c => {
                 const placa = String(c.placa || '').trim().toUpperCase();
                 return String(c.tipoVeiculo || veiculoPorPlaca.get(placa)?.tipoModelo || veiculoPorPlaca.get(placa)?.tipo || '').trim();
@@ -4326,7 +4324,7 @@ function AdmPainel({ st, dados, user, onNavegar }) {
         cargas: cargasDetalhe.length,
         peso: cargasDetalhe.reduce((s, c) => s + Number(c.peso || c.pesoTon || 0), 0),
         frete: cargasDetalhe.reduce((s, c) => s + Number(c.freteTotal || 0), 0),
-        premiacao: cargasDetalhe.reduce((s, c) => s + Number(c.valor || c.premiacao || 0), 0)
+        premiacao: cargasDetalhe.reduce((s, c) => s + Number(c.premiacao ?? 0), 0)
     };
     const Subtabs = () => React.createElement("div", { className: "subtabs", style: { marginBottom: 12 } },
         React.createElement("button", { className: 'subtab' + (subPainel === 'visao' ? ' on' : ''), onClick: () => setSubPainel('visao') }, "Vis\u00E3o geral"),
@@ -4440,7 +4438,7 @@ function AdmPainel({ st, dados, user, onNavegar }) {
                             React.createElement("td", { className: "td-num num" }, brn(Number(c.peso || c.pesoTon || 0), 2)),
                             React.createElement("td", { className: "td-num num" }, Number(c.peso || c.pesoTon || 0) > 0 ? brl(Number(c.freteTotal || 0) / Number(c.peso || c.pesoTon || 0)) : '—'),
                             React.createElement("td", { className: "td-num num" }, brl(Number(c.freteTotal || 0))),
-                            React.createElement("td", { className: "td-num num" }, brl(Number(c.valor || c.premiacao || 0))))),
+                            React.createElement("td", { className: "td-num num" }, brl(c.premiacao == null ? null : Number(c.premiacao))))),
                         !cargasDetalhe.length && React.createElement("tr", null,
                             React.createElement("td", { colSpan: "10", className: "muted", style: { textAlign: 'center', padding: 24 } }, "Nenhuma carga encontrada para os filtros selecionados."))),
                     React.createElement("tfoot", null,
