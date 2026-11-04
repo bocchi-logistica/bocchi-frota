@@ -4303,12 +4303,11 @@ function AdmPainel({ st, dados, user, onNavegar }) {
         const frete = cargas.reduce((s, c) => s + Number(c.freteTotal || 0), 0);
         const premiacao = cargas.reduce((s, c) => s + Number(c.premiacao ?? 0), 0);
         const tipo = [...new Set(cargas.map(tipoDaCarga).filter(Boolean))].join(' / ');
-        const oficial = apuracoesPainel[uid];
+        const codigoMotorista = String(u.usuarioId || '');
+        const oficial = (codigoMotorista && apuracoesPainel[codigoMotorista]) || apuracoesPainel[uid];
         const pendencias = pendenciasNome(u.nome, mesLinha || competenciaInicio, mesLinha || competenciaFim);
         const alertas = cargas.flatMap(motivosCarga);
         const motivos = [...new Set(alertas)].map(motivo => `${motivo} (${alertas.filter(item => item === motivo).length})`);
-        if (!periodoMultiplo && !oficial)
-            motivos.push('Apuração do RH não localizada para a competência');
         let situacao = 'CONFERIDO';
         if (oficial && String(oficial.status || '').toUpperCase() === 'FECHADO')
             situacao = 'FECHADO';
