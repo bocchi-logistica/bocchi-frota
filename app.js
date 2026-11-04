@@ -3890,6 +3890,27 @@ function PainelRH({ st, dados, user }) {
             setProgressoRH('');
         }
     };
+    const confirmarSemMovimentoRH = async (motorista, competencia) => {
+        if (carregandoRH || filaRH.rodando || periodoBloqueado)
+            return;
+        if (!window.confirm(`Confirmar que ${motorista.nome} não teve cargas em ${competencia} e gravar a apuração em R$ 0,00?`))
+            return;
+        const motoristaId = idUsuario(motorista);
+        setCarregandoRH(true);
+        setErroRH('');
+        setSucessoRH('');
+        try {
+            await ApiService.salvarApuracoes(motoristaId, [{ competencia, apurado: 0, premioBruto: 0, totalDescontos: 0 }], 'RH_SEM_MOVIMENTO');
+            const item = apuracaoSalvaParaTela({ competencia, status: 'CALCULADO', semMovimento: true }, motorista.nome);
+            setApuracoesRH(v => ({ ...v, [motoristaId]: [...(v[motoristaId] || []).filter(a => a.competencia !== competencia), item] }));
+            setAuditoriasRH(v => ({ ...v, [motoristaId]: null }));
+            setSucessoRH(`${motorista.nome} — ${competencia} registrado como Sem movimento.`);
+        } catch (e) {
+            setErroRH(e.message);
+        } finally {
+            setCarregandoRH(false);
+        }
+    };
     const alternarAuditoria = async (linha) => {
         const motoristaId = idUsuario(linha.u);
         if (aberto === linha.u.nome) {
@@ -4048,7 +4069,7 @@ function PainelRH({ st, dados, user }) {
                         React.createElement("td", null,
                             React.createElement("span", { className: 'tag ' + (l.statusMotorista === 'CALCULADO' || l.statusMotorista === 'FECHADO' ? 'tag-ok' :
                                     l.statusMotorista === 'ERRO' ? 'tag-neg' : 'tag-pend') }, l.statusMotorista)),
-                        l.apuracoes.map((a, i) => React.createElement("td", { key: meses[i], className: "td-num num", style: { color: a?.apurado < 0 ? 'var(--erro)' : 'inherit' } }, a ? brl(a.apurado) : 'Sem vínculo')),
+                        l.apuracoes.map((a, i) => React.createElement("td", { key: meses[i], className: "td-num num", style: { color: a?.apurado < 0 ? 'var(--erro)' : 'inherit' } }, a ? (apuracoesPorChave.get(idUsuario(l.u) + '|' + competenciaRH(meses[i]))?.semMovimento ? 'Sem movimento · ' + brl(a.apurado) : brl(a.apurado)) : 'Sem vínculo')),
                         React.createElement("td", { className: "td-num num" },
                             React.createElement("b", { style: { color: l.acumulado < 0 ? 'var(--erro)' : 'var(--mata)' } }, brl(l.acumulado))),
                         React.createElement("td", { className: "td-num num" },
@@ -4069,6 +4090,10 @@ function PainelRH({ st, dados, user }) {
                                 const a = aoVivo ? apuracaoMes({ ...st, apuracoes: [{ ...aoVivo, mes: meses[i], motoristaNome: l.u.nome }] }, dados, l.u.nome, meses[i]) : salva;
                                 return React.createElement("div", { className: "card", key: meses[i], style: { boxShadow: 'none', border: '1px solid var(--linha)' } },
                                     React.createElement("b", null, mesLabel(meses[i])),
+                                    apuracoesPorChave.get(idUsuario(l.u) + '|' + competencia)?.semMovimento
+                                        ? React.createElement("div", { className: "muted" }, "Sem movimento confirmado")
+                                        : competencia < competenciaAtual && pode(user, 'quadrimestre.atualizar') && !periodoBloqueado && !aoVivo?.quantidadeCargas &&
+                                            React.createElement("button", { className: "btn btn-s btn-sm", disabled: carregandoRH || filaRH.rodando, onClick: () => confirmarSemMovimentoRH(l.u, competencia) }, "Confirmar sem movimento"),
                                     React.createElement("div", { className: "linha-item" },
                                         React.createElement("span", null, "Tipo / meta"),
                                         React.createElement("span", null,
