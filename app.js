@@ -6427,8 +6427,19 @@ function AdmCadastros({ st, setSt, toast, user }) {
             .map(t => [chaveTipo(t.nome), t])).values()]
         .sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
     const compararTexto = (a, b) => String(a || '').localeCompare(String(b || ''), 'pt-BR', { numeric: true, sensitivity: 'base' });
+    const acessosFrota = { FROTA_LEVE: 'Frota leve', FROTA_PESADA: 'Frota pesada', AMBAS: 'Ambos' };
+    const acessoFrota = u => {
+        const acesso = normalizarPerfil(u.tipoFrotaAcesso);
+        return Object.hasOwn(acessosFrota, acesso) ? acesso : 'SEM_ACESSO';
+    };
+    const usuariosAtivos = cad.usuarios.filter(u => u.ativo);
+    const indicadoresUsuarios = [
+        ['Usuários ativos', usuariosAtivos.length],
+        ['Usuários inativos', cad.usuarios.length - usuariosAtivos.length],
+        ...Object.entries(acessosFrota).map(([acesso, titulo]) => [titulo, usuariosAtivos.filter(u => acessoFrota(u) === acesso).length])
+    ];
     const usuariosFiltrados = cad.usuarios
-        .filter(u => String(u.nome || '').toLocaleLowerCase('pt-BR').includes(fUsuario.nome.toLocaleLowerCase('pt-BR')) && (!fUsuario.perfil || u.perfil === fUsuario.perfil))
+        .filter(u => String(u.nome || '').toLocaleLowerCase('pt-BR').includes(fUsuario.nome.toLocaleLowerCase('pt-BR')) && (!fUsuario.perfil || u.perfil === fUsuario.perfil) && (!fUsuario.frota || acessoFrota(u) === fUsuario.frota))
         .sort((a, b) => (fUsuario.ordem.endsWith('desc') ? -1 : 1) * compararTexto(fUsuario.ordem.startsWith('perfil') ? a.perfil : a.nome, fUsuario.ordem.startsWith('perfil') ? b.perfil : b.nome));
     const veiculosFiltrados = cad.veiculos
         .filter(v => String(v.placa || '').toUpperCase().includes(fVeiculo.placa.toUpperCase()) &&
@@ -6469,6 +6480,10 @@ function AdmCadastros({ st, setSt, toast, user }) {
         sub === 'usuarios' && podeSub('cadastro.usuarios') && !carregandoCad && !erroCad && React.createElement(React.Fragment, null,
             React.createElement("div", null,
                 React.createElement("button", { className: "btn btn-p", onClick: () => { setSenhaVisivel(false); const p = cad.perfis.find(x => x.titulo === 'MOTORISTA'); setEdit({ nome: '', usuarioId: proximoUsuarioId(), login: '', telefone: '', perfil: p?.titulo || '', perfilAcessoId: p?.itemId || '', tipoFrotaAcesso: 'FROTA PESADA', ativo: true, novaSenha: '', acessoCargas: false, acessoPremiacao: false, acessoChecklist: false, acessoSinistros: false, acessoAgendamentos: false, acessoHistorico: false }); } }, "+ Novo usu\u00E1rio")),
+            React.createElement("div", { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, margin: '12px 0' }, 'aria-label': 'Resumo do cadastro' },
+                indicadoresUsuarios.map(([titulo, total]) => React.createElement("div", { className: "card kpi", key: titulo },
+                    React.createElement("div", { className: "l" }, titulo),
+                    React.createElement("div", { className: "v num" }, total)))),
             React.createElement("div", { className: "filtros-cadastro" },
                 React.createElement("div", null,
                     React.createElement("label", { htmlFor: "adm-cadastros-filtrar-por-nome" }, "Filtrar por nome"),
@@ -6478,6 +6493,12 @@ function AdmCadastros({ st, setSt, toast, user }) {
                     React.createElement("select", { id: "adm-cadastros-perfil", name: "adm-cadastros-perfil", value: fUsuario.perfil, onChange: e => setFUsuario({ ...fUsuario, perfil: e.target.value }) },
                         React.createElement("option", { value: "" }, "Todos os perfis"),
                         [...new Set(cad.usuarios.map(u => u.perfil).filter(Boolean))].sort(compararTexto).map(p => React.createElement("option", { key: p }, p)))),
+                React.createElement("div", null,
+                    React.createElement("label", { htmlFor: "adm-cadastros-filtro-frota" }, "Acesso à frota"),
+                    React.createElement("select", { id: "adm-cadastros-filtro-frota", value: fUsuario.frota || '', onChange: e => setFUsuario({ ...fUsuario, frota: e.target.value }) },
+                        React.createElement("option", { value: "" }, "Todos"),
+                        Object.entries(acessosFrota).map(([value, titulo]) => React.createElement("option", { key: value, value }, titulo)),
+                        React.createElement("option", { value: "SEM_ACESSO" }, "Sem acesso à frota"))),
                 React.createElement("div", null,
                     React.createElement("label", { htmlFor: "adm-cadastros-ordenar" }, "Ordenar"),
                     React.createElement("select", { id: "adm-cadastros-ordenar", name: "adm-cadastros-ordenar", value: fUsuario.ordem, onChange: e => setFUsuario({ ...fUsuario, ordem: e.target.value }) },
