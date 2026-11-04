@@ -4289,28 +4289,36 @@ function AdmPainel({ st, dados, user, onNavegar }) {
         const checklists = checklistsPainel.filter(c => String(c.status || '').toLowerCase() === 'pendente' && String(c.data || '').slice(0, 7) >= inicio && String(c.data || '').slice(0, 7) <= fim && normalizar(c.motoristaNome || c.motorista) === normalizar(nome)).length;
         return contestacoes + checklists;
     };
+    const tipoDaCarga = c => {
+        const veiculo = veiculoPorPlaca.get(String(c.placa || '').trim().toUpperCase());
+        return String(c.tipoVeiculo || veiculo?.tipoModelo || veiculo?.tipo || '').trim();
+    };
+    const motivosCarga = c => [
+        !Number(c.peso || c.pesoTon || 0) && 'Peso ausente, zerado ou inválido',
+        !Number(c.freteTotal || 0) && 'Frete ausente, zerado ou inválido',
+        !tipoDaCarga(c) && 'Tipo de veículo não identificado'
+    ].filter(Boolean);
     const resumir = (u, uid, cargas, mesLinha = '') => {
         const peso = cargas.reduce((s, c) => s + Number(c.peso || c.pesoTon || 0), 0);
         const frete = cargas.reduce((s, c) => s + Number(c.freteTotal || 0), 0);
         const premiacao = cargas.reduce((s, c) => s + Number(c.premiacao ?? 0), 0);
-        const tipos = [...new Set(cargas.map(c => {
-                const placa = String(c.placa || '').trim().toUpperCase();
-                return String(c.tipoVeiculo || veiculoPorPlaca.get(placa)?.tipoModelo || veiculoPorPlaca.get(placa)?.tipo || '').trim();
-            }).filter(Boolean))];
-        const tipo = tipos.join(' / ');
+        const tipo = [...new Set(cargas.map(tipoDaCarga).filter(Boolean))].join(' / ');
         const oficial = apuracoesPainel[uid];
         const pendencias = pendenciasNome(u.nome, mesLinha || competenciaInicio, mesLinha || competenciaFim);
-        const inconsistencias = cargas.filter(c => !Number(c.peso || c.pesoTon || 0) || !Number(c.freteTotal || 0) || !String(c.tipoVeiculo || veiculoPorPlaca.get(String(c.placa || '').trim().toUpperCase())?.tipoModelo || '').trim()).length;
+        const alertas = cargas.flatMap(motivosCarga);
+        const motivos = [...new Set(alertas)].map(motivo => `${motivo} (${alertas.filter(item => item === motivo).length})`);
+        if (!periodoMultiplo && !oficial)
+            motivos.push('Apuração do RH não localizada para a competência');
         let situacao = 'CONFERIDO';
         if (oficial && String(oficial.status || '').toUpperCase() === 'FECHADO')
             situacao = 'FECHADO';
         else if (!cargas.length)
             situacao = 'SEM_MOVIMENTO';
-        else if (inconsistencias > 0 || (!periodoMultiplo && !oficial))
+        else if (motivos.length > 0)
             situacao = 'DIVERGENTE';
         else if (pendencias > 0)
             situacao = 'PENDENTE';
-        return { u, uid, mesLinha, cargas, peso, frete, premiacao, tipo, pendencias, inconsistencias, oficial, situacao };
+        return { u, uid, mesLinha, cargas, peso, frete, premiacao, tipo, pendencias, motivos, oficial, situacao };
     };
     const linhas = motoristas.map(u => {
         const uid = idUsuario(u);
@@ -4482,7 +4490,8 @@ function AdmPainel({ st, dados, user, onNavegar }) {
                             React.createElement("td", null, c.origem || '—'),
                             React.createElement("td", null, c.destino || '—'),
                             React.createElement("td", null, c.produto || '—'),
-                            React.createElement("td", null, c.nota || c.numeroNota || '—'),
+                            React.createElement("td", null, c.nota || c.numeroNota || '—',
+                                motivosCarga(c).map(motivo => React.createElement("div", { key: motivo, className: "muted", style: { color: 'var(--erro)' } }, motivo))),
                             React.createElement("td", { className: "td-num num" }, brn(Number(c.peso || c.pesoTon || 0), 2)),
                             React.createElement("td", { className: "td-num num" }, Number(c.peso || c.pesoTon || 0) > 0 ? brl(Number(c.freteTotal || 0) / Number(c.peso || c.pesoTon || 0)) : '—'),
                             React.createElement("td", { className: "td-num num" }, brl(Number(c.freteTotal || 0))),
@@ -4593,7 +4602,9 @@ function AdmPainel({ st, dados, user, onNavegar }) {
                             React.createElement("td", { className: "td-num num" }, brl(l.premiacao)),
                             React.createElement("td", { className: "td-num num" }, l.pendencias || '—'),
                             React.createElement("td", null,
-                                React.createElement("b", { style: { color: corSituacao(l.situacao) } }, rotuloSituacao(l.situacao))),
+                                React.createElement("b", { style: { color: corSituacao(l.situacao) } }, rotuloSituacao(l.situacao)),
+                                l.situacao === 'DIVERGENTE' && l.motivos.map(motivo =>
+                                    React.createElement("div", { key: motivo, className: "muted" }, motivo))),
                             React.createElement("td", null,
                                 React.createElement("button", { className: "btn btn-s btn-sm", onClick: () => abrirDetalhe(l) }, "Detalhar")))),
                         !linhasTabela.length && React.createElement("tr", null,
