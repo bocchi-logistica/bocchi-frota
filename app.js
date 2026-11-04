@@ -164,7 +164,6 @@ const ACESSO_NOVO_POR_PERMISSAO = {
     'cadastro.veiculos': { area: 'CADASTROS', subtela: 'CADASTRO_VEICULOS' },
     'cadastro.vinculos': { area: 'CADASTROS', subtela: 'CADASTRO_VINCULOS' },
     'cadastro.perfis': { area: 'CADASTROS', subtela: 'CADASTRO_PERFIS' },
-    'apuracao.mensal.atualizar': { area: 'PAINEL', subtela: 'ATUALIZARAPURACAOMENSAL_PAINEL', editar: true },
     'quadrimestre.atualizar': { area: 'RH_FECHAMENTO', subtela: 'ATUALIZARAPURACOESDOQUADRIMESTRE_RH_FECHAMENTO', editar: true },
     'quadrimestre.fechar': { area: 'RH_FECHAMENTO', subtela: 'FECHARQUADRIMESTRE_RH_FECHAMENTO', editar: true },
     'quadrimestre.reabrir': { area: 'RH_FECHAMENTO', subtela: 'REABRIQUADRIMESTRE_RH_FECHAMENTO', editar: true },
@@ -4109,7 +4108,6 @@ function AdmPainel({ st, dados, user, onNavegar }) {
     const [carregandoCargasPainel, setCarregandoCargasPainel] = useState(false);
     const [erroPainel, setErroPainel] = useState('');
     const [erroCargasPainel, setErroCargasPainel] = useState('');
-    const [progressoPainel, setProgressoPainel] = useState('');
     const [revisaoPendencias, setRevisaoPendencias] = useState(0);
     const [revisaoCargas, setRevisaoCargas] = useState(0);
     const [cargasCarregadas, setCargasCarregadas] = useState(false);
@@ -4231,55 +4229,6 @@ function AdmPainel({ st, dados, user, onNavegar }) {
         return () => { ativo = false; };
     }, [mes, mesAte, revisaoCargas]);
     const motoristas = usuariosPainel.filter(u => usuarioValidoPremiacaoPeriodo(u, vinculosPainel, inicioMes, fimMes));
-    const mesFechado = !periodoMultiplo && Object.values(apuracoesPainel).some(item => String(item?.status || '').toUpperCase() === 'FECHADO');
-    const recalcularMes = async () => {
-        if (periodoMultiplo) {
-            setErroCargasPainel('Para atualizar a apuração mensal, selecione o mesmo mês em De e Até.');
-            return;
-        }
-        if (!motoristas.length || carregandoCargasPainel)
-            return;
-        setCarregandoCargasPainel(true);
-        setErroCargasPainel('');
-        setProgressoPainel('');
-        const falhas = [];
-        try {
-            for (let i = 0; i < motoristas.length; i++) {
-                const u = motoristas[i];
-                setProgressoPainel(`Processando ${i + 1} de ${motoristas.length}: ${u.nome}`);
-                try {
-                    await executarComRetentativaGraph(async () => {
-                        const r = await ApiService.obterPremiacaoMotorista(u.nome);
-                        const apuracao = (r.apuracoes || []).find(a => String(a.competencia || '') === competencia);
-                        if (apuracao)
-                            await ApiService.salvarApuracoes(idUsuario(u), [apuracao]);
-                    });
-                }
-                catch (e) {
-                    falhas.push(`${u.nome}: ${e.message}`);
-                }
-                if (i < motoristas.length - 1)
-                    await aguardar(1800);
-            }
-            setProgressoPainel('Carregando os resultados salvos...');
-            const atualizadas = await ApiService.obterApuracoesSalvas(competencia);
-            const saida = {};
-            (atualizadas.apuracoes || []).forEach(item => {
-                const u = usuariosPainel.find(x => idUsuario(x) === String(item.motoristaId || ''));
-                saida[String(item.motoristaId || '')] = apuracaoSalvaParaTela(item, u?.nome || '');
-            });
-            setApuracoesPainel(saida);
-            if (falhas.length)
-                setErroCargasPainel(`${falhas.length} motorista(s) não puderam ser atualizados: ${falhas.join(' | ')}`);
-        }
-        catch (e) {
-            setErroCargasPainel('Falha ao atualizar a apuração mensal: ' + e.message);
-        }
-        finally {
-            setCarregandoCargasPainel(false);
-            setProgressoPainel('');
-        }
-    };
     const veiculoPorPlaca = new Map((veiculosPainel || []).map(v => [String(v.placa || '').trim().toUpperCase(), v]));
     const cargasPorMotorista = new Map();
     for (const carga of cargasPainel) {
@@ -4389,8 +4338,7 @@ function AdmPainel({ st, dados, user, onNavegar }) {
             React.createElement("h2", { style: { marginBottom: 2 } }, "Painel operacional"),
             React.createElement("div", { className: "muted" }, "Pend\u00EAncias que aguardam an\u00E1lise, aprova\u00E7\u00E3o ou reprova\u00E7\u00E3o")),
         subPainel === 'visao' && React.createElement("button", { className: "btn btn-s btn-sm", disabled: carregandoPainel, onClick: () => setRevisaoPendencias(v => v + 1) }, carregandoPainel ? 'Carregando...' : 'Atualizar pendências'),
-        emCargas && React.createElement("button", { className: "btn btn-s btn-sm", disabled: carregandoCargasPainel, onClick: () => setRevisaoCargas(v => v + 1) }, carregandoCargasPainel ? 'Carregando...' : 'Recarregar dados'),
-        emCargas && pode(user, 'apuracao.mensal.atualizar') && React.createElement("button", { className: "btn btn-p btn-sm", disabled: carregandoCargasPainel || mesFechado || periodoMultiplo, title: periodoMultiplo ? 'A atualização da apuração é mensal. Selecione o mesmo mês em De e Até.' : mesFechado ? 'O quadrimestre está fechado. Reabra-o no Fechamento RH para atualizar este mês.' : '', onClick: recalcularMes }, carregandoCargasPainel ? 'Atualizando...' : periodoMultiplo ? 'Selecione 1 mês' : mesFechado ? 'Quadrimestre fechado' : 'Atualizar apuração mensal'));
+        emCargas && React.createElement("button", { className: "btn btn-s btn-sm", disabled: carregandoCargasPainel, onClick: () => setRevisaoCargas(v => v + 1) }, carregandoCargasPainel ? 'Carregando...' : 'Recarregar dados'));
     const FiltrosCargas = () => React.createElement("div", { className: "card", style: { marginTop: 12 } },
         React.createElement("div", { className: "form-grid", style: { alignItems: 'end' } },
             React.createElement("div", null,
@@ -4513,7 +4461,7 @@ function AdmPainel({ st, dados, user, onNavegar }) {
         React.createElement(Subtabs, null),
         subPainel === 'visao' && carregandoPainel && React.createElement("div", { className: "aviso-box" }, "Carregando pend\u00EAncias operacionais..."),
         subPainel === 'visao' && erroPainel && React.createElement("div", { className: "aviso-box", style: { color: 'var(--erro)' } }, erroPainel),
-        ['cargas', 'detalhes'].includes(subPainel) && carregandoCargasPainel && React.createElement("div", { className: "aviso-box" }, progressoPainel || 'Carregando cargas, motoristas e apurações salvas...'),
+        ['cargas', 'detalhes'].includes(subPainel) && carregandoCargasPainel && React.createElement("div", { className: "aviso-box" }, 'Carregando cargas, motoristas e apurações salvas...'),
         ['cargas', 'detalhes'].includes(subPainel) && erroCargasPainel && React.createElement("div", { className: "aviso-box", style: { color: 'var(--erro)' } }, erroCargasPainel),
         !carregandoPainel && !erroPainel && subPainel === 'visao' && React.createElement(React.Fragment, null,
             React.createElement("div", { className: "card", style: { padding: 12 } },
@@ -6108,9 +6056,7 @@ function AdmPremiacao({ st, setSt, toast, user }) {
                 React.createElement("button", { type: "button", className: "btn btn-p", style: { width: '100%', marginTop: 14 }, onClick: salvarMeta }, "Salvar meta"))));
 }
 const AREAS_E_SUBTELAS = {
-    PAINEL: [
-        ['ATUALIZARAPURACAOMENSAL_PAINEL', 'Atualizar apuração mensal']
-    ],
+    PAINEL: [],
     IMPORTACAO: [],
     CONTESTACOES: [],
     RH_FECHAMENTO: [
