@@ -4069,7 +4069,7 @@ function PainelRH({ st, dados, user }) {
                         React.createElement("td", null,
                             React.createElement("span", { className: 'tag ' + (l.statusMotorista === 'CALCULADO' || l.statusMotorista === 'FECHADO' ? 'tag-ok' :
                                     l.statusMotorista === 'ERRO' ? 'tag-neg' : 'tag-pend') }, l.statusMotorista)),
-                        l.apuracoes.map((a, i) => React.createElement("td", { key: meses[i], className: "td-num num", style: { color: a?.apurado < 0 ? 'var(--erro)' : 'inherit' } }, a ? (apuracoesPorChave.get(idUsuario(l.u) + '|' + competenciaRH(meses[i]))?.semMovimento ? 'Sem movimento · ' + brl(a.apurado) : brl(a.apurado)) : 'Sem vínculo')),
+                        l.apuracoes.map((a, i) => React.createElement("td", { key: meses[i], className: "td-num num", style: { color: a?.apurado < 0 ? 'var(--erro)' : 'inherit' } }, a ? (apuracoesPorChave.get(idUsuario(l.u) + '|' + competenciaRH(meses[i]))?.semMovimento ? 'Sem movimento' : brl(a.apurado)) : 'Sem vínculo')),
                         React.createElement("td", { className: "td-num num" },
                             React.createElement("b", { style: { color: l.acumulado < 0 ? 'var(--erro)' : 'var(--mata)' } }, brl(l.acumulado))),
                         React.createElement("td", { className: "td-num num" },
