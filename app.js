@@ -3606,14 +3606,14 @@ const FilaApuracaoRH = (() => {
         const existentes = new Set((r.apuracoes || []).map(a => String(a.competencia || '')));
         return competencias.every(c => existentes.has(c));
     };
-    const iniciar = async ({ motoristas, meses }) => {
+    const iniciar = async ({ motoristas, competenciasPorMotorista }) => {
         if (estado.rodando || !motoristas.length)
             return false;
         estado = { rodando: true, total: motoristas.length, atual: 0, motorista: '', falhas: [], concluidos: 0, finalizadaEm: '' };
         publicar();
-        const competencias = meses.map(m => m.slice(3) + '-' + m.slice(0, 2));
         for (let i = 0; i < motoristas.length; i++) {
             const u = motoristas[i];
+            const competencias = competenciasPorMotorista.get(idUsuario(u));
             estado = { ...estado, atual: i + 1, motorista: u.nome };
             publicar();
             try {
@@ -3763,6 +3763,21 @@ function PainelRH({ st, dados, user }) {
                 .finally(() => setCarregandoRH(false));
         }
     }, [filaRH.finalizadaEm]);
+    const competenciaRH = mes => mes.slice(3) + '-' + mes.slice(0, 2);
+    const competenciasPorMotorista = new Map(motoristasPeriodo.map(u => [
+        idUsuario(u),
+        meses.map(competenciaRH).filter(competencia => {
+            const [anoMes, mesNumero] = competencia.split('-').map(Number);
+            const fimMes = new Date(Date.UTC(anoMes, mesNumero, 0)).toISOString().slice(0, 10);
+            return usuarioValidoPremiacaoPeriodo(u, vinculosRH, competencia + '-01', fimMes);
+        })
+    ]));
+    const competenciasProcessaveis = new Set(mesesProcessaveis.map(competenciaRH));
+    const competenciasParaCalcular = new Map([...competenciasPorMotorista].map(([id, competencias]) => [
+        id, competencias.filter(c => competenciasProcessaveis.has(c))
+    ]));
+    const competenciasEsperadas = motoristasPeriodo.flatMap(u => competenciasParaCalcular.get(idUsuario(u))
+        .map(competencia => ({ u, competencia, chave: idUsuario(u) + '|' + competencia })));
     const recalcularQuadrimestre = async () => {
         if (filaRH.rodando || periodoBloqueado)
             return;
@@ -3770,39 +3785,23 @@ function PainelRH({ st, dados, user }) {
             setErroRH(`O ${quadrimestre}º quadrimestre de ${ano} ainda não começou. Não há competências disponíveis para atualizar.`);
             return;
         }
-        const competencias = mesesProcessaveis.map(m => m.slice(3) + '-' + m.slice(0, 2));
-        const pendentes = motoristas.filter(u => {
+        const elegiveis = motoristas.filter(u => competenciasParaCalcular.get(idUsuario(u)).length > 0);
+        const pendentes = elegiveis.filter(u => {
+            const competencias = competenciasParaCalcular.get(idUsuario(u));
             const itens = (apuracoesRH[idUsuario(u)] || []).filter(a => competencias.includes(String(a.competencia || '')));
             return itens.length < competencias.length || itens.some(a => a.desatualizada === true ||
                 ['PENDENTE', 'ERRO'].includes(String(a.status || '').toUpperCase()));
         });
-        const escolhidos = modoAtualizacao === 'TODOS' ? motoristas :
+        const escolhidos = modoAtualizacao === 'TODOS' ? elegiveis :
             modoAtualizacao === 'PENDENTES' ? pendentes :
-                motoristas.filter(u => selecionados.includes(idUsuario(u)));
+                elegiveis.filter(u => selecionados.includes(idUsuario(u)));
         if (!escolhidos.length) {
-            setErroRH(modoAtualizacao === 'SELECIONADOS' ? 'Selecione pelo menos um motorista.' : 'Não há motoristas pendentes ou com erro neste quadrimestre.');
+            setErroRH(modoAtualizacao === 'SELECIONADOS' ? 'Selecione pelo menos um motorista com competência aplicável.' : 'Não há motoristas pendentes ou com erro neste quadrimestre.');
             return;
         }
         setErroRH('');
-        await FilaApuracaoRH.iniciar({ motoristas: escolhidos, meses: mesesProcessaveis });
+        await FilaApuracaoRH.iniciar({ motoristas: escolhidos, competenciasPorMotorista: competenciasParaCalcular });
     };
-    /*
-     * A conferência é mensal. Um motorista só gera uma competência esperada
-     * quando está configurado para a premiação e possui vínculo sobreposto ao mês.
-     * Na ausência total de histórico de vínculo para o usuário, preserva-se a
-     * compatibilidade atual: usuário ativo é aplicável aos quatro meses.
-     */
-    const competenciasEsperadas = motoristasPeriodo.flatMap(u => mesesProcessaveis
-        .map(m => {
-        const competencia = m.slice(3) + '-' + m.slice(0, 2);
-        const [anoMes, mesNumero] = competencia.split('-').map(Number);
-        const inicioMes = `${anoMes}-${String(mesNumero).padStart(2, '0')}-01`;
-        const fimMes = new Date(anoMes, mesNumero, 0).toISOString().slice(0, 10);
-        return usuarioValidoPremiacaoPeriodo(u, vinculosRH, inicioMes, fimMes)
-            ? { u, competencia, chave: idUsuario(u) + '|' + competencia }
-            : null;
-    })
-        .filter(Boolean));
     const apuracoesPorChave = new Map();
     motoristasPeriodo.forEach(u => (apuracoesRH[idUsuario(u)] || []).forEach(a => {
         const competencia = String(a.competencia || '');
@@ -3905,7 +3904,11 @@ function PainelRH({ st, dados, user }) {
             return;
         setAuditoriasRH(v => ({ ...v, [motoristaId]: { carregando: true, erro: '', apuracoes: null } }));
         try {
-            const competenciasAuditoria = mesesProcessaveis.map(m => m.slice(3) + '-' + m.slice(0, 2));
+            const competenciasAuditoria = competenciasParaCalcular.get(motoristaId);
+            if (!competenciasAuditoria.length) {
+                setAuditoriasRH(v => ({ ...v, [motoristaId]: { carregando: false, erro: '', apuracoes: {} } }));
+                return;
+            }
             const resposta = await ApiService.obterPremiacaoMotorista(linha.u.nome, competenciasAuditoria);
             const porCompetencia = {};
             (resposta.apuracoes || []).forEach(a => { porCompetencia[String(a.competencia || '')] = a; });
@@ -3923,16 +3926,11 @@ function PainelRH({ st, dados, user }) {
         const chave = idUsuario(u);
         const vindas = Array.isArray(apuracoesRH[chave]) ? apuracoesRH[chave] : [];
         const stMotorista = CONFIG.MODO_TESTE_LOCAL ? { ...st, apuracoes: vindas } : { usuarios: usuariosRH, frota: {}, cargas: [], metas: [], descontos: [], apuracoes: vindas };
-        const apuracoes = meses.map(m => apuracaoMes(stMotorista, CONFIG.MODO_TESTE_LOCAL ? dados : {}, u.nome, m));
-        const acumulado = apuracoes.reduce((s, a) => s + Number(a.apurado || 0), 0);
-        const competenciasAplicaveis = mesesProcessaveis
-            .map(m => m.slice(3) + '-' + m.slice(0, 2))
-            .filter(competencia => {
-            const [anoMes, mesNumero] = competencia.split('-').map(Number);
-            const inicioMes = `${anoMes}-${String(mesNumero).padStart(2, '0')}-01`;
-            const fimMes = new Date(anoMes, mesNumero, 0).toISOString().slice(0, 10);
-            return usuarioValidoPremiacaoPeriodo(u, vinculosRH, inicioMes, fimMes);
-        });
+        const apuracoes = meses.map(m => competenciasPorMotorista.get(chave).includes(competenciaRH(m))
+            ? apuracaoMes(stMotorista, CONFIG.MODO_TESTE_LOCAL ? dados : {}, u.nome, m)
+            : null);
+        const acumulado = apuracoes.reduce((s, a) => s + Number(a?.apurado || 0), 0);
+        const competenciasAplicaveis = competenciasParaCalcular.get(chave);
         const aplicaveis = vindas.filter(a => competenciasAplicaveis.includes(String(a.competencia || '')));
         const faltantes = Math.max(0, competenciasAplicaveis.length - aplicaveis.length);
         const statusSalvos = aplicaveis.map(a => String(a.status || 'PENDENTE').toUpperCase());
@@ -4052,7 +4050,7 @@ function PainelRH({ st, dados, user }) {
                         React.createElement("td", null,
                             React.createElement("span", { className: 'tag ' + (l.statusMotorista === 'CALCULADO' || l.statusMotorista === 'FECHADO' ? 'tag-ok' :
                                     l.statusMotorista === 'ERRO' ? 'tag-neg' : 'tag-pend') }, l.statusMotorista)),
-                        l.apuracoes.map((a, i) => React.createElement("td", { key: meses[i], className: "td-num num", style: { color: a.apurado < 0 ? 'var(--erro)' : 'inherit' } }, brl(a.apurado))),
+                        l.apuracoes.map((a, i) => React.createElement("td", { key: meses[i], className: "td-num num", style: { color: a?.apurado < 0 ? 'var(--erro)' : 'inherit' } }, a ? brl(a.apurado) : 'Sem vínculo')),
                         React.createElement("td", { className: "td-num num" },
                             React.createElement("b", { style: { color: l.acumulado < 0 ? 'var(--erro)' : 'var(--mata)' } }, brl(l.acumulado))),
                         React.createElement("td", { className: "td-num num" },
@@ -4066,6 +4064,8 @@ function PainelRH({ st, dados, user }) {
                                 "N\u00E3o foi poss\u00EDvel carregar a auditoria: ",
                                 auditoriasRH[idUsuario(l.u)].erro),
                             React.createElement("div", { className: "cards4" }, l.apuracoes.map((salva, i) => {
+                                if (!salva)
+                                    return React.createElement("div", { className: "card", key: meses[i] }, mesLabel(meses[i]), " · Não aplicável — sem vínculo");
                                 const competencia = meses[i].slice(3) + '-' + meses[i].slice(0, 2);
                                 const aoVivo = auditoriasRH[idUsuario(l.u)]?.apuracoes?.[competencia];
                                 const a = aoVivo ? apuracaoMes({ ...st, apuracoes: [{ ...aoVivo, mes: meses[i], motoristaNome: l.u.nome }] }, dados, l.u.nome, meses[i]) : salva;
