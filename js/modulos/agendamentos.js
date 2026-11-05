@@ -136,14 +136,13 @@ function FormAgendamento({ base, item, onClose, onSalvo, toast, admin = false, d
 function DetalheAgendamento({ item, admin, onClose, onAtualizar, toast, onAbrirChecklist, parametros = {} }) {
     const [acao, setAcao] = useState(''), [km, setKm] = useState(''), [motivo, setMotivo] = useState(''), [obs, setObs] = useState(''), [problema, setProblema] = useState(false), [salvando, setSalvando] = useState(false), [avisoRetirada, setAvisoRetirada] = useState(false);
     const kmReferencia = Number(item.kmMinimoRetirada || 0);
-    const regularizacaoTerceiro = item.regularizacaoTerceiro === true;
-    const somenteLeitura = !admin && item.meuAgendamento === false && !regularizacaoTerceiro;
+    const somenteLeitura = !admin && item.meuAgendamento === false;
     const janelaRetiradaMinutos = Math.max(0, Number(parametros?.janelaRetiradaMinutos || 0));
     const inicioPrevistoRetirada = new Date(item.saidaPrevista || 0);
     const liberaRetiradaEm = Number.isFinite(inicioPrevistoRetirada.getTime()) ? new Date(inicioPrevistoRetirada.getTime() - janelaRetiradaMinutos * 60000) : null;
     const retiradaLiberada = admin || !liberaRetiradaEm || Date.now() >= liberaRetiradaEm.getTime();
     const textoLiberacaoRetirada = liberaRetiradaEm ? liberaRetiradaEm.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
-    const executar = async () => { if (acao === 'retirar' && kmReferencia && Number(km) < kmReferencia) {
+    const executar = async () => { if (somenteLeitura) return; if (acao === 'retirar' && kmReferencia && Number(km) < kmReferencia) {
         toast(`KM inicial não pode ser menor que o último KM final registrado da placa (${kmReferencia}).`);
         return;
     } setSalvando(true); try {
@@ -153,14 +152,14 @@ function DetalheAgendamento({ item, admin, onClose, onAtualizar, toast, onAbrirC
         if (acao === 'retirar')
             resposta = await ApiService.retirarAgendamento(item.id, { kmInicial: Number(km), possuiNC: problema, dataHora: new Date().toISOString(), origemOperacao: admin ? 'MONITORAMENTO_GESTAO' : 'APP' });
         if (acao === 'finalizar')
-            resposta = await ApiService.finalizarAgendamento(item.id, { kmFinal: Number(km), possuiProblema: problema, dataHora: new Date().toISOString(), regularizacaoTerceiro });
+            resposta = await ApiService.finalizarAgendamento(item.id, { kmFinal: Number(km), possuiProblema: problema, dataHora: new Date().toISOString() });
         if (acao === 'corrigir')
             resposta = await ApiService.admCorrigirKmAgendamento(item.id, { kmInicial: Number(km), kmFinal: Number(obs || 0), motivo });
         toast(resposta?.mensagem || 'Ação concluída.');
         await onAtualizar();
         onClose();
         if (resposta?.abrirChecklist && onAbrirChecklist)
-            onAbrirChecklist({ placa: resposta.placa || item.placa, agendamentoId: resposta.agendamentoId || item.id, etapa: resposta.etapa || acao, km: Number(resposta.km || km || 0), modoChecklist: resposta.modoChecklist || '', ultimoChecklist: resposta.ultimoChecklist || null, regularizacaoTerceiro: resposta.regularizacaoTerceiro === true || regularizacaoTerceiro });
+            onAbrirChecklist({ placa: resposta.placa || item.placa, agendamentoId: resposta.agendamentoId || item.id, etapa: resposta.etapa || acao, km: Number(resposta.km || km || 0), modoChecklist: resposta.modoChecklist || '', ultimoChecklist: resposta.ultimoChecklist || null });
     }
     catch (e) {
         toast(e.message);
@@ -210,6 +209,8 @@ function DetalheAgendamento({ item, admin, onClose, onAtualizar, toast, onAbrirC
             ['Criado por', (item.criadoPor || item.solicitante || '—') + (item.criadoManualmente ? ' · Manual ADM' : ' · Aplicativo')]
         );
     }
+    if (agendamentoTerceiro && item.solicitanteNome && item.solicitanteNome !== 'Reservado')
+        linhasDetalhe.push(['Agendado para', item.solicitanteNome]);
     linhasDetalhe.push(['Previsto', previsto]);
     if (!agendamentoTerceiro) {
         linhasDetalhe.push(
@@ -217,7 +218,7 @@ function DetalheAgendamento({ item, admin, onClose, onAtualizar, toast, onAbrirC
             aguardando ? ['Último KM registrado', kmReferencia || '—'] : ['KM', `${item.kmInicial || '—'} → ${item.kmFinal || '—'}`]
         );
     }
-    const titulo = agendamentoTerceiro
+    const titulo = agendamentoTerceiro && !item.origem && !item.destino
         ? 'Agendamento de outro motorista'
         : `${item.origem || 'Origem não informada'} → ${item.destino || 'Destino não informado'}`;
     return React.createElement(Modal, { titulo, onClose: onClose },
@@ -231,9 +232,9 @@ function DetalheAgendamento({ item, admin, onClose, onAtualizar, toast, onAbrirC
         !acao && React.createElement("div", { className: "agenda-acoes", style: { marginTop: 14 } },
             somenteLeitura && React.createElement("div", { className: "aviso-box", style: { width: '100%' } },
                 "Somente consulta. Este agendamento pertence a ",
-                item.motorista || 'outro motorista',
+                item.solicitanteNome && item.solicitanteNome !== 'Reservado' ? item.solicitanteNome : 'outro motorista',
                 "."),
-            !somenteLeitura && !regularizacaoTerceiro && aguardando && React.createElement(React.Fragment, null,
+            !somenteLeitura && aguardando && React.createElement(React.Fragment, null,
                 React.createElement("button", { className: "btn btn-d", onClick: () => setAcao('cancelar') }, "Cancelar agendamento"),
                 React.createElement("button", { className: "btn btn-p", disabled: !retiradaLiberada, onClick: () => { if (!retiradaLiberada)
                         return; admin ? (setKm(String(kmReferencia || item.kmInicial || '')), setAcao('retirar')) : setAvisoRetirada(true); } }, admin ? 'Retirar manualmente' : retiradaLiberada ? 'Retirar veículo' : 'Retirada ainda não liberada'),
@@ -241,12 +242,6 @@ function DetalheAgendamento({ item, admin, onClose, onAtualizar, toast, onAbrirC
                     "Dispon\u00EDvel a partir de ",
                     textoLiberacaoRetirada)),
             !somenteLeitura && ncSemDetalhe && onAbrirChecklist && React.createElement("button", {className:"btn btn-p",onClick:()=>{onClose();onAbrirChecklist({placa:item.placa,agendamentoId:item.id,etapa:"retirar",km:Number(item.kmInicial||0),modoChecklist:"OCORRENCIA"});}}, "Registrar anomalias no checklist"),
-            regularizacaoTerceiro && emUso && React.createElement(React.Fragment, null,
-                React.createElement("div", { className: "aviso-box", style: { width: '100%' } },
-                    "Este ve\u00EDculo possui uma devolu\u00E7\u00E3o anterior ainda aberta por ",
-                    item.motorista || 'outro motorista',
-                    ". Informe a condi\u00E7\u00E3o atual do ve\u00EDculo para liberar sua retirada."),
-                React.createElement("button", { className: "btn btn-p", onClick: () => { setKm(String(item.kmFinal || '')); setProblema(item.status === 'PENDENTE_FINALIZACAO'); setAcao('finalizar'); } }, "Regularizar devolu\u00E7\u00E3o anterior")),
             admin && item.status === 'EM_USO' && React.createElement(React.Fragment, null,
                 React.createElement("button", { className: "btn btn-s", onClick: () => { setKm(item.kmInicial || ''); setObs(item.kmFinal || ''); setAcao('corrigir'); } }, "Corrigir KM"),
                 React.createElement("button", { className: "btn btn-d", onClick: () => setAcao('cancelar') }, "Cancelar agendamento"),
@@ -257,9 +252,9 @@ function DetalheAgendamento({ item, admin, onClose, onAtualizar, toast, onAbrirC
             admin && item.status === 'PENDENTE_FINALIZACAO' && React.createElement(React.Fragment, null,
                 React.createElement("button", { className: "btn btn-s", onClick: () => { setKm(item.kmInicial || ''); setObs(item.kmFinal || ''); setAcao('corrigir'); } }, "Corrigir KM"),
                 React.createElement("button", { className: "btn btn-p", onClick: () => setAcao('finalizar') }, "Concluir finaliza\u00E7\u00E3o")),
-            !admin && !somenteLeitura && !regularizacaoTerceiro && emUso && React.createElement("button", { className: "btn btn-p", onClick: () => setAcao('finalizar') }, item.status === 'PENDENTE_FINALIZACAO' ? 'Concluir devolução' : 'Devolver veículo'),
+            !admin && !somenteLeitura && emUso && React.createElement("button", { className: "btn btn-p", onClick: () => setAcao('finalizar') }, item.status === 'PENDENTE_FINALIZACAO' ? 'Concluir devolução' : 'Devolver veículo'),
             admin && item.status === 'FINALIZADO' && React.createElement("button", { className: "btn btn-s", onClick: () => { setKm(item.kmInicial || ''); setObs(item.kmFinal || ''); setAcao('corrigir'); } }, "Corrigir KM")),
-        acao && React.createElement("div", { style: { marginTop: 14 } },
+        !somenteLeitura && acao && React.createElement("div", { style: { marginTop: 14 } },
             acao === 'cancelar' ? React.createElement(React.Fragment, null,
                 React.createElement("label", { htmlFor: "detalhe-agendamento-motivo-obrigatorio" }, "Motivo obrigat\u00F3rio"),
                 React.createElement("select", { id: "detalhe-agendamento-motivo-obrigatorio", name: "detalhe-agendamento-motivo-obrigatorio", value: motivo, onChange: e => setMotivo(e.target.value) },
@@ -267,7 +262,7 @@ function DetalheAgendamento({ item, admin, onClose, onAtualizar, toast, onAbrirC
                     ['VIAGEM_CANCELADA', 'ALTERACAO_PROGRAMACAO', 'VEICULO_NAO_NECESSARIO', 'MOTORISTA_INDISPONIVEL', 'VEICULO_INDISPONIVEL', 'ERRO_AGENDAMENTO', 'DUPLICIDADE', 'OUTRO'].map(x => React.createElement("option", { key: x }, x))),
                 React.createElement("label", { style: { marginTop: 8 }, htmlFor: "detalhe-agendamento-observacao" }, "Observa\u00E7\u00E3o"),
                 React.createElement("textarea", { id: "detalhe-agendamento-observacao", name: "detalhe-agendamento-observacao", value: obs, onChange: e => setObs(e.target.value) })) : React.createElement(React.Fragment, null,
-                React.createElement("label", null, acao === 'finalizar' ? (regularizacaoTerceiro ? 'KM atual / final da devolução anterior' : 'KM final') : 'KM inicial'),
+                React.createElement("label", null, acao === 'finalizar' ? 'KM final' : 'KM inicial'),
                 React.createElement("input", { type: "number", min: acao === 'retirar' && kmReferencia ? kmReferencia : 1, value: km, onChange: e => setKm(e.target.value) }),
                 acao === 'retirar' && kmReferencia > 0 && React.createElement("div", { className: "muted", style: { marginTop: 5 } },
                     "\u00DAltimo KM registrado: ",
@@ -279,8 +274,8 @@ function DetalheAgendamento({ item, admin, onClose, onAtualizar, toast, onAbrirC
                     React.createElement("label", { style: { marginTop: 8 }, htmlFor: "detalhe-agendamento-motivo" }, "Motivo"),
                     React.createElement("textarea", { id: "detalhe-agendamento-motivo", name: "detalhe-agendamento-motivo", value: motivo, onChange: e => setMotivo(e.target.value) })),
                 acao !== 'corrigir' && React.createElement("div", { style: { marginTop: 8 } },
-                    React.createElement("label", null, acao === 'retirar' ? 'Possui alguma NC?' : regularizacaoTerceiro ? 'Há alguma NC na condição atual?' : 'Houve problema?'),
-                    regularizacaoTerceiro && item.status === 'PENDENTE_FINALIZACAO' ? React.createElement("div", { className: "aviso-box" }, "Existe uma ocorr\u00EAncia pendente nesta devolu\u00E7\u00E3o. O registro da NC \u00E9 obrigat\u00F3rio para concluir.") : React.createElement("select", { value: problema ? 'sim' : 'nao', onChange: e => setProblema(e.target.value === 'sim') },
+                    React.createElement("label", null, acao === 'retirar' ? 'Possui alguma NC?' : 'Houve problema?'),
+                    React.createElement("select", { value: problema ? 'sim' : 'nao', onChange: e => setProblema(e.target.value === 'sim') },
                         React.createElement("option", { value: "nao" }, "N\u00E3o"),
                         React.createElement("option", { value: "sim" }, "Sim")))),
             React.createElement("div", { className: "agenda-acoes", style: { marginTop: 12 } },
@@ -339,8 +334,8 @@ function TelaAgendamento({ user, toast, onAbrirChecklist }) {
     const bloqueadorRetirada = retiradaPronta ? base.agendamentos
         .filter(a => a.meuAgendamento !== true && String(a.id) !== String(retiradaPronta.id) && mesmoVeiculoTela(a, retiradaPronta) && ['EM_USO', 'DEVOLUCAO_ATRASADA', 'PENDENTE_FINALIZACAO'].includes(a.status))
         .sort((a, b) => new Date(b.saidaReal || b.saidaPrevista || 0) - new Date(a.saidaReal || a.saidaPrevista || 0))[0] || null : null;
-    const proxima = pendencias[0] || emUso[0] || (bloqueadorRetirada ? { ...bloqueadorRetirada, regularizacaoTerceiro: true, agendamentoSeguinteId: retiradaPronta.id } : retiradaPronta) || agendadosFuturos[0] || null;
-    const configAcao = proxima ? (proxima.regularizacaoTerceiro ? { titulo: 'Regularizar devolução anterior', sub: `${proxima.motorista || 'Outro motorista'} ainda não concluiu a devolução deste veículo. Regularize a condição atual antes da sua retirada.`, botao: 'Regularizar devolução' } :
+    const proxima = pendencias[0] || emUso[0] || (bloqueadorRetirada ? bloqueadorRetirada : retiradaPronta) || agendadosFuturos[0] || null;
+    const configAcao = proxima ? (proxima.meuAgendamento === false ? { titulo: 'Veículo ainda em uso', sub: 'A devolução anterior está pendente. Aguarde o responsável ou procure a gestão.', botao: 'Consultar reserva anterior' } :
         proxima.status === 'PENDENTE_FINALIZACAO' ? { titulo: 'Finalizar pendência', sub: 'A devolução possui uma pendência e precisa ser concluída.', botao: 'Concluir devolução' } :
             ['EM_USO', 'DEVOLUCAO_ATRASADA'].includes(proxima.status) ? { titulo: 'Devolver veículo', sub: proxima.status === 'DEVOLUCAO_ATRASADA' ? 'O horário previsto de retorno já passou.' : 'A utilização está aberta e precisa ser encerrada ao retornar.', botao: 'Devolver veículo' } :
                 ['AGENDADO', 'AGUARDANDO_RETIRADA'].includes(proxima.status) && agora >= new Date(new Date(proxima.saidaPrevista).getTime() - janelaRetirada * 60000) ? { titulo: 'Retirar veículo', sub: `Seu agendamento começa às ${fmtDataHora(proxima.saidaPrevista).slice(-5)}.`, botao: 'Retirar veículo' } :
