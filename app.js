@@ -87,7 +87,7 @@ const CONFIG = {
     TIMEOUT_MS: 90000,
     RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
     MAX_TENTATIVAS: 4,
-    VERSAO: '2.8.49-homolog'
+    VERSAO: '2.8.50-homolog'
 };
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
 document.title = `Logística Bocchi — Portal do Motorista e ADM Logística (${CONFIG.VERSAO})`;
@@ -382,63 +382,6 @@ function otimizarArquivoBinario(arquivo) {
 let _expiraSessao = null;
 let _token = null;
 let _loginSessao = null; // identifica o proprietário do token atual
-// Leituras reutilizadas apenas na memória desta sessão; nunca em armazenamento persistente.
-class CacheLeiturasPortal {
-    constructor() { this.entradas = new Map(); }
-    limpar(modulos) {
-        if (!Array.isArray(modulos)) {
-            for (const entrada of this.entradas.values()) entrada.invalidada = true;
-            this.entradas.clear();
-            return;
-        }
-        for (const [chave, entrada] of this.entradas) {
-            if (!entrada.modulo || modulos.includes(entrada.modulo)) {
-                entrada.invalidada = true;
-                this.entradas.delete(chave);
-            }
-        }
-    }
-    async obter(chave, carregar, ttl = 0, modulo = null) {
-        for (const [k, e] of this.entradas) if (!e.pendente && e.ate <= Date.now()) this.entradas.delete(k);
-        if (this.entradas.size > 100) for (const [k,e] of this.entradas) { if (!e.pendente) this.entradas.delete(k); }
-        const atual = this.entradas.get(chave);
-        if (atual && (atual.pendente || atual.ate > Date.now())) {
-            const valor = await atual.valor;
-            if (atual.invalidada && modulo) throw new Error('Leitura invalidada por uma atualização.');
-            return structuredClone(valor);
-        }
-        const entrada = { pendente: true, ate: 0, modulo };
-        entrada.valor = Promise.resolve().then(carregar);
-        this.entradas.set(chave, entrada);
-        try {
-            const valor = await entrada.valor;
-            if (entrada.invalidada && modulo) throw new Error('Leitura invalidada por uma atualização.');
-            entrada.pendente = false;
-            entrada.ate = Date.now() + ttl;
-            if (!ttl) {
-                if (this.entradas.get(chave) === entrada) this.entradas.delete(chave);
-            }
-            return structuredClone(valor);
-        } catch (erro) {
-            if (this.entradas.get(chave) === entrada) this.entradas.delete(chave);
-            throw erro;
-        }
-    }
-}
-const cacheLeiturasPortal = new CacheLeiturasPortal();
-function invalidarLeiturasPortal(modulos) {
-    if (!Array.isArray(modulos)) {
-        cacheLeiturasPortal.limpar();
-        return;
-    }
-    const afetados = [...modulos];
-    if (modulos.includes('cadastros')) afetados.push('cargas', 'configuracoes');
-    if (afetados.includes('cargas') || modulos.includes('contestacoes')) afetados.push('premiacao');
-    cacheLeiturasPortal.limpar(afetados);
-}
-window.addEventListener('bocchi:atualizacao', evento => invalidarLeiturasPortal(evento.detail));
-window.addEventListener('bocchi:sessao-invalida', () => cacheLeiturasPortal.limpar());
-
 const ApiService = {
     get token() { return _token; },
     get loginAtual() { return _loginSessao; },
@@ -723,14 +666,14 @@ const ApiService = {
     }
 };
 const aguardar = ms => new Promise(resolve => setTimeout(resolve, ms));
-function erroTemporarioGraph(error) {
+function erroTemporarioDaApi(error) {
     const status = Number(error?.status || 0);
     const texto = String(error?.message || '') + ' ' + JSON.stringify(error?.detalhe || {});
     const falhaRede = /failed to fetch|network|fetch|aborterror|timeout|tempo limite/i.test(texto);
     return falhaRede || ([408, 425, 429, 500, 502, 503, 504].includes(status) &&
         (status !== 500 || /429|throttl|temporari|limite|muitas tentativas/i.test(texto)));
 }
-async function executarComRetentativaGraph(operacao, maxTentativas = 4) {
+async function executarComRetentativa(operacao, maxTentativas = 4) {
     let ultimoErro;
     for (let tentativa = 1; tentativa <= maxTentativas; tentativa++) {
         try {
@@ -738,7 +681,7 @@ async function executarComRetentativaGraph(operacao, maxTentativas = 4) {
         }
         catch (error) {
             ultimoErro = error;
-            if (!erroTemporarioGraph(error) || tentativa === maxTentativas)
+            if (!erroTemporarioDaApi(error) || tentativa === maxTentativas)
                 throw error;
             await aguardar(Math.min(30000, 4000 * Math.pow(2, tentativa - 1)));
         }
@@ -3738,7 +3681,7 @@ const FilaApuracaoRH = (() => {
             let concluiu = true;
             for (const competencia of competencias) {
                 try {
-                    await executarComRetentativaGraph(async () => {
+                    await executarComRetentativa(async () => {
                         const resposta = await ApiService.obterPremiacaoMotorista(u.nome, [competencia]);
                         const apuracao = (resposta.apuracoes || []).find(a => a.competencia === competencia);
                         if (!apuracao)
@@ -3981,7 +3924,7 @@ function PainelRH({ st, dados, user }) {
             ? 'Fechando o quadrimestre e bloqueando os lançamentos. Aguarde...'
             : 'Reabrindo os registros fechados do quadrimestre. Aguarde...');
         try {
-            const resposta = await executarComRetentativaGraph(() => ApiService.alterarStatusQuadrimestre(ano, quadrimestre, acao));
+            const resposta = await executarComRetentativa(() => ApiService.alterarStatusQuadrimestre(ano, quadrimestre, acao));
             const totalAlterado = Number(resposta.total || 0);
             const atualizadas = await ApiService.obterApuracoesSalvas('', '', { somenteSalvas: true });
             const porMotorista = {};
