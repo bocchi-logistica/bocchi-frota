@@ -200,10 +200,27 @@ function DetalheAgendamento({ item, admin, onClose, onAtualizar, toast, onAbrirC
                 React.createElement("button", { className: "btn btn-p orientacao-ciente", onClick: () => { setAvisoRetirada(false); setKm(String(kmReferencia || item.kmInicial || '')); setAcao('retirar'); } }, "Li e estou ciente \u2014 Continuar retirada")));
     const ncSemDetalhe = item.status === 'BLOQUEADO_NC' && !item.checklistNCProtocolo;
     const aguardando = ['AGENDADO', 'AGUARDANDO_RETIRADA'].includes(item.status), emUso = ['EM_USO', 'DEVOLUCAO_ATRASADA', 'PENDENTE_FINALIZACAO'].includes(item.status);
-    const linhasDetalhe = aguardando
-        ? [['Veículo', item.placa], ['Motorista', item.motorista], ['Agendado para', item.solicitante || item.motorista || '—'], ['Criado por', (item.criadoPor || item.solicitante || '—') + (item.criadoManualmente ? ' · Manual ADM' : ' · Aplicativo')], ['Previsto', fmtDataHora(item.saidaPrevista) + ' até ' + fmtDataHora(item.retornoPrevisto)], ['Real', fmtDataHora(item.saidaReal) + ' até ' + fmtDataHora(item.retornoReal)], ['Último KM registrado', kmReferencia || '—']]
-        : [['Veículo', item.placa], ['Motorista', item.motorista], ['Agendado para', item.solicitante || item.motorista || '—'], ['Criado por', (item.criadoPor || item.solicitante || '—') + (item.criadoManualmente ? ' · Manual ADM' : ' · Aplicativo')], ['Previsto', fmtDataHora(item.saidaPrevista) + ' até ' + fmtDataHora(item.retornoPrevisto)], ['Real', fmtDataHora(item.saidaReal) + ' até ' + fmtDataHora(item.retornoReal)], ['KM', `${item.kmInicial || '—'} → ${item.kmFinal || '—'}`]];
-    return React.createElement(Modal, { titulo: `${item.origem} → ${item.destino}`, onClose: onClose },
+    const agendamentoTerceiro = !admin && item.meuAgendamento === false;
+    const previsto = fmtDataHora(item.saidaPrevista) + ' até ' + fmtDataHora(item.retornoPrevisto);
+    const linhasDetalhe = [['Veículo', item.placa]];
+    if (!agendamentoTerceiro) {
+        linhasDetalhe.push(
+            ['Motorista', item.motorista || item.solicitanteNome || '—'],
+            ['Agendado para', item.solicitante || item.solicitanteNome || item.motorista || '—'],
+            ['Criado por', (item.criadoPor || item.solicitante || '—') + (item.criadoManualmente ? ' · Manual ADM' : ' · Aplicativo')]
+        );
+    }
+    linhasDetalhe.push(['Previsto', previsto]);
+    if (!agendamentoTerceiro) {
+        linhasDetalhe.push(
+            ['Real', fmtDataHora(item.saidaReal) + ' até ' + fmtDataHora(item.retornoReal)],
+            aguardando ? ['Último KM registrado', kmReferencia || '—'] : ['KM', `${item.kmInicial || '—'} → ${item.kmFinal || '—'}`]
+        );
+    }
+    const titulo = agendamentoTerceiro
+        ? 'Agendamento de outro motorista'
+        : `${item.origem || 'Origem não informada'} → ${item.destino || 'Destino não informado'}`;
+    return React.createElement(Modal, { titulo, onClose: onClose },
         React.createElement("div", { className: "row" },
             React.createElement(AgendaStatus, { status: item.status }),
             React.createElement("span", { className: "muted" }, item.codigo)),
