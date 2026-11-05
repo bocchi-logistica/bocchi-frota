@@ -87,7 +87,7 @@ const CONFIG = {
     TIMEOUT_MS: 90000,
     RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
     MAX_TENTATIVAS: 4,
-    VERSAO: '2.8.47-homolog'
+    VERSAO: '2.8.48-homolog'
 };
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
 document.title = `Logística Bocchi — Portal do Motorista e ADM Logística (${CONFIG.VERSAO})`;
@@ -4362,24 +4362,17 @@ function AdmPainel({ st, dados, user, onNavegar }) {
                     setCargasCarregadas(true);
                     return;
                 }
-                const [cadastros, cargasResp, apuracoesResp] = await Promise.all([
-                    ApiService.admCadastros(),
-                    ApiService._req('GET', '/cargas/me?' + new URLSearchParams({ modo: 'resumo-painel', competencia: competenciaInicio, ateCompetencia: competenciaFim })),
-                    periodoMultiplo ? Promise.resolve({ apuracoes: [] }) : ApiService.obterApuracoesSalvas(competenciaInicio)
-                ]);
+                const cargasResp = await ApiService._req('GET', '/cargas/me?' + new URLSearchParams({
+                    modo: 'resumo-painel', competencia: competenciaInicio, ateCompetencia: competenciaFim
+                }));
                 if (!ativo)
                     return;
-                const usuarios = Array.isArray(cadastros.usuarios) ? cadastros.usuarios : [];
-                setUsuariosPainel(usuarios);
-                setVinculosPainel(Array.isArray(cadastros.vinculos) ? cadastros.vinculos : []);
-                setVeiculosPainel(Array.isArray(cadastros.veiculos) ? cadastros.veiculos : []);
-                setResumosPainel(Array.isArray(cargasResp.resumos) ? cargasResp.resumos : []);
-                const salvas = {};
-                (apuracoesResp.apuracoes || []).forEach(item => {
-                    const u = usuarios.find(x => idUsuario(x) === String(item.motoristaId || ''));
-                    salvas[String(item.motoristaId || '')] = apuracaoSalvaParaTela(item, u?.nome || '');
-                });
-                setApuracoesPainel(salvas);
+                if (!Array.isArray(cargasResp.motoristas) || !Array.isArray(cargasResp.resumos))
+                    throw new Error('Resposta de Cargas incompatível com esta versão do painel.');
+                setUsuariosPainel(cargasResp.motoristas);
+                setResumosPainel(cargasResp.resumos);
+                setApuracoesPainel(Object.fromEntries(cargasResp.motoristas.filter(u => u.fechado)
+                    .map(u => [String(u.id), { status: 'FECHADO' }])));
                 setCargasCarregadas(true);
             }
             catch (e) {
@@ -4394,7 +4387,7 @@ function AdmPainel({ st, dados, user, onNavegar }) {
         carregarCargas();
         return () => { ativo = false; };
     }, [mes, mesAte, revisaoCargas]);
-    const motoristas = usuariosPainel.filter(u => usuarioValidoPremiacaoPeriodo(u, vinculosPainel, inicioMes, fimMes));
+    const motoristas = CONFIG.MODO_TESTE_LOCAL ? usuariosPainel.filter(u => usuarioValidoPremiacaoPeriodo(u, vinculosPainel, inicioMes, fimMes)) : usuariosPainel;
     const veiculoPorPlaca = new Map((veiculosPainel || []).map(v => [String(v.placa || '').trim().toUpperCase(), v]));
     const cargasPorMotorista = new Map();
     for (const carga of cargasPainel) {
@@ -4701,7 +4694,7 @@ function AdmPainel({ st, dados, user, onNavegar }) {
         React.createElement(Subtabs, null),
         subPainel === 'visao' && carregandoPainel && React.createElement("div", { className: "aviso-box" }, "Carregando pend\u00EAncias operacionais..."),
         subPainel === 'visao' && erroPainel && React.createElement("div", { className: "aviso-box", style: { color: 'var(--erro)' } }, erroPainel),
-        ['cargas', 'detalhes'].includes(subPainel) && carregandoCargasPainel && React.createElement("div", { className: "aviso-box" }, 'Carregando cargas, motoristas e apurações salvas...'),
+        ['cargas', 'detalhes'].includes(subPainel) && carregandoCargasPainel && React.createElement("div", { className: "aviso-box" }, 'Carregando resumo de cargas...'),
         ['cargas', 'detalhes'].includes(subPainel) && erroCargasPainel && React.createElement("div", { className: "aviso-box", style: { color: 'var(--erro)' } }, erroCargasPainel),
         !carregandoPainel && !erroPainel && subPainel === 'visao' && React.createElement(React.Fragment, null,
             React.createElement("div", { className: "card", style: { padding: 12 } },
