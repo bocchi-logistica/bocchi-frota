@@ -11,7 +11,6 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
     const [resps, setResps] = useState({});
     const [ver, setVer] = useState(null);
     const abrirChecklistHistorico = async ck => {
-        if(CONFIG.MODO_TESTE_LOCAL){setVer(ck);return;}
         try{
             const r=await ApiService.consultarChecklist(ck.protocolo||ck.id),d=r.checklist;
             if(!d)throw new Error("Checklist não encontrado.");
@@ -29,8 +28,8 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
     const [temRascunho, setTemRascunho] = useState(false);
     const fileRefs = useRef({});
     const veiculosDemo = Object.values(st.frota).filter(f => f.motorista === user.nome);
-    const [veiculosPermitidos, setVeiculosPermitidos] = useState(CONFIG.MODO_TESTE_LOCAL ? veiculosDemo : []);
-    const [carregandoVeiculos, setCarregandoVeiculos] = useState(!CONFIG.MODO_TESTE_LOCAL);
+    const [veiculosPermitidos, setVeiculosPermitidos] = useState([]);
+    const [carregandoVeiculos, setCarregandoVeiculos] = useState(true);
     const [erroVeiculos, setErroVeiculos] = useState('');
     const [veiculo, setVeiculo] = useState(veiculosDemo[0]?.placa || '');
     const vSel = veiculosPermitidos.find(v => v.placa === veiculo);
@@ -57,8 +56,6 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
         ordem: Number(p.ordem || 999)
     })).sort((a, b) => a.grupo.localeCompare(b.grupo, 'pt-BR') || a.ordem - b.ordem);
     useEffect(() => {
-        if (CONFIG.MODO_TESTE_LOCAL)
-            return;
         let ativo = true;
         setCarregandoVeiculos(true);
         setErroVeiculos('');
@@ -98,8 +95,6 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
         return 'pendente';
     };
     const carregarHistorico = async (silencioso = false) => {
-        if (CONFIG.MODO_TESTE_LOCAL)
-            return;
         try {
             const r = await ApiService.consultarMeusChecklists();
             const vindos = (r.checklists || []).map(x => ({
@@ -436,12 +431,6 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
             localStorage.setItem('km_' + veiculo, String(km));
             // Somente no modo local de testes o registro entra diretamente no painel local.
             // Em produção, o painel administrativo deve carregar exclusivamente os dados da API/banco D1 de homologação.
-            if (CONFIG.MODO_TESTE_LOCAL) {
-                const registroLocal = { id: 'demo' + Date.now(), idLocal, motorista: user.nome, placa: veiculo, frota: frotaSel, data: HOJE, status: 'pendente', motivoReprova: '',
-                    km: String(km), combustivel: extras.combustivel || '',
-                    respostas: perguntasExibidas.map(p => ({ pid: p.id, resp: (resps[p.id] && resps[p.id].resp) || 'NA', obs: (resps[p.id] && resps[p.id].obs) || '', foto: (resps[p.id] && resps[p.id].foto) || null })) };
-                setSt(s => ({ ...s, checklists: [...s.checklists, registroLocal] }));
-            }
             // 2) tenta enviar agora; só marca ENVIADO com confirmação real da API
             await FilaEnvio.processar(toast, user.login);
             const fila = await IDB.listarFila();
@@ -741,10 +730,6 @@ function AdmChecklist({ st, setSt, toast, user, foco }) {
     const [sub, setSub] = useState(pode(user, 'checklist.aprovacao') ? 'aprovar' : pode(user, 'checklist.perguntas') ? 'perguntas' : 'relatorio');
     const [sincronizando, setSincronizando] = useState(false);
     const sincronizar = async () => {
-        if (CONFIG.MODO_TESTE_LOCAL) {
-            toast('Modo local de testes: dados simulados. Configure a URL do backend e desative MODO_TESTE_LOCAL para consultar o banco D1 de homologação.');
-            return;
-        }
         setSincronizando(true);
         try {
             const r = await ApiService.admListarChecklists();
@@ -767,7 +752,6 @@ function AdmChecklist({ st, setSt, toast, user, foco }) {
     };
     const [ver, setVer] = useState(null);
     const abrirDetalhe = async ck => {
-        if(CONFIG.MODO_TESTE_LOCAL){setVer(ck);return;}
         try{
             const r=await ApiService.admDetalhe(ck.id), detalhe=r.checklist;
             if(!detalhe)throw new Error("Checklist não encontrado.");
@@ -845,7 +829,7 @@ function AdmChecklist({ st, setSt, toast, user, foco }) {
             toast('Informe o motivo do bloqueio do veículo.');
             return;
         }
-        if (!CONFIG.MODO_TESTE_LOCAL && ck.id && !String(ck.id).startsWith('DEMO-')) {
+        if (ck.id && !String(ck.id).startsWith('DEMO-')) {
             try {
                 await ApiService.admStatus(ck.id, status === 'aprovado' ? 'APROVADO' : 'REPROVADO', motivo || '', opcoes);
             }
