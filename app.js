@@ -15,7 +15,6 @@ function useAtualizacaoPortal(modulos, atualizar) {
     const callback = React.useRef(atualizar);
     callback.current = atualizar;
     useEffect(() => {
-        if (CONFIG.MODO_TESTE_LOCAL) return;
         let ocupado = false;
         let pendente = false;
         let ativo = true;
@@ -45,7 +44,7 @@ function useAtualizacaoPortal(modulos, atualizar) {
 
 function useConexaoPortal(usuario) {
     useEffect(() => {
-        if (!CONFIG.ATUALIZACAO_TEMPO_REAL || !usuario || !ApiService.token || CONFIG.MODO_TESTE_LOCAL) return;
+        if (!CONFIG.ATUALIZACAO_TEMPO_REAL || !usuario || !ApiService.token) return;
         const url = new URL(CONFIG.API_URL + '/atualizacoes', location.href);
         url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
         let socket, timer, encerrado = false, conectadoAntes = false, atraso = 1000;
@@ -78,8 +77,6 @@ const { useState, useMemo, useRef, useEffect } = React;
    ========================================================================== */
 const CONFIG = {
     API_URL: "https://bocchi-frota-api-homolog.logistica-951.workers.dev",
-    // Modo local de testes, desativado em produção: não grava na API.
-    MODO_TESTE_LOCAL: false,
     ATUALIZACAO_TEMPO_REAL: false,
     MAX_FOTO_MB: 2,
     QUALIDADE_FOTO: 0.7,
@@ -87,7 +84,7 @@ const CONFIG = {
     TIMEOUT_MS: 90000,
     RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
     MAX_TENTATIVAS: 4,
-    VERSAO: '2.8.64-homolog'
+    VERSAO: '2.8.65-homolog'
 };
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
 document.title = `Logística Bocchi — Portal do Motorista e ADM Logística (${CONFIG.VERSAO})`;
@@ -377,7 +374,6 @@ function otimizarArquivoBinario(arquivo) {
    SERVIÇO DE INTEGRAÇÃO
    O front-end acessa somente o backend definido em CONFIG.API_URL.
    O acesso ao banco D1 de homologação é responsabilidade exclusiva do backend.
-   Em MODO_TESTE_LOCAL, as funções simulam o servidor localmente.
    ========================================================================== */
 let _expiraSessao = null;
 let _token = null;
@@ -505,15 +501,6 @@ const ApiService = {
         }
         _token = null; _loginSessao = null; _expiraSessao = null; try { sessionStorage.removeItem('bocchi.portal.sessao'); } catch {} },
     enviarChecklist(registro) {
-        if (CONFIG.MODO_TESTE_LOCAL) {
-            // Simula o servidor com prefixo DEMO, sem confundir com protocolos reais
-            return new Promise(res => setTimeout(() => {
-                const d = new Date();
-                const dt = d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
-                res({ sucesso: true, protocolo: 'DEMO-' + dt + '-' + String(Math.floor(Math.random() * 9000) + 1000),
-                    dataHoraRecebimento: agoraISO(), status: 'RECEBIDO' });
-            }, 700));
-        }
         return this._req('POST', '/checklists', registro);
     },
     consultarMeusChecklists() { return this._req('GET', '/checklists/me'); },
@@ -760,7 +747,7 @@ const FilaEnvio = {
             return;
         // Um temporizador de uma sessão anterior pode disparar depois da troca de
         // motorista. Nesse caso ele é encerrado sem acessar nem enviar o registro.
-        if (!CONFIG.MODO_TESTE_LOCAL && ApiService.loginAtual !== login)
+        if (ApiService.loginAtual !== login)
             return;
         if (this._processando)
             return; // evita tentativas simultâneas
@@ -1241,10 +1228,10 @@ function MotoristaApp({ st, setSt, user, onSair, toast }) {
     ].filter(Boolean);
     const [aba, setAba] = useModuloPortal('motorista', user, abas.map(a => a.id));
     const dados = usarDadosMensais(st);
-    const [carregandoCargas, setCarregandoCargas] = useState(!CONFIG.MODO_TESTE_LOCAL);
-    const [carregandoPremiacao, setCarregandoPremiacao] = useState(!CONFIG.MODO_TESTE_LOCAL);
+    const [carregandoCargas, setCarregandoCargas] = useState(true);
+    const [carregandoPremiacao, setCarregandoPremiacao] = useState(true);
     useEffect(() => {
-        if (CONFIG.MODO_TESTE_LOCAL || !['cargas', 'prem'].includes(aba))
+        if (!['cargas', 'prem'].includes(aba))
             return;
         let ativo = true;
         Promise.allSettled([
@@ -1395,7 +1382,7 @@ function AdmApp({ st, setSt, user, onSair, toast }) {
         setAba(id);
     };
     useEffect(() => {
-        if (CONFIG.MODO_TESTE_LOCAL || !pode(user, 'checklist.administrar'))
+        if (!pode(user, 'checklist.administrar'))
             return;
         ApiService.admListarChecklists().then(r => {
             const vindos = (r.itens || r.checklists || []).map(x => ({
@@ -1437,7 +1424,7 @@ function AdmApp({ st, setSt, user, onSair, toast }) {
 function restaurarSessaoPortal() {
     try {
         const sessao = JSON.parse(sessionStorage.getItem('bocchi.portal.sessao') || 'null');
-        if (!CONFIG.MODO_TESTE_LOCAL && sessao?.token && sessao.usuario?.login && Date.parse(sessao.expiraEm) > Date.now()) {
+        if (sessao?.token && sessao.usuario?.login && Date.parse(sessao.expiraEm) > Date.now()) {
             _token = sessao.token;
             _expiraSessao = sessao.expiraEm;
             _loginSessao = sessao.usuario.login.trim().toLowerCase();
