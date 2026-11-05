@@ -87,7 +87,7 @@ const CONFIG = {
     TIMEOUT_MS: 90000,
     RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
     MAX_TENTATIVAS: 4,
-    VERSAO: '2.8.43-homolog'
+    VERSAO: '2.8.44-homolog'
 };
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
 document.title = `Logística Bocchi — Portal do Motorista e ADM Logística (${CONFIG.VERSAO})`;
@@ -1326,12 +1326,7 @@ function TelaCargas({ st: estadoPortal, setSt, user, toast }) {
         }
     };
     const mesesDisp = [...new Set([...mesesAteHoje(), MES_ATUAL, mes, ...estadoPortal.cargas.filter(c => c.motorista === user.nome).map(c => mesDaData(c.data))])].sort((a,b) => (a.slice(3)+a.slice(0,2)).localeCompare(b.slice(3)+b.slice(0,2)));
-    const seletor = React.createElement(React.Fragment, null,
-        React.createElement("div", { className: "seletor-mes" }, mesesDisp.map(m => React.createElement("button", { key: m, className: 'mes-pill' + (m === mes ? ' on' : ''), onClick: () => setMes(m) }, mesLabel(m)))),
-        React.createElement("label", null, "Outra competência ", React.createElement("input", { type: "month", value: competencia, onChange: e => {
-            const valor = e.target.value;
-            if (/^\d{4}-(0[1-9]|1[0-2])$/.test(valor)) setMes(valor.slice(5) + '/' + valor.slice(0, 4));
-        } })));
+    const seletor = React.createElement("div", { className: "seletor-mes" }, mesesDisp.map(m => React.createElement("button", { key: m, className: 'mes-pill' + (m === mes ? ' on' : ''), onClick: () => setMes(m) }, mesLabel(m))));
     if (!CONFIG.MODO_TESTE_LOCAL && (!resultadoAtual || resultadoAtual.erro))
         return React.createElement(React.Fragment, null, seletor,
             React.createElement("div", { className: "card muted", role: "status" }, resultadoAtual?.erro ?
