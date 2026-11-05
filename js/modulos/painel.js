@@ -5,8 +5,6 @@ function AdmPainel({ st, dados, user, onNavegar }) {
     const [mesAte, setMesAte] = useState(MES_ATUAL);
     const [usuariosPainel, setUsuariosPainel] = useState([]);
     const [vinculosPainel, setVinculosPainel] = useState([]);
-    const [veiculosPainel, setVeiculosPainel] = useState([]);
-    const [cargasPainel, setCargasPainel] = useState([]);
     const [resumosPainel, setResumosPainel] = useState([]);
     const [apuracoesPainel, setApuracoesPainel] = useState({});
     const [contestacoesPainel, setContestacoesPainel] = useState([]);
@@ -50,14 +48,6 @@ function AdmPainel({ st, dados, user, onNavegar }) {
             setCarregandoPainel(true);
             setErroPainel('');
             try {
-                if (CONFIG.MODO_TESTE_LOCAL) {
-                    if (!ativo)
-                        return;
-                    setContestacoesPainel(st.contestacoes || []);
-                    setChecklistsPainel(st.checklists || []);
-                    setSinistrosPainel(st.sinistros || []);
-                    return;
-                }
                 const [contestacoesResp, checklistsResp, sinistrosResp] = await Promise.allSettled([
                     pode(user, 'contestacoes.visualizar') ? ApiService.admListarContestacoes() : Promise.resolve({ contestacoes: [] }),
                     pode(user, 'checklist.aprovacao') ? ApiService.admListarChecklists() : Promise.resolve({ checklists: [] }),
@@ -96,19 +86,6 @@ function AdmPainel({ st, dados, user, onNavegar }) {
             setCarregandoCargasPainel(true);
             setErroCargasPainel('');
             try {
-                if (CONFIG.MODO_TESTE_LOCAL) {
-                    if (!ativo)
-                        return;
-                    setUsuariosPainel(st.usuarios || []);
-                    setVinculosPainel(st.vinculos || []);
-                    setVeiculosPainel(Object.values(st.frota || {}));
-                    setCargasPainel((st.cargas || []).filter(c => { const comp = String(c.competencia || '') || compDeTela(String(c.mes || '')); return comp >= competenciaInicio && comp <= competenciaFim; }));
-                    const salvas = {};
-                    (st.apuracoes || []).filter(a => String(a.competencia || '') === competencia).forEach(a => { salvas[String(a.motoristaId || a.usuarioId || '')] = a; });
-                    setApuracoesPainel(salvas);
-                    setCargasCarregadas(true);
-                    return;
-                }
                 const cargasResp = await ApiService._req('GET', '/cargas/me?' + new URLSearchParams({
                     modo: 'resumo-painel', competencia: competenciaInicio, ateCompetencia: competenciaFim
                 }));
@@ -134,40 +111,18 @@ function AdmPainel({ st, dados, user, onNavegar }) {
         carregarCargas();
         return () => { ativo = false; };
     }, [mes, mesAte, revisaoCargas, podeCargas]);
-    const motoristas = CONFIG.MODO_TESTE_LOCAL ? usuariosPainel.filter(u => usuarioValidoPremiacaoPeriodo(u, vinculosPainel, inicioMes, fimMes)) : usuariosPainel;
-    const veiculoPorPlaca = new Map((veiculosPainel || []).map(v => [String(v.placa || '').trim().toUpperCase(), v]));
-    const cargasPorMotorista = new Map();
-    for (const carga of cargasPainel) {
-        const uid = String(carga.usuarioId || '');
-        const chave = uid || normalizar(carga.motorista || '');
-        if (!cargasPorMotorista.has(chave))
-            cargasPorMotorista.set(chave, []);
-        cargasPorMotorista.get(chave).push(carga);
-    }
+    const motoristas = usuariosPainel;
     const pendenciasNome = (nome, inicio = competenciaInicio, fim = competenciaFim) => {
         const contestacoes = contestacoesPainel.filter(c => String(c.status || '').toLowerCase() === 'pendente' && String(c.dataCarga || c.data || '').slice(0, 7) >= inicio && String(c.dataCarga || c.data || '').slice(0, 7) <= fim && normalizar(c.motorista) === normalizar(nome)).length;
         const checklists = checklistsPainel.filter(c => String(c.status || '').toLowerCase() === 'pendente' && String(c.data || '').slice(0, 7) >= inicio && String(c.data || '').slice(0, 7) <= fim && normalizar(c.motoristaNome || c.motorista) === normalizar(nome)).length;
         return contestacoes + checklists;
     };
-    const tipoDaCarga = c => {
-        const veiculo = veiculoPorPlaca.get(String(c.placa || '').trim().toUpperCase());
-        return String(c.tipoVeiculo || veiculo?.tipoModelo || veiculo?.tipo || '').trim();
-    };
     const motivosCarga = c => [
         !Number(c.peso || c.pesoTon || 0) && 'Peso ausente, zerado ou inválido',
         !Number(c.freteTotal || 0) && 'Frete ausente, zerado ou inválido',
-        !tipoDaCarga(c) && 'Tipo de veículo não identificado'
+        !String(c.tipoVeiculo ?? "").trim() && 'Tipo de veículo não identificado'
     ].filter(Boolean);
     const rotulosAlertas = ['Peso ausente, zerado ou inválido', 'Frete ausente, zerado ou inválido', 'Tipo de veículo não identificado'];
-    const resumoDeCargas = cargas => {
-        const peso = cargas.reduce((s, c) => s + Number(c.peso || c.pesoTon || 0), 0);
-        const frete = cargas.reduce((s, c) => s + Number(c.freteTotal || 0), 0);
-        const premiacao = cargas.reduce((s, c) => s + Number(c.premiacao ?? 0), 0);
-        const tipos = [...new Set(cargas.map(tipoDaCarga).filter(Boolean))];
-        const motivos = cargas.flatMap(motivosCarga);
-        return { quantidade: cargas.length, peso, frete, premiacao, tipos,
-            alertas: rotulosAlertas.map(rotulo => motivos.filter(m => m === rotulo).length) };
-    };
     const resumir = (u, uid, meses, mesLinha = '') => {
         const quantidade = meses.reduce((s, m) => s + m.quantidade, 0);
         const peso = meses.reduce((s, m) => s + m.peso, 0);
@@ -201,16 +156,6 @@ function AdmPainel({ st, dados, user, onNavegar }) {
     const linhas = motoristas.map(u => {
         const uid = idUsuario(u);
         let meses = resumoPorMotorista.get(uid) || [];
-        if (CONFIG.MODO_TESTE_LOCAL) {
-            const cargas = cargasPorMotorista.get(uid) || cargasPorMotorista.get(normalizar(u.nome)) || [];
-            const porMes = new Map();
-            for (const carga of cargas) {
-                const mesCarga = String(carga.data || '').slice(0, 7);
-                if (!porMes.has(mesCarga)) porMes.set(mesCarga, []);
-                porMes.get(mesCarga).push(carga);
-            }
-            meses = [...porMes].sort(([a], [b]) => b.localeCompare(a)).map(([mes, itens]) => ({ ...resumoDeCargas(itens), mes }));
-        }
         return resumir(u, uid, meses);
     }).sort((a, b) => b.frete - a.frete || a.u.nome.localeCompare(b.u.nome, 'pt-BR'));
     const tipos = [...new Set(linhas.map(l => l.tipo).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
@@ -261,7 +206,7 @@ function AdmPainel({ st, dados, user, onNavegar }) {
     const pagina = paginaDetalhe.chave === consultaDetalhe ? paginaDetalhe.numero : 1;
     const chaveDetalhe = consultaDetalhe + '&pagina=' + pagina + '|' + revisaoCargas;
     useEffect(() => {
-        if (CONFIG.MODO_TESTE_LOCAL || subPainel !== 'detalhes' || !consultaDetalhe) return;
+        if (subPainel !== 'detalhes' || !consultaDetalhe) return;
         let ativo = true;
         const timer = setTimeout(() => {
             ApiService._req('GET', '/cargas/me?' + consultaDetalhe + '&pagina=' + pagina).then(dados => {
@@ -278,26 +223,10 @@ function AdmPainel({ st, dados, user, onNavegar }) {
         return () => { ativo = false; clearTimeout(timer); };
     }, [subPainel, chaveDetalhe]);
     const detalheAtual = resultadoDetalhe?.chave === chaveDetalhe ? resultadoDetalhe : null;
-    const cargasLocaisMotorista = motoristaDetalhe ? cargasPorMotorista.get(motoristaDetalhe.uid) ||
-        cargasPorMotorista.get(normalizar(motoristaDetalhe.u.nome)) || [] : [];
-    const cargasLocaisDetalhe = cargasLocaisMotorista.filter(c => !motoristaDetalhe?.mesLinha || String(c.data || '').slice(0,7) === motoristaDetalhe.mesLinha);
-    const produtosLocais = [...new Set(cargasLocaisDetalhe.map(c => String(c.produto || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
-    const cargasLocaisFiltradas = cargasLocaisDetalhe.filter(c => {
-        const busca = normalizar(fBuscaDetalhe);
-        const data = String(c.data || '').slice(0, 10);
-        const correspondeBusca = !busca || [c.nota, c.numeroNota, c.origem, c.destino, c.placa, c.produto].some(v => normalizar(v).includes(busca));
-        return correspondeBusca && (!fProdutoDetalhe || String(c.produto || '') === fProdutoDetalhe) && (!fDataInicialDetalhe || data >= fDataInicialDetalhe) && (!fDataFinalDetalhe || data <= fDataFinalDetalhe);
-    });
-    const totaisLocais = {
-        cargas: cargasLocaisFiltradas.length,
-        peso: cargasLocaisFiltradas.reduce((s, c) => s + Number(c.peso || c.pesoTon || 0), 0),
-        frete: cargasLocaisFiltradas.reduce((s, c) => s + Number(c.freteTotal || 0), 0),
-        premiacao: cargasLocaisFiltradas.reduce((s, c) => s + Number(c.premiacao ?? 0), 0)
-    };
     const tamanhoPagina = 50;
-    const produtosDetalhe = CONFIG.MODO_TESTE_LOCAL ? produtosLocais : resultadoDetalhe?.dados?.produtos || [];
-    const cargasDetalhe = CONFIG.MODO_TESTE_LOCAL ? cargasLocaisFiltradas.slice((pagina - 1) * tamanhoPagina, pagina * tamanhoPagina) : detalheAtual?.dados?.cargas || [];
-    const totaisDetalhe = CONFIG.MODO_TESTE_LOCAL ? totaisLocais : detalheAtual?.dados ? { ...detalheAtual.dados.totais, cargas: detalheAtual.dados.totais.quantidade } :
+    const produtosDetalhe = resultadoDetalhe?.dados?.produtos || [];
+    const cargasDetalhe = detalheAtual?.dados?.cargas || [];
+    const totaisDetalhe = detalheAtual?.dados ? { ...detalheAtual.dados.totais, cargas: detalheAtual.dados.totais.quantidade } :
         { cargas: 0, peso: 0, frete: 0, premiacao: 0 };
     const mudarPagina = numero => setPaginaDetalhe({ chave: consultaDetalhe, numero });
     const Subtabs = () => React.createElement("div", { className: "subtabs", style: { marginBottom: 12 } },
@@ -386,9 +315,9 @@ function AdmPainel({ st, dados, user, onNavegar }) {
                     React.createElement("div", null,
                         React.createElement("label", { htmlFor: "adm-painel-data-final" }, "Data final"),
                         React.createElement("input", { id: "adm-painel-data-final", name: "adm-painel-data-final", autoComplete: "off", type: "date", value: fDataFinalDetalhe, onChange: e => setFDataFinalDetalhe(e.target.value) })))),
-            !CONFIG.MODO_TESTE_LOCAL && !detalheAtual && React.createElement("div", { className: "aviso-box", role: "status" }, "Carregando cargas..."),
+            !detalheAtual && React.createElement("div", { className: "aviso-box", role: "status" }, "Carregando cargas..."),
             detalheAtual?.erro && React.createElement("div", { className: "aviso-box", role: "alert" }, detalheAtual.erro),
-            (CONFIG.MODO_TESTE_LOCAL || detalheAtual?.dados) && React.createElement("div", { className: "card", style: { overflowX: 'auto', marginTop: 12 } },
+            (detalheAtual?.dados) && React.createElement("div", { className: "card", style: { overflowX: 'auto', marginTop: 12 } },
                 React.createElement("table", null,
                     React.createElement("thead", null,
                         React.createElement("tr", null,
@@ -430,7 +359,7 @@ function AdmPainel({ st, dados, user, onNavegar }) {
                                 React.createElement("b", null, brl(totaisDetalhe.frete))),
                             React.createElement("td", { className: "td-num num" },
                                 React.createElement("b", null, brl(totaisDetalhe.premiacao))))))),
-            (CONFIG.MODO_TESTE_LOCAL || detalheAtual?.dados) && React.createElement("div", { className: "row", style: { marginTop: 12, gap: 8, flexWrap: 'wrap' } },
+            (detalheAtual?.dados) && React.createElement("div", { className: "row", style: { marginTop: 12, gap: 8, flexWrap: 'wrap' } },
                 React.createElement("span", { className: "muted grow" }, totaisDetalhe.cargas ?
                     `${(pagina - 1) * tamanhoPagina + 1}–${Math.min(pagina * tamanhoPagina, totaisDetalhe.cargas)} de ${totaisDetalhe.cargas} cargas` : "0 cargas"),
                 React.createElement("button", { className: "btn btn-s btn-sm", disabled: pagina <= 1, onClick: () => mudarPagina(pagina - 1) }, "Anterior"),
