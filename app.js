@@ -87,7 +87,7 @@ const CONFIG = {
     TIMEOUT_MS: 90000,
     RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
     MAX_TENTATIVAS: 4,
-    VERSAO: '2.8.45-homolog'
+    VERSAO: '2.8.46-homolog'
 };
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
 document.title = `Logística Bocchi — Portal do Motorista e ADM Logística (${CONFIG.VERSAO})`;
@@ -1586,6 +1586,19 @@ function TelaPremiacao({ st, user, dados }) {
                         (String(d.situacao || 'Com ocorrência').toLowerCase().includes('ocorr') || Number(d.valor || 0) !== 0 || Number(d.percentual || 0) !== 0);
                 });
                 const tot = doItem.reduce((s, d) => s + (Number(d.valor || 0) > 0 ? -Math.abs(Number(d.valor || 0)) : Number(d.valor || 0)), 0);
+                const quantidadeOcorrencias = doItem.reduce((s, d) => {
+                    const situacao = normalizar(d.situacao);
+                    if (situacao === 'sem ocorrencia') return s;
+                    if (d.quantidade != null && d.quantidade !== '') {
+                        const quantidade = Number(d.quantidade);
+                        if (Number.isInteger(quantidade) && quantidade >= 0) return s + quantidade;
+                    }
+                    return s + 1;
+                }, 0);
+                const rotulo = React.createElement("span", null, grupo.rotulo,
+                    React.createElement("span", { className: "muted" }, " — ",
+                        quantidadeOcorrencias === 0 ? 'Sem ocorrência' :
+                            quantidadeOcorrencias + (quantidadeOcorrencias === 1 ? ' ocorrência' : ' ocorrências')));
                 const chave = grupo.rotulo;
                 const aberta = !!ocorrenciasAbertas[chave];
                 return (React.createElement("div", { className: "linha-item ocorrencia-linha", key: grupo.rotulo },
@@ -1593,16 +1606,7 @@ function TelaPremiacao({ st, user, dados }) {
                         doItem.length > 0 ?
                             React.createElement("button", { type: "button", className: "ocorrencia-abrir", onClick: () => setOcorrenciasAbertas(a => ({ ...a, [chave]: !a[chave] })), "aria-expanded": aberta },
                                 React.createElement("span", { className: 'ocorrencia-seta' + (aberta ? ' aberta' : '') }, "\u2304"),
-                                React.createElement("span", null,
-                                    grupo.rotulo,
-                                    React.createElement("span", { className: "muted" },
-                                        " \u2014 ",
-                                        doItem.length,
-                                        " ocorr\u00EAncia",
-                                        doItem.length > 1 ? 's' : ''))) :
-                            React.createElement("span", null,
-                                grupo.rotulo,
-                                React.createElement("span", { className: "muted" }, " \u2014 nenhuma ocorr\u00EAncia")),
+                                rotulo) : rotulo,
                         React.createElement("b", { className: "num", style: { color: tot < 0 ? 'var(--erro)' : 'var(--cinza)' } }, tot < 0 ? brl(tot) : brl(0))),
                     aberta && doItem.length > 0 &&
                         React.createElement("div", { className: "ocorrencia-detalhes" }, doItem.map((d, i) => {
