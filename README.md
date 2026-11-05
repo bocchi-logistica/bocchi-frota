@@ -16,6 +16,7 @@ Portal da Logística Bocchi Agrobios. O mesmo frontend apresenta a área do moto
 | [js/modulos/premiacao.js](js/modulos/premiacao.js) | Premiação do motorista, régua, metas, descontos e auditoria interna. |
 | [js/modulos/fechamento-rh.js](js/modulos/fechamento-rh.js) | Fechamento do RH, fila de apuração e reabertura do quadrimestre. |
 | [js/modulos/importacao.js](js/modulos/importacao.js) | Importação de cargas, filtros e resumo do processamento. |
+| [js/modulos/cargas-motorista.js](js/modulos/cargas-motorista.js) | Consulta de cargas próprias por competência e envio de contestações pelo motorista. |
 | [js/core/cache-leituras.js](js/core/cache-leituras.js) | Implementação do cache de sessão, carregada antes de `app.js` e usada nos testes da API. |
 
 A API é mantida em [bocchi-frota-api](https://github.com/bocchi-logistica/bocchi-frota-api/tree/migracao/cloudflare-d1-r2). Veja o [mapa de rotas e acessos](https://github.com/bocchi-logistica/bocchi-frota-api/blob/migracao/cloudflare-d1-r2/docs/ROTAS_E_ACESSOS.md).
