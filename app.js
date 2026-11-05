@@ -87,7 +87,7 @@ const CONFIG = {
     TIMEOUT_MS: 90000,
     RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
     MAX_TENTATIVAS: 4,
-    VERSAO: '2.8.44-homolog'
+    VERSAO: '2.8.45-homolog'
 };
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
 document.title = `Logística Bocchi — Portal do Motorista e ADM Logística (${CONFIG.VERSAO})`;
@@ -375,22 +375,38 @@ let _token = null;
 let _loginSessao = null; // identifica o proprietário do token atual
 // Leituras reutilizadas apenas na memória desta sessão; nunca em armazenamento persistente.
 class CacheLeiturasPortal {
-    constructor() { this.entradas = new Map(); this.geracao = 0; }
-    limpar() { this.geracao++; this.entradas.clear(); }
-    async obter(chave, carregar, ttl = 0) {
+    constructor() { this.entradas = new Map(); }
+    limpar(modulos) {
+        if (!Array.isArray(modulos)) {
+            for (const entrada of this.entradas.values()) entrada.invalidada = true;
+            this.entradas.clear();
+            return;
+        }
+        for (const [chave, entrada] of this.entradas) {
+            if (!entrada.modulo || modulos.includes(entrada.modulo)) {
+                entrada.invalidada = true;
+                this.entradas.delete(chave);
+            }
+        }
+    }
+    async obter(chave, carregar, ttl = 0, modulo = null) {
         for (const [k, e] of this.entradas) if (!e.pendente && e.ate <= Date.now()) this.entradas.delete(k);
         if (this.entradas.size > 100) for (const [k,e] of this.entradas) { if (!e.pendente) this.entradas.delete(k); }
         const atual = this.entradas.get(chave);
-        if (atual && (atual.pendente || atual.ate > Date.now())) return structuredClone(await atual.valor);
-        const geracao = this.geracao;
-        const entrada = { pendente: true, ate: 0 };
+        if (atual && (atual.pendente || atual.ate > Date.now())) {
+            const valor = await atual.valor;
+            if (atual.invalidada && modulo) throw new Error('Leitura invalidada por uma atualização.');
+            return structuredClone(valor);
+        }
+        const entrada = { pendente: true, ate: 0, modulo };
         entrada.valor = Promise.resolve().then(carregar);
         this.entradas.set(chave, entrada);
         try {
             const valor = await entrada.valor;
+            if (entrada.invalidada && modulo) throw new Error('Leitura invalidada por uma atualização.');
             entrada.pendente = false;
             entrada.ate = Date.now() + ttl;
-            if (!ttl || geracao !== this.geracao) {
+            if (!ttl) {
                 if (this.entradas.get(chave) === entrada) this.entradas.delete(chave);
             }
             return structuredClone(valor);
@@ -401,7 +417,17 @@ class CacheLeiturasPortal {
     }
 }
 const cacheLeiturasPortal = new CacheLeiturasPortal();
-window.addEventListener('bocchi:atualizacao', () => cacheLeiturasPortal.limpar());
+function invalidarLeiturasPortal(modulos) {
+    if (!Array.isArray(modulos)) {
+        cacheLeiturasPortal.limpar();
+        return;
+    }
+    const afetados = [...modulos];
+    if (modulos.includes('cadastros')) afetados.push('cargas', 'configuracoes');
+    if (afetados.includes('cargas') || modulos.includes('contestacoes')) afetados.push('premiacao');
+    cacheLeiturasPortal.limpar(afetados);
+}
+window.addEventListener('bocchi:atualizacao', evento => invalidarLeiturasPortal(evento.detail));
 window.addEventListener('bocchi:sessao-invalida', () => cacheLeiturasPortal.limpar());
 
 const ApiService = {
@@ -422,12 +448,26 @@ const ApiService = {
             finally { this.limparCache(); }
         }
         // Decisões, disponibilidade, RH e permissões sempre voltam ao servidor.
-        const ttl = /^\/(cargas\/me|premiacao\/me|configuracoes)(\?|$)/.test(caminho) ? 15000 : 0;
-        return cacheLeiturasPortal.obter(token + '|' + caminho, async () => {
+        const rota = caminho.split('?')[0];
+        const modulo = rota === '/cargas/me' ? 'cargas' : rota === '/premiacao/me' ? 'premiacao' : rota === '/configuracoes' ? 'configuracoes' : null;
+        const ttl = modulo === 'configuracoes' ? 15000 : modulo ? 120000 : 0;
+        const privada = modulo === 'cargas' || modulo === 'premiacao';
+        const conferirSessao = () => {
+            if (!privada) return;
+            if (token !== _token) throw new Error('Sessão alterada durante a consulta.');
+            if (!token || !(Date.parse(_expiraSessao) > Date.now())) {
+                window.dispatchEvent(new Event('bocchi:sessao-invalida'));
+                throw new Error('Sessão inválida ou expirada.');
+            }
+        };
+        conferirSessao();
+        const resultado = await cacheLeiturasPortal.obter(token + '|' + caminho, async () => {
             const dados = await this._reqRede(metodo, caminho, corpo);
             if (token !== _token) throw new Error('Sessão alterada durante a consulta.');
             return dados;
-        }, ttl);
+        }, ttl, modulo);
+        conferirSessao();
+        return resultado;
     },
     async _reqRede(metodo, caminho, corpo) {
         const r = await fetchComTimeout(CONFIG.API_URL + caminho, {
@@ -1257,7 +1297,7 @@ function TelaCargas({ st: estadoPortal, setSt, user, toast }) {
         });
         return () => { ativo = false; };
     }, [chave, competencia]);
-    useAtualizacaoPortal(['cargas'], () => setRevisao(v => v + 1));
+    useAtualizacaoPortal(['cargas','cadastros'], () => setRevisao(v => v + 1));
     const resultadoAtual = resultado?.chave === chave ? resultado : null;
     const st = CONFIG.MODO_TESTE_LOCAL ? estadoPortal : { ...estadoPortal, cargas: resultadoAtual?.cargas || [] };
     const dados = usarDadosMensais(st);
@@ -3590,7 +3630,7 @@ function MotoristaApp({ st, setSt, user, onSair, toast }) {
         });
         return () => { ativo = false; };
     }, [user.id, aba]);
-    useAtualizacaoPortal(['cargas','premiacao','contestacoes'], () => {
+    useAtualizacaoPortal(['cargas','premiacao','contestacoes','cadastros'], () => {
         if (!['cargas', 'prem'].includes(aba)) return;
         return Promise.allSettled([
             aba === 'prem' && user.perms.cargas ? ApiService.obterCargas() : Promise.resolve(null),
