@@ -111,7 +111,7 @@ function PainelRH({ st, dados, user }) {
         setErroRH('');
         // Ao entrar ou trocar de quadrimestre, carrega somente o que já foi salvo.
         // A conferência completa das cargas fica restrita à atualização solicitada
-        // pelo usuário, evitando consultas pesadas e repetidas ao Graph.
+        // pelo usuário, evitando consultas pesadas e repetidas à API.
         ApiService.obterApuracoesSalvas('', '', { somenteSalvas: true })
             .then(r => {
             if (!ativo)
