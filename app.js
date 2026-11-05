@@ -87,7 +87,7 @@ const CONFIG = {
     TIMEOUT_MS: 90000,
     RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
     MAX_TENTATIVAS: 4,
-    VERSAO: '2.8.48-homolog'
+    VERSAO: '2.8.49-homolog'
 };
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
 document.title = `Logística Bocchi — Portal do Motorista e ADM Logística (${CONFIG.VERSAO})`;
@@ -197,6 +197,15 @@ function pode(user, permissao) {
     if (podePeloPerfilNovo(user, permissao))
         return true;
     return permissoesDoUsuario(user).has(permissao);
+}
+const ABAS_PAINEL = ['PAINEL_VISAO_GERAL', 'PAINEL_CARGAS'];
+const subtelasPainelDefinidas = subtelas => subtelas.some(codigo => codigo.startsWith('PAINEL_'));
+function podeAbaPainel(user, aba) {
+    if (!user?.acessosPerfilDefinidos) return pode(user, 'painel.visualizar');
+    const areas = (user.areasAcesso || []).map(normalizarPerfil);
+    const subtelas = (user.subtelasAcesso || []).map(normalizarPerfil);
+    return areas.includes('PAINEL') &&
+        (subtelasPainelDefinidas(subtelas) ? subtelas.includes(aba) : ABAS_PAINEL.includes(aba));
 }
 function temPerfil(user, perfil) { return perfisDoUsuario(user).includes(normalizarPerfil(perfil)); }
 /* ============================================================================
@@ -4256,6 +4265,8 @@ function PainelRH({ st, dados, user }) {
         React.createElement("div", { className: "aviso-box" }, "O acumulado soma os quatro meses, inclusive resultados negativos. O valor a pagar nunca fica abaixo de R$ 0,00 e o saldo negativo n\u00E3o \u00E9 levado para o quadrimestre seguinte."));
 }
 function AdmPainel({ st, dados, user, onNavegar }) {
+    const podeVisao = podeAbaPainel(user, 'PAINEL_VISAO_GERAL');
+    const podeCargas = podeAbaPainel(user, 'PAINEL_CARGAS');
     const [mes, setMes] = useState(MES_ATUAL);
     const [mesAte, setMesAte] = useState(MES_ATUAL);
     const [usuariosPainel, setUsuariosPainel] = useState([]);
@@ -4273,12 +4284,13 @@ function AdmPainel({ st, dados, user, onNavegar }) {
     const [erroPainel, setErroPainel] = useState('');
     const [erroCargasPainel, setErroCargasPainel] = useState('');
     const [revisaoPendencias, setRevisaoPendencias] = useState(0);
-    const [revisaoCargas, setRevisaoCargas] = useState(0);
+    const [revisaoCargas, setRevisaoCargas] = useState(podeCargas && !podeVisao ? 1 : 0);
     const [cargasCarregadas, setCargasCarregadas] = useState(false);
     const [fMotorista, setFMotorista] = useState('');
     const [fTipo, setFTipo] = useState('');
     const [fSituacao, setFSituacao] = useState('');
-    const [subPainel, setSubPainel] = useState('visao');
+    const [abaPainel, setSubPainel] = useState(podeVisao ? 'visao' : 'cargas');
+    const subPainel = abaPainel === 'visao' ? (podeVisao ? 'visao' : 'cargas') : (podeCargas ? abaPainel : 'visao');
     const [motoristaDetalhe, setMotoristaDetalhe] = useState(null);
     const [fBuscaDetalhe, setFBuscaDetalhe] = useState('');
     const [fProdutoDetalhe, setFProdutoDetalhe] = useState('');
@@ -4298,6 +4310,7 @@ function AdmPainel({ st, dados, user, onNavegar }) {
     const rotuloPeriodo = periodoMultiplo ? `${mesLabel(competenciaInicio.slice(5) + '/' + competenciaInicio.slice(0, 4))} a ${mesLabel(competenciaFim.slice(5) + '/' + competenciaFim.slice(0, 4))}` : mesLabel(mes);
     /* Visão geral: carrega somente os módulos de pendência. */
     useEffect(() => {
+        if (!podeVisao) return;
         let ativo = true;
         const carregarPendencias = async () => {
             setCarregandoPainel(true);
@@ -4339,10 +4352,10 @@ function AdmPainel({ st, dados, user, onNavegar }) {
         };
         carregarPendencias();
         return () => { ativo = false; };
-    }, [revisaoPendencias]);
+    }, [revisaoPendencias, podeVisao]);
     /* Subtela Cargas: dados pesados somente sob demanda. */
     useEffect(() => {
-        if (revisaoCargas === 0)
+        if (!podeCargas || revisaoCargas === 0)
             return;
         let ativo = true;
         const carregarCargas = async () => {
@@ -4386,7 +4399,7 @@ function AdmPainel({ st, dados, user, onNavegar }) {
         };
         carregarCargas();
         return () => { ativo = false; };
-    }, [mes, mesAte, revisaoCargas]);
+    }, [mes, mesAte, revisaoCargas, podeCargas]);
     const motoristas = CONFIG.MODO_TESTE_LOCAL ? usuariosPainel.filter(u => usuarioValidoPremiacaoPeriodo(u, vinculosPainel, inicioMes, fimMes)) : usuariosPainel;
     const veiculoPorPlaca = new Map((veiculosPainel || []).map(v => [String(v.placa || '').trim().toUpperCase(), v]));
     const cargasPorMotorista = new Map();
@@ -4554,8 +4567,8 @@ function AdmPainel({ st, dados, user, onNavegar }) {
         { cargas: 0, peso: 0, frete: 0, premiacao: 0 };
     const mudarPagina = numero => setPaginaDetalhe({ chave: consultaDetalhe, numero });
     const Subtabs = () => React.createElement("div", { className: "subtabs", style: { marginBottom: 12 } },
-        React.createElement("button", { className: 'subtab' + (subPainel === 'visao' ? ' on' : ''), onClick: () => setSubPainel('visao') }, "Vis\u00E3o geral"),
-        React.createElement("button", { className: 'subtab' + (['cargas', 'detalhes'].includes(subPainel) ? ' on' : ''), onClick: () => { setSubPainel('cargas'); if (!cargasCarregadas)
+        podeVisao && React.createElement("button", { className: 'subtab' + (subPainel === 'visao' ? ' on' : ''), onClick: () => setSubPainel('visao') }, "Vis\u00E3o geral"),
+        podeCargas && React.createElement("button", { className: 'subtab' + (['cargas', 'detalhes'].includes(subPainel) ? ' on' : ''), onClick: () => { setSubPainel('cargas'); if (!cargasCarregadas)
                 setRevisaoCargas(v => v + 1); } }, "Cargas"));
     const emCargas = ['cargas', 'detalhes'].includes(subPainel);
     const Cabecalho = () => React.createElement("div", { className: "row", style: { flexWrap: 'wrap', gap: 10, alignItems: 'flex-end' } },
@@ -6291,7 +6304,10 @@ function AdmPremiacao({ st, setSt, toast, user }) {
                 React.createElement("button", { type: "button", className: "btn btn-p", style: { width: '100%', marginTop: 14 }, onClick: salvarMeta }, "Salvar meta"))));
 }
 const AREAS_E_SUBTELAS = {
-    PAINEL: [],
+    PAINEL: [
+        ['PAINEL_VISAO_GERAL', 'Visão Geral'],
+        ['PAINEL_CARGAS', 'Cargas']
+    ],
     IMPORTACAO: [],
     CONTESTACOES: [],
     RH_FECHAMENTO: [
@@ -6577,6 +6593,8 @@ function AdmCadastros({ st, setSt, toast, user }) {
             const areasCanon = canonListaAcesso(editPerfil.areasAcesso);
             const subtelasCanon = canonListaAcesso(editPerfil.subtelasAcesso);
             const subtelasValidas = subtelasCanon.filter(c => areasCanon.some(a => (AREAS_E_SUBTELAS[a] || []).some(([codigo]) => codigo === c)));
+            if (areasCanon.includes('PAINEL') && !ABAS_PAINEL.some(aba => subtelasValidas.includes(aba)))
+                throw new Error('Selecione ao menos uma aba do Painel ou desmarque a área.');
             const resposta = await ApiService.salvarPerfil({ ...editPerfil, titulo: String(editPerfil.titulo).toUpperCase(), areasAcesso: areasCanon, subtelasAcesso: subtelasValidas });
             if (!resposta?.ok && !resposta?.sucesso)
                 throw new Error(resposta?.erro || 'O D1 de homologação não confirmou o salvamento do perfil.');
@@ -6879,7 +6897,12 @@ function AdmCadastros({ st, setSt, toast, user }) {
                         React.createElement("td", null,
                             React.createElement("span", { className: 'tag ' + (p.ativo ? 'tag-ok' : 'tag-neutro') }, p.ativo ? 'Ativo' : 'Inativo')),
                         React.createElement("td", null,
-                            React.createElement("button", { className: "btn btn-s btn-sm", onClick: () => setEditPerfil({ ...p, areasAcesso: [...(p.areasAcesso || [])], subtelasAcesso: [...(p.subtelasAcesso || [])] }) }, "Editar")))))))),
+                            React.createElement("button", { className: "btn btn-s btn-sm", onClick: () => {
+                                const areasAcesso = [...(p.areasAcesso || [])], subtelasAcesso = [...(p.subtelasAcesso || [])];
+                                if (areasAcesso.includes('PAINEL') && !subtelasPainelDefinidas(subtelasAcesso))
+                                    subtelasAcesso.push(...ABAS_PAINEL);
+                                setEditPerfil({ ...p, areasAcesso, subtelasAcesso });
+                            } }, "Editar")))))))),
         edit &&
             React.createElement(Modal, { titulo: edit.nome ? 'Editar usuário' : 'Novo usuário', onClose: () => setEdit(null) },
                 React.createElement("div", { style: { display: 'flex', flexDirection: 'column', gap: 12 } },
@@ -7497,7 +7520,7 @@ function AdmApp({ st, setSt, user, onSair, toast }) {
     const dados = usarDadosMensais(st);
     const abas = [
         pode(user, 'painel_rh.visualizar') && ['rh', 'Fechamento RH'],
-        pode(user, 'painel.visualizar') && ['painel', 'Painel'],
+        ABAS_PAINEL.some(aba => podeAbaPainel(user, aba)) && ['painel', 'Painel'],
         pode(user, 'importar.criar') && ['importar', 'Importar'],
         pode(user, 'contestacoes.visualizar') && ['contest', 'Contestações'],
         (pode(user, 'sinistros.visualizar') || pode(user, 'sinistros.configuracoes')) && ['sinistros', 'Sinistros'],
