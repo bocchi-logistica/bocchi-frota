@@ -78,11 +78,6 @@ function PainelRH({ st, dados, user }) {
     const motoristas = motoristasPeriodo
         .filter(u => String(u.nome || '').toLocaleLowerCase('pt-BR').includes(nome.toLocaleLowerCase('pt-BR')));
     useEffect(() => {
-        if (CONFIG.MODO_TESTE_LOCAL) {
-            setUsuariosRH(st.usuarios || []);
-            setVinculosRH(st.vinculos || []);
-            return;
-        }
         let ativo = true;
         setCarregandoRH(true);
         setErroRH('');
@@ -104,8 +99,6 @@ function PainelRH({ st, dados, user }) {
         return () => { ativo = false; };
     }, []);
     useEffect(() => {
-        if (CONFIG.MODO_TESTE_LOCAL)
-            return;
         let ativo = true;
         setCarregandoRH(true);
         setErroRH('');
@@ -358,9 +351,9 @@ function PainelRH({ st, dados, user }) {
     const linhas = motoristas.map(u => {
         const chave = idUsuario(u);
         const vindas = Array.isArray(apuracoesRH[chave]) ? apuracoesRH[chave] : [];
-        const stMotorista = CONFIG.MODO_TESTE_LOCAL ? { ...st, apuracoes: vindas } : { usuarios: usuariosRH, frota: {}, cargas: [], metas: [], descontos: [], apuracoes: vindas };
+        const stMotorista = { usuarios: usuariosRH, frota: {}, cargas: [], metas: [], descontos: [], apuracoes: vindas };
         const apuracoes = meses.map(m => competenciasPorMotorista.get(chave).includes(competenciaRH(m))
-            ? apuracaoMes(stMotorista, CONFIG.MODO_TESTE_LOCAL ? dados : {}, u.nome, m)
+            ? apuracaoMes(stMotorista, {}, u.nome, m)
             : null);
         const acumulado = apuracoes.reduce((s, a) => s + Number(a?.apurado || 0), 0);
         const competenciasAplicaveis = competenciasPorMotorista.get(chave);
