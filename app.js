@@ -87,7 +87,7 @@ const CONFIG = {
     TIMEOUT_MS: 90000,
     RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
     MAX_TENTATIVAS: 4,
-    VERSAO: '2.8.42-homolog'
+    VERSAO: '2.8.43-homolog'
 };
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
 document.title = `Logística Bocchi — Portal do Motorista e ADM Logística (${CONFIG.VERSAO})`;
@@ -1241,8 +1241,26 @@ function Login({ st, onLogin }) {
                 " \u2014 selecione um usu\u00E1rio cadastrado para navegar sem gravar no banco D1 de homologação."))));
 }
 /* ================= MOTORISTA: CARGAS ================= */
-function TelaCargas({ st, setSt, user, dados, toast }) {
+function TelaCargas({ st: estadoPortal, setSt, user, toast }) {
     const [mes, setMes] = useState(MES_ATUAL);
+    const [revisao, setRevisao] = useState(0);
+    const [resultado, setResultado] = useState(null);
+    const competencia = mes.slice(3) + '-' + mes.slice(0, 2);
+    const chave = user.id + '/' + competencia + '/' + revisao;
+    useEffect(() => {
+        if (CONFIG.MODO_TESTE_LOCAL) return;
+        let ativo = true;
+        ApiService.obterCargas(competencia).then(r => {
+            if (ativo) setResultado({ chave, cargas: Array.isArray(r.cargas) ? r.cargas : [] });
+        }).catch(() => {
+            if (ativo) setResultado({ chave, erro: true });
+        });
+        return () => { ativo = false; };
+    }, [chave, competencia]);
+    useAtualizacaoPortal(['cargas'], () => setRevisao(v => v + 1));
+    const resultadoAtual = resultado?.chave === chave ? resultado : null;
+    const st = CONFIG.MODO_TESTE_LOCAL ? estadoPortal : { ...estadoPortal, cargas: resultadoAtual?.cargas || [] };
+    const dados = usarDadosMensais(st);
     const [contestar, setContestar] = useState(null);
     const [detalheContestacao, setDetalheContestacao] = useState('');
     const [motivo, setMotivo] = useState('');
@@ -1307,9 +1325,20 @@ function TelaCargas({ st, setSt, user, dados, toast }) {
             setEnviandoContestacao(false);
         }
     };
-    const mesesDisp = [...new Set([...mesesAteHoje(), ...st.cargas.filter(c => c.motorista === user.nome).map(c => mesDaData(c.data))])].sort((a,b) => (a.slice(3)+a.slice(0,2)).localeCompare(b.slice(3)+b.slice(0,2)));
-    return (React.createElement(React.Fragment, null,
+    const mesesDisp = [...new Set([...mesesAteHoje(), MES_ATUAL, mes, ...estadoPortal.cargas.filter(c => c.motorista === user.nome).map(c => mesDaData(c.data))])].sort((a,b) => (a.slice(3)+a.slice(0,2)).localeCompare(b.slice(3)+b.slice(0,2)));
+    const seletor = React.createElement(React.Fragment, null,
         React.createElement("div", { className: "seletor-mes" }, mesesDisp.map(m => React.createElement("button", { key: m, className: 'mes-pill' + (m === mes ? ' on' : ''), onClick: () => setMes(m) }, mesLabel(m)))),
+        React.createElement("label", null, "Outra competência ", React.createElement("input", { type: "month", value: competencia, onChange: e => {
+            const valor = e.target.value;
+            if (/^\d{4}-(0[1-9]|1[0-2])$/.test(valor)) setMes(valor.slice(5) + '/' + valor.slice(0, 4));
+        } })));
+    if (!CONFIG.MODO_TESTE_LOCAL && (!resultadoAtual || resultadoAtual.erro))
+        return React.createElement(React.Fragment, null, seletor,
+            React.createElement("div", { className: "card muted", role: "status" }, resultadoAtual?.erro ?
+                React.createElement(React.Fragment, null, "Não foi possível carregar as cargas. ", React.createElement("button", { className: "btn btn-sm btn-s", onClick: () => setRevisao(v => v + 1) }, "Tentar novamente")) :
+                "Carregando cargas do mês..."));
+    return (React.createElement(React.Fragment, null,
+        seletor,
         React.createElement("div", { className: "totais" },
             React.createElement("div", { className: "card" },
                 React.createElement("div", { className: "v num" }, ap.nCargas),
@@ -3523,7 +3552,7 @@ function MotoristaApp({ st, setSt, user, onSair, toast }) {
             return;
         let ativo = true;
         Promise.allSettled([
-            user.perms.cargas ? ApiService.obterCargas() : Promise.resolve({cargas:[]}),
+            aba === 'prem' && user.perms.cargas ? ApiService.obterCargas() : Promise.resolve(null),
             user.perms.premiacao ? ApiService.obterPremiacao() : Promise.resolve({metas:[],descontos:[],apuracoes:[]}),
             user.perms.cargas ? ApiService.obterMinhasContestacoes() : Promise.resolve({contestacoes:[]})
         ]).then(([cargasResult, premiacaoResult, contestacoesResult]) => {
@@ -3531,7 +3560,7 @@ function MotoristaApp({ st, setSt, user, onSair, toast }) {
                 return;
             setSt(s => {
                 const proximo = { ...s };
-                if (cargasResult.status === 'fulfilled') {
+                if (cargasResult.status === 'fulfilled' && cargasResult.value) {
                     const r = cargasResult.value;
                     proximo.cargas = Array.isArray(r.cargas) ? r.cargas : [];
                 }
@@ -3569,13 +3598,13 @@ function MotoristaApp({ st, setSt, user, onSair, toast }) {
     useAtualizacaoPortal(['cargas','premiacao','contestacoes'], () => {
         if (!['cargas', 'prem'].includes(aba)) return;
         return Promise.allSettled([
-            user.perms.cargas ? ApiService.obterCargas() : Promise.resolve({cargas:[]}),
+            aba === 'prem' && user.perms.cargas ? ApiService.obterCargas() : Promise.resolve(null),
             user.perms.premiacao ? ApiService.obterPremiacao() : Promise.resolve({metas:[],descontos:[],apuracoes:[]}),
             user.perms.cargas ? ApiService.obterMinhasContestacoes() : Promise.resolve({contestacoes:[]})
         ]).then(([cargasResult, premiacaoResult, contestacoesResult]) => {
             setSt(s => {
                 const proximo = { ...s };
-                if (cargasResult.status === 'fulfilled') {
+                if (cargasResult.status === 'fulfilled' && cargasResult.value) {
                     const r = cargasResult.value;
                     proximo.cargas = Array.isArray(r.cargas) ? r.cargas : [];
                 }
@@ -3625,7 +3654,7 @@ function MotoristaApp({ st, setSt, user, onSair, toast }) {
         React.createElement("div", { className: "mbody" },
             abas.length === 0 && React.createElement("div", { className: "card muted" }, "Seu usu\u00E1rio est\u00E1 sem m\u00F3dulos liberados. Fale com a log\u00EDstica."),
             aba === 'cargas' && carregandoCargas && React.createElement("div", { className: "card muted" }, "Carregando cargas do banco D1 de homologação..."),
-            aba === 'cargas' && !carregandoCargas && React.createElement(TelaCargas, { st: st, setSt: setSt, user: user, dados: dados, toast: toast }),
+            aba === 'cargas' && !carregandoCargas && React.createElement(TelaCargas, { st: st, setSt: setSt, user: user, toast: toast }),
             aba === 'prem' && carregandoPremiacao && React.createElement("div", { className: "card muted" }, "Carregando metas, apura\u00E7\u00E3o e descontos do banco D1 de homologação..."),
             aba === 'prem' && !carregandoPremiacao && React.createElement(TelaPremiacao, { st: st, user: user, dados: dados }),
             aba === 'check' && React.createElement(TelaChecklist, { st: st, setSt: setSt, user: user, toast: toast, inicioAgendamento: inicioChecklistAgendamento, onInicioConsumido: () => { setInicioChecklistAgendamento(null); setAba('agendamento'); }, onConcluidoAgendamento: () => { setInicioChecklistAgendamento(null); setAba('agendamento'); } }),
