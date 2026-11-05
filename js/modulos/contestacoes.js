@@ -7,7 +7,7 @@ function AdmContestacoes({ st, setSt, toast, foco }) {
     const [respondendo, setRespondendo] = useState(null);
     const [resposta, setResposta] = useState('');
     const [decisao, setDecisao] = useState('procede');
-    const [carregando, setCarregando] = useState(!CONFIG.MODO_TESTE_LOCAL);
+    const [carregando, setCarregando] = useState(true);
     const [salvando, setSalvando] = useState(false);
     useEffect(() => {
         if (!foco?.chave)
@@ -26,8 +26,6 @@ function AdmContestacoes({ st, setSt, toast, foco }) {
         .sort((a, b) => String(b.data || '').localeCompare(String(a.data || '')));
     const cargaDe = id => st.cargas.find(c => c.id === id);
     const carregar = async () => {
-        if (CONFIG.MODO_TESTE_LOCAL)
-            return;
         setCarregando(true);
         try {
             const r = await ApiService.admListarContestacoes();
@@ -45,13 +43,6 @@ function AdmContestacoes({ st, setSt, toast, foco }) {
     const responder = async () => {
         if (!resposta.trim()) {
             toast('Informe a justificativa da decisão.');
-            return;
-        }
-        if (CONFIG.MODO_TESTE_LOCAL) {
-            setSt(s => ({ ...s, contestacoes: s.contestacoes.map(c => c.id === respondendo.id ? { ...c, status: decisao, resposta: resposta.trim() } : c) }));
-            setRespondendo(null);
-            setResposta('');
-            toast('Contestação respondida.');
             return;
         }
         setSalvando(true);
