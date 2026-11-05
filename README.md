@@ -8,6 +8,7 @@ Portal da Logística Bocchi Agrobios. O mesmo frontend apresenta a área do moto
 | --- | --- |
 | [index.html](index.html) | Página de entrada, estilos e carregamento do JavaScript |
 | [app.js](app.js) | Configuração do portal, sessão, cliente da API, navegação e telas |
+| [js/modulos/painel.js](js/modulos/painel.js) | Painel administrativo, Visão Geral, filtros e detalhamento de Cargas. |
 | [js/core/cache-leituras.js](js/core/cache-leituras.js) | Implementação do cache de sessão, carregada antes de `app.js` e usada nos testes da API. |
 
 A API é mantida em [bocchi-frota-api](https://github.com/bocchi-logistica/bocchi-frota-api/tree/migracao/cloudflare-d1-r2). Veja o [mapa de rotas e acessos](https://github.com/bocchi-logistica/bocchi-frota-api/blob/migracao/cloudflare-d1-r2/docs/ROTAS_E_ACESSOS.md).
