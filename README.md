@@ -1,2 +1,23 @@
-# bocchi-frota
-Portal da logística Bocchi Agrobios
+# Bocchi Frota — Portal
+
+Portal da Logística Bocchi Agrobios. O mesmo frontend apresenta a área do motorista e os módulos administrativos conforme o acesso retornado pela API.
+
+## Onde mexer
+
+| Arquivo | Responsabilidade |
+| --- | --- |
+| [index.html](index.html) | Página de entrada, estilos e carregamento do JavaScript |
+| [app.js](app.js) | Configuração do portal, sessão, cliente da API, navegação e telas |
+| [js/core/cache-leituras.js](js/core/cache-leituras.js) | Cópia separada da lógica de cache usada por testes. A definição em uso no portal está no `app.js`; verifique ambas se alterar o cache. |
+
+A API é mantida em [bocchi-frota-api](https://github.com/bocchi-logistica/bocchi-frota-api/tree/migracao/cloudflare-d1-r2). Veja o [mapa de rotas e acessos](https://github.com/bocchi-logistica/bocchi-frota-api/blob/migracao/cloudflare-d1-r2/docs/ROTAS_E_ACESSOS.md).
+
+## Testar uma alteração
+
+1. Para executar a versão entregue em homologação, abra `/portal` no Worker de homologação. O Worker serve o commit do frontend fixado na API.
+2. Para testar arquivos alterados localmente, sirva a raiz deste repositório em um servidor HTTP local. Aponte `CONFIG.API_URL` para o Worker local e configure a origem do portal em `ALLOWED_ORIGINS` no ambiente local. Essas alterações são específicas do ambiente de desenvolvimento.
+3. Use contas de teste com perfis distintos. Confira o login, a navegação e a resposta da API com e sem a permissão do módulo. Esconder um botão ou uma tela faz parte da interface; a autorização precisa ser verificada no servidor.
+
+## Publicação em homologação
+
+Registre a versão do frontend e o commit correspondente. A entrega só está confirmada quando o Worker da homologação aponta para esse commit e o portal exibe a versão esperada. Veja o [guia de entrega da API](https://github.com/bocchi-logistica/bocchi-frota-api/blob/migracao/cloudflare-d1-r2/README.md).
