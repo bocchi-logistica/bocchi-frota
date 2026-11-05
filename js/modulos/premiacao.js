@@ -29,9 +29,18 @@ function Regua({ fat, meta }) {
 function TelaPremiacao({ st, user, dados }) {
     const [mes, setMes] = useState(MES_ATUAL);
     const [ocorrenciasAbertas, setOcorrenciasAbertas] = useState({});
-    const ap = apuracaoMes(st, dados, user.nome, mes);
+    const resumo = m => {
+        const estimativa = apuracaoMes(st, dados, user.nome, m);
+        const salva = (st.apuracoes || []).find(a => a.resumoMotorista && a.mes === m);
+        return salva ? { ...estimativa, status: salva.status, prod: salva.premioBruto, totDesc: salva.totalDescontos, apurado: salva.apurado } : estimativa;
+    };
+    const ap = resumo(mes);
+    const fechado = ap.status === 'FECHADO';
+    const calculado = ap.status === 'CALCULADO';
+    const salvo = fechado || calculado;
+    const status = fechado ? 'Fechado' : calculado ? 'Calculado' : 'Em aberto';
     const quad = QUADS.find(q => q.meses.includes(mes)) || QUADS[0];
-    const apsQuad = quad.meses.map(m => ({ mes: m, ...apuracaoMes(st, dados, user.nome, m) }));
+    const apsQuad = quad.meses.map(m => ({ mes: m, ...resumo(m) }));
     const somaQuad = apsQuad.reduce((s, a) => s + a.apurado, 0);
     const pctStart = ap.meta ? Math.min(100, ap.fat / ap.meta.start * 100) : 0;
     const pctMeta = ap.meta ? Math.min(100, ap.fat / ap.meta.meta * 100) : 0;
@@ -41,7 +50,7 @@ function TelaPremiacao({ st, user, dados }) {
     const mesesVisiveis = mesesAteHoje();
     return (React.createElement(React.Fragment, null,
         React.createElement("div", { className: "seletor-mes" }, mesesVisiveis.map(m => React.createElement("button", { key: m, className: 'mes-pill' + (m === mes ? ' on' : ''), onClick: () => setMes(m) }, mesLabel(m)))),
-        React.createElement("div", { className: "aviso-box" }, ap.meta ? "Estimativa conforme cargas, metas e descontos cadastrados. Não substitui o fechamento oficial do RH." : "Premiação indisponível: não foi encontrada meta para o tipo de veículo e período. Valores zerados abaixo não representam uma apuração validada."),
+        React.createElement("div", { className: "aviso-box" }, fechado ? "Apuração fechada pelo RH. Valores oficiais abaixo." : calculado ? "Valor calculado, aguardando fechamento pelo RH." : ap.meta ? "Estimativa conforme cargas, metas e descontos cadastrados. Não substitui o fechamento oficial do RH." : "Premiação indisponível: não foi encontrada meta para o tipo de veículo e período. Valores zerados abaixo não representam uma apuração validada."),
         React.createElement("div", { className: "card regua-wrap" },
             React.createElement("div", { className: "row" },
                 React.createElement("div", { className: "grow" },
@@ -61,7 +70,7 @@ function TelaPremiacao({ st, user, dados }) {
         React.createElement("div", { className: "card" },
             React.createElement("h3", { style: { marginBottom: 6 } },
                 "Apura\u00E7\u00E3o de ",
-                mesLabel(mes)),
+                mesLabel(mes), " · ", status),
             ap.inconsistencias && ap.inconsistencias.length > 0 &&
                 React.createElement("div", { className: "aviso-box", style: { marginBottom: 10, borderColor: 'var(--erro)' } },
                     React.createElement("b", null,
@@ -95,9 +104,11 @@ function TelaPremiacao({ st, user, dados }) {
             React.createElement("div", { className: "linha-item" },
                 React.createElement("span", null,
                     "Premia\u00E7\u00E3o pelo frete realizado ",
-                    React.createElement("span", { className: "muted" }, "(estimativa)")),
+                    React.createElement("span", { className: "muted" }, fechado ? "(oficial)" : calculado ? "(calculado)" : "(estimativa)")),
                 React.createElement("b", { className: "num", style: { color: 'var(--mata)' } }, brl(ap.prod))),
-            [
+            salvo ? React.createElement("div", { className: "linha-item" },
+                React.createElement("span", null, "Total de descontos"),
+                React.createElement("b", null, brl(-Math.abs(ap.totDesc)))) : [
                 { rotulo: 'Notificação / Advertência', aliases: ['Notificação / Advertência', 'Notificação / Advertencia'] },
                 { rotulo: 'Multas', aliases: ['Multas'] },
                 { rotulo: 'Auditoria Interna', aliases: ['Auditoria Interna', 'Check List'] }
@@ -157,7 +168,7 @@ function TelaPremiacao({ st, user, dados }) {
             React.createElement("div", { className: "linha-item", style: { fontSize: 15.5 } },
                 React.createElement("b", null, "Apurado no m\u00EAs"),
                 React.createElement("b", { className: "num", style: { color: ap.apurado < 0 ? 'var(--erro)' : 'var(--mata)' } }, brl(ap.apurado))),
-            React.createElement("div", { className: "aviso-box", style: { marginTop: 10 } }, "Valores estimados conforme POL 4.1.1 e sujeitos a confer\u00EAncia. O apurado mensal pode ficar negativo e ser\u00E1 compensado pelos demais meses do quadrimestre. Nunca haver\u00E1 desconto em folha se o acumulado final ficar negativo.")),
+            React.createElement("div", { className: "aviso-box", style: { marginTop: 10 } }, "Conforme POL 4.1.1, o apurado mensal pode ficar negativo e ser\u00E1 compensado pelos demais meses do quadrimestre. Nunca haver\u00E1 desconto em folha se o acumulado final ficar negativo.")),
         React.createElement("div", { className: "card" },
             React.createElement("div", { className: "row", style: { marginBottom: 10 } },
                 React.createElement("h3", { className: "grow" }, quad.nome),
@@ -173,7 +184,7 @@ function TelaPremiacao({ st, user, dados }) {
                         React.createElement("b", { className: "num", style: { color: a.apurado < 0 ? 'var(--erro)' : 'var(--mata)' } }, brl(a.apurado))));
             }),
             React.createElement("div", { className: "linha-item", style: { fontSize: 16, marginTop: 6 } },
-                React.createElement("b", null, "Acumulado do quadrimestre"),
+                React.createElement("b", null, apsQuad.every(a => a.status === "FECHADO") ? "Acumulado do quadrimestre" : "Acumulado provisório do quadrimestre"),
                 React.createElement("b", { className: "num", style: { color: 'var(--mata)' } }, brl(Math.max(0, somaQuad)))),
             somaQuad < 0 && React.createElement("div", { className: "muted" },
                 "O acumulado ficou negativo (",
