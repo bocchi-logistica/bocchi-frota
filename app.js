@@ -87,7 +87,7 @@ const CONFIG = {
     TIMEOUT_MS: 90000,
     RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
     MAX_TENTATIVAS: 4,
-    VERSAO: '2.8.63-homolog'
+    VERSAO: '2.8.64-homolog'
 };
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
 document.title = `Logística Bocchi — Portal do Motorista e ADM Logística (${CONFIG.VERSAO})`;
@@ -452,8 +452,6 @@ const ApiService = {
         return r.json();
     },
     async login(login, senha) {
-        if (CONFIG.MODO_TESTE_LOCAL)
-            return null;
         const r = await this._req('POST', '/login', {
             login,
             pin: senha
@@ -1142,27 +1140,16 @@ function AvisoPrivacidade({claro=false}){
  React.createElement("button",{className:"btn btn-p",onClick:()=>setAberto(false)},"Fechar")));
 }
 
-function Login({ st, onLogin }) {
+function Login({ onLogin }) {
     const [login, setLogin] = useState('');
     const [senha, setSenha] = useState('');
     const [erro, setErro] = useState('');
     const [senhaLoginVisivel, setSenhaLoginVisivel] = useState(false);
-    /* Em produção, a autenticação é feita pelo endpoint POST /auth/login.
-       O token expira no prazo informado pelo servidor. A senha não é gravada.
-       O modo local de testes utiliza uma base simulada. */
+    /* O endpoint POST /login valida as credenciais e informa a expiração da sessão. */
     const [carregando, setCarregando] = useState(false);
     const entrar = async () => {
         if(carregando)return;
         setErro('');
-        if (CONFIG.MODO_TESTE_LOCAL) {
-            const u = st.usuarios.find(x => x.login === login.trim().toLowerCase());
-            if (!u) {
-                setErro('Usuário ou senha incorretos.');
-                return;
-            }
-            onLogin(u);
-            return;
-        }
         setCarregando(true);
         try {
             const r = await ApiService.login(login.trim().toLowerCase(), senha);
@@ -1227,10 +1214,7 @@ function Login({ st, onLogin }) {
                 React.createElement("button", { className: "btn btn-p", disabled: carregando, onClick: entrar }, carregando ? 'Entrando...' : 'Entrar')),
             React.createElement("p",{className:"login-ajuda"},"Precisa de acesso ou esqueceu sua senha? Fale com a Logística."),
             React.createElement("div",{style:{textAlign:"center",marginTop:12}},React.createElement(AvisoPrivacidade,null)),
-            React.createElement("div",{className:"login-versao"},"Versão ",CONFIG.VERSAO),
-            CONFIG.MODO_TESTE_LOCAL && React.createElement("div", { className: "hint" },
-                React.createElement("b", null, "MODO LOCAL DE TESTES ATIVO"),
-                " \u2014 selecione um usu\u00E1rio cadastrado para navegar sem gravar no banco D1 de homologação."))));
+            React.createElement("div",{className:"login-versao"},"Versão ",CONFIG.VERSAO))));
 }
 /* ================= SHELL MOTORISTA ================= */
 function AlterarSenhaUsuario({user,onSair,toast,claro=false}){
@@ -1504,7 +1488,7 @@ function App() {
     ].some(permissao => pode(userAtual, permissao)) ||
         permissoesDoUsuario(userAtual).has('*');
     return (React.createElement(React.Fragment, null,
-        !userAtual && React.createElement(Login, { st: st, onLogin: usuario => {
+        !userAtual && React.createElement(Login, { onLogin: usuario => {
             try { if (_token && _expiraSessao) sessionStorage.setItem('bocchi.portal.sessao', JSON.stringify({token: _token, expiraEm: _expiraSessao, usuario})); } catch {}
             setUser(usuario);
         } }),
