@@ -48,12 +48,12 @@ function useConexaoPortal(usuario) {
         if (!CONFIG.ATUALIZACAO_TEMPO_REAL || !usuario || !ApiService.token || CONFIG.MODO_TESTE_LOCAL) return;
         const url = new URL(CONFIG.API_URL + '/atualizacoes', location.href);
         url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-        let socket, timer, encerrado = false, atraso = 1000;
+        let socket, timer, encerrado = false, conectadoAntes = false, atraso = 1000;
         const avisar = modulos => window.dispatchEvent(new CustomEvent('bocchi:atualizacao', { detail: modulos }));
         const conectar = () => {
             if (encerrado || !ApiService.token) return;
             socket = new WebSocket(url.href, ['bocchi.atualizacoes', 'sessao.' + ApiService.token]);
-            socket.onopen = () => { if (!encerrado) { atraso = 1000; avisar(null); } };
+            socket.onopen = () => { if (!encerrado) { atraso = 1000; if (conectadoAntes) avisar(null); conectadoAntes = true; } };
             socket.onmessage = event => {
                 if (encerrado) return;
                 try { const modulos = JSON.parse(event.data); if (Array.isArray(modulos)) avisar(modulos); } catch {}
@@ -373,6 +373,37 @@ function otimizarArquivoBinario(arquivo) {
 let _expiraSessao = null;
 let _token = null;
 let _loginSessao = null; // identifica o proprietário do token atual
+// Leituras reutilizadas apenas na memória desta sessão; nunca em armazenamento persistente.
+class CacheLeiturasPortal {
+    constructor() { this.entradas = new Map(); this.geracao = 0; }
+    limpar() { this.geracao++; this.entradas.clear(); }
+    async obter(chave, carregar, ttl = 0) {
+        for (const [k, e] of this.entradas) if (!e.pendente && e.ate <= Date.now()) this.entradas.delete(k);
+        if (this.entradas.size > 100) for (const [k,e] of this.entradas) { if (!e.pendente) this.entradas.delete(k); }
+        const atual = this.entradas.get(chave);
+        if (atual && (atual.pendente || atual.ate > Date.now())) return structuredClone(await atual.valor);
+        const geracao = this.geracao;
+        const entrada = { pendente: true, ate: 0 };
+        entrada.valor = Promise.resolve().then(carregar);
+        this.entradas.set(chave, entrada);
+        try {
+            const valor = await entrada.valor;
+            entrada.pendente = false;
+            entrada.ate = Date.now() + ttl;
+            if (!ttl || geracao !== this.geracao) {
+                if (this.entradas.get(chave) === entrada) this.entradas.delete(chave);
+            }
+            return structuredClone(valor);
+        } catch (erro) {
+            if (this.entradas.get(chave) === entrada) this.entradas.delete(chave);
+            throw erro;
+        }
+    }
+}
+const cacheLeiturasPortal = new CacheLeiturasPortal();
+window.addEventListener('bocchi:atualizacao', () => cacheLeiturasPortal.limpar());
+window.addEventListener('bocchi:sessao-invalida', () => cacheLeiturasPortal.limpar());
+
 const ApiService = {
     get token() { return _token; },
     get loginAtual() { return _loginSessao; },
@@ -382,7 +413,23 @@ const ApiService = {
             h['Authorization'] = 'Bearer ' + _token;
         return h;
     },
+    limparCache() { cacheLeiturasPortal.limpar(); },
     async _req(metodo, caminho, corpo) {
+        const token = _token;
+        if (metodo !== 'GET') {
+            this.limparCache();
+            try { return await this._reqRede(metodo, caminho, corpo); }
+            finally { this.limparCache(); }
+        }
+        // Decisões, disponibilidade, RH e permissões sempre voltam ao servidor.
+        const ttl = /^\/(cargas\/me|premiacao\/me|configuracoes)(\?|$)/.test(caminho) ? 15000 : 0;
+        return cacheLeiturasPortal.obter(token + '|' + caminho, async () => {
+            const dados = await this._reqRede(metodo, caminho, corpo);
+            if (token !== _token) throw new Error('Sessão alterada durante a consulta.');
+            return dados;
+        }, ttl);
+    },
+    async _reqRede(metodo, caminho, corpo) {
         const r = await fetchComTimeout(CONFIG.API_URL + caminho, {
             method: metodo, headers: this._headers(),
             body: corpo ? JSON.stringify(corpo) : undefined
@@ -457,6 +504,7 @@ const ApiService = {
         };
     },
     sair() {
+        this.limparCache();
         const token = _token;
         if (token) {
             void fetch(CONFIG.API_URL + '/logout', {
@@ -3459,11 +3507,19 @@ function AlterarSenhaUsuario({user,onSair,toast,claro=false}){
 }
 
 function MotoristaApp({ st, setSt, user, onSair, toast }) {
+    const abas = [
+        user.perms.cargas && { id: 'cargas', ic: '🚛', nome: 'Cargas' },
+        user.perms.premiacao && { id: 'prem', ic: '🏆', nome: 'Premiação' },
+        user.perms.checklist && { id: 'check', ic: '📋', nome: 'Check list' },
+        user.perms.sinistros && { id: 'sinistro', ic: '🚨', nome: 'Sinistro' },
+        user.perms.agendamentos && { id: 'agendamento', ic: '📅', nome: 'Agendamento' },
+    ].filter(Boolean);
+    const [aba, setAba] = useModuloPortal('motorista', user, abas.map(a => a.id));
     const dados = usarDadosMensais(st);
     const [carregandoCargas, setCarregandoCargas] = useState(!CONFIG.MODO_TESTE_LOCAL);
     const [carregandoPremiacao, setCarregandoPremiacao] = useState(!CONFIG.MODO_TESTE_LOCAL);
     useEffect(() => {
-        if (CONFIG.MODO_TESTE_LOCAL)
+        if (CONFIG.MODO_TESTE_LOCAL || !['cargas', 'prem'].includes(aba))
             return;
         let ativo = true;
         Promise.allSettled([
@@ -3509,8 +3565,9 @@ function MotoristaApp({ st, setSt, user, onSair, toast }) {
             }
         });
         return () => { ativo = false; };
-    }, [user.id]);
+    }, [user.id, aba]);
     useAtualizacaoPortal(['cargas','premiacao','contestacoes'], () => {
+        if (!['cargas', 'prem'].includes(aba)) return;
         return Promise.allSettled([
             user.perms.cargas ? ApiService.obterCargas() : Promise.resolve({cargas:[]}),
             user.perms.premiacao ? ApiService.obterPremiacao() : Promise.resolve({metas:[],descontos:[],apuracoes:[]}),
@@ -3536,14 +3593,6 @@ function MotoristaApp({ st, setSt, user, onSair, toast }) {
             });
         });
     });
-    const abas = [
-        user.perms.cargas && { id: 'cargas', ic: '🚛', nome: 'Cargas' },
-        user.perms.premiacao && { id: 'prem', ic: '🏆', nome: 'Premiação' },
-        user.perms.checklist && { id: 'check', ic: '📋', nome: 'Check list' },
-        user.perms.sinistros && { id: 'sinistro', ic: '🚨', nome: 'Sinistro' },
-        user.perms.agendamentos && { id: 'agendamento', ic: '📅', nome: 'Agendamento' },
-    ].filter(Boolean);
-    const [aba, setAba] = useModuloPortal('motorista', user, abas.map(a => a.id));
     const [inicioChecklistAgendamento, setInicioChecklistAgendamento] = useState(null);
     const abrirChecklistDoAgendamento = dados => { setInicioChecklistAgendamento(dados); setAba('check'); };
     const placa = Object.values(st.frota).find(f => f.motorista === user.nome && f.frota !== 'leve');
@@ -4391,7 +4440,7 @@ function AdmPainel({ st, dados, user, onNavegar }) {
             React.createElement("h2", { style: { marginBottom: 2 } }, "Painel operacional"),
             React.createElement("div", { className: "muted" }, "Pend\u00EAncias que aguardam an\u00E1lise, aprova\u00E7\u00E3o ou reprova\u00E7\u00E3o")),
         subPainel === 'visao' && React.createElement("button", { className: "btn btn-s btn-sm", disabled: carregandoPainel, onClick: () => setRevisaoPendencias(v => v + 1) }, carregandoPainel ? 'Carregando...' : 'Atualizar pendências'),
-        emCargas && React.createElement("button", { className: "btn btn-s btn-sm", disabled: carregandoCargasPainel, onClick: () => setRevisaoCargas(v => v + 1) }, carregandoCargasPainel ? 'Carregando...' : 'Recarregar dados'));
+        emCargas && React.createElement("button", { className: "btn btn-s btn-sm", disabled: carregandoCargasPainel, onClick: () => { ApiService.limparCache(); setRevisaoCargas(v => v + 1); } }, carregandoCargasPainel ? 'Carregando...' : 'Recarregar dados'));
     const FiltrosCargas = () => React.createElement("div", { className: "card", style: { marginTop: 12 } },
         React.createElement("div", { className: "form-grid", style: { alignItems: 'end' } },
             React.createElement("div", null,
