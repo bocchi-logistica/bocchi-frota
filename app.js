@@ -87,7 +87,7 @@ const CONFIG = {
     TIMEOUT_MS: 90000,
     RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
     MAX_TENTATIVAS: 4,
-    VERSAO: '2.8.58-homolog'
+    VERSAO: '2.8.59-homolog'
 };
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
 document.title = `Logística Bocchi — Portal do Motorista e ADM Logística (${CONFIG.VERSAO})`;
@@ -891,7 +891,7 @@ function usarDadosMensais(st) {
     }, [st.resumos, st.cargas]);
 }
 function apuracaoMes(st, dados, motNome, mes) {
-    const calculada = (st.apuracoes || []).find(a => a.mes === mes &&
+    const calculada = (st.apuracoes || []).find(a => !a.resumoMotorista && a.mes === mes &&
         (!a.motoristaNome || normalizar(a.motoristaNome) === normalizar(motNome)));
     if (calculada) {
         return {
