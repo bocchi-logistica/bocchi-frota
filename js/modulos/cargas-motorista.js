@@ -6,7 +6,6 @@ function TelaCargas({ st: estadoPortal, setSt, user, toast }) {
     const competencia = mes.slice(3) + '-' + mes.slice(0, 2);
     const chave = user.id + '/' + competencia + '/' + revisao;
     useEffect(() => {
-        if (CONFIG.MODO_TESTE_LOCAL) return;
         let ativo = true;
         ApiService.obterCargas(competencia).then(r => {
             if (ativo) setResultado({ chave, cargas: Array.isArray(r.cargas) ? r.cargas : [] });
@@ -17,7 +16,7 @@ function TelaCargas({ st: estadoPortal, setSt, user, toast }) {
     }, [chave, competencia]);
     useAtualizacaoPortal(['cargas','cadastros'], () => setRevisao(v => v + 1));
     const resultadoAtual = resultado?.chave === chave ? resultado : null;
-    const st = CONFIG.MODO_TESTE_LOCAL ? estadoPortal : { ...estadoPortal, cargas: resultadoAtual?.cargas || [] };
+    const st = { ...estadoPortal, cargas: resultadoAtual?.cargas || [] };
     const dados = usarDadosMensais(st);
     const [contestar, setContestar] = useState(null);
     const [detalheContestacao, setDetalheContestacao] = useState('');
@@ -34,10 +33,6 @@ function TelaCargas({ st: estadoPortal, setSt, user, toast }) {
         setContestar(carga);
         setMotivo('');
         setTipoContestacao('ERRO_CARGA');
-        if (CONFIG.MODO_TESTE_LOCAL) {
-            setOpcoesContestacao(['ERRO_CARGA']);
-            return;
-        }
         setCarregandoOpcoes(true);
         try {
             const r = await ApiService.obterOpcoesContestacao(carga.id);
@@ -61,13 +56,6 @@ function TelaCargas({ st: estadoPortal, setSt, user, toast }) {
             toast('Descreva o que está errado na carga.');
             return;
         }
-        if (CONFIG.MODO_TESTE_LOCAL) {
-            setSt(s => ({ ...s, contestacoes: [...s.contestacoes, { id: 'ct' + Date.now(), motorista: user.nome, cargaId: contestar.id, tipoContestacao, motivo: motivo.trim(), status: 'pendente', resposta: '', data: HOJE }] }));
-            setContestar(null);
-            setMotivo('');
-            toast('Contestação enviada para a logística.');
-            return;
-        }
         setEnviandoContestacao(true);
         try {
             const r = await ApiService.criarContestacao(contestar.id, tipoContestacao, motivo.trim());
@@ -85,7 +73,7 @@ function TelaCargas({ st: estadoPortal, setSt, user, toast }) {
     };
     const mesesDisp = [...new Set([...mesesAteHoje(), MES_ATUAL, mes, ...estadoPortal.cargas.filter(c => c.motorista === user.nome).map(c => mesDaData(c.data))])].sort((a,b) => (a.slice(3)+a.slice(0,2)).localeCompare(b.slice(3)+b.slice(0,2)));
     const seletor = React.createElement("div", { className: "seletor-mes" }, mesesDisp.map(m => React.createElement("button", { key: m, className: 'mes-pill' + (m === mes ? ' on' : ''), onClick: () => setMes(m) }, mesLabel(m))));
-    if (!CONFIG.MODO_TESTE_LOCAL && (!resultadoAtual || resultadoAtual.erro))
+    if (!resultadoAtual || resultadoAtual.erro)
         return React.createElement(React.Fragment, null, seletor,
             React.createElement("div", { className: "card muted", role: "status" }, resultadoAtual?.erro ?
                 React.createElement(React.Fragment, null, "Não foi possível carregar as cargas. ", React.createElement("button", { className: "btn btn-sm btn-s", onClick: () => setRevisao(v => v + 1) }, "Tentar novamente")) :
