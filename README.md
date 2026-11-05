@@ -11,6 +11,7 @@ Portal da Logística Bocchi Agrobios. O mesmo frontend apresenta a área do moto
 | [js/modulos/painel.js](js/modulos/painel.js) | Painel administrativo, Visão Geral, filtros e detalhamento de Cargas. |
 | [js/modulos/checklist.js](js/modulos/checklist.js) | Checklist do motorista, detalhe e telas administrativas de aprovação, perguntas e relatório. |
 | [js/modulos/agendamentos.js](js/modulos/agendamentos.js) | Agenda do motorista e da gestão, reservas, retirada, devolução e parâmetros. |
+| [js/modulos/sinistros.js](js/modulos/sinistros.js) | Registro e consulta de sinistros no app, gestão e configurações administrativas. |
 | [js/core/cache-leituras.js](js/core/cache-leituras.js) | Implementação do cache de sessão, carregada antes de `app.js` e usada nos testes da API. |
 
 A API é mantida em [bocchi-frota-api](https://github.com/bocchi-logistica/bocchi-frota-api/tree/migracao/cloudflare-d1-r2). Veja o [mapa de rotas e acessos](https://github.com/bocchi-logistica/bocchi-frota-api/blob/migracao/cloudflare-d1-r2/docs/ROTAS_E_ACESSOS.md).
