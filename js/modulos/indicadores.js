@@ -1,4 +1,32 @@
-function AdmIndicadores() {
+const ABAS_INDICADORES = [
+    ['INDICADORES_FROTA_PESADA', 'Frota Pesada'],
+    ['INDICADORES_FROTA_LEVE', 'Frota Leve']
+];
+
+function podeAbaIndicadores(user, codigo) {
+    return (user?.areasAcesso || []).map(normalizarPerfil).includes('INDICADORES') &&
+        (user?.subtelasAcesso || []).map(normalizarPerfil).includes(codigo);
+}
+
+function AdmIndicadores({ user }) {
+    const h = React.createElement;
+    const abas = ABAS_INDICADORES.filter(([codigo]) => podeAbaIndicadores(user, codigo));
+    const [selecionada, setSelecionada] = React.useState(null);
+    const ativa = abas.some(([codigo]) => codigo === selecionada) ? selecionada : abas[0]?.[0];
+
+    if (!ativa) return null;
+    return h('section', null,
+        h('div', { className: 'subtabs', style: { marginBottom: 14 }, 'aria-label': 'Subtelas de Indicadores' },
+            abas.map(([codigo, rotulo]) => h('button', {
+                key: codigo, type: 'button', className: 'subtab' + (ativa === codigo ? ' ativa' : ''),
+                'aria-pressed': ativa === codigo, onClick: () => setSelecionada(codigo)
+            }, rotulo))),
+        ativa === 'INDICADORES_FROTA_PESADA' ? h(IndicadoresFrotaPesada) :
+            h('div', { className: 'card' }, h('h2', null, 'Frota Leve'),
+                h('p', null, 'Os indicadores da frota leve serão disponibilizados nesta subtela.')));
+}
+
+function IndicadoresFrotaPesada() {
     const h = React.createElement;
     const mesAtual = HOJE.slice(0, 7);
     const [inicio, setInicio] = React.useState(mesAtual);
@@ -81,7 +109,7 @@ function AdmIndicadores() {
     return h('section',null,
         h('header',{style:{background:'linear-gradient(115deg,#102e25,#205844)',borderRadius:18,color:'#fff',padding:'22px 24px',marginBottom:14}},
             h('small',{style:{color:'#f0cc67',letterSpacing:2,fontWeight:700}},'BOCCHI FROTA · INDICADORES'),
-            h('h2',{style:{color:'inherit',fontSize:32,margin:'5px 0'}},'Faturamento da frota'),
+            h('h2',{style:{color:'inherit',fontSize:32,margin:'5px 0'}},'Faturamento da frota pesada'),
             h('div',null,'Acompanhe receita, volume transportado e metas por placa e competência.')),
         h('div',{className:'card',style:{...grid(150),marginBottom:14,alignItems:'end'}},
             h('label',null,'Competência inicial',h('input',{type:'month',value:inicio,onChange:e=>setInicio(e.target.value)})),
