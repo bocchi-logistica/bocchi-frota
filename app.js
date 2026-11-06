@@ -84,7 +84,7 @@ const CONFIG = {
     TIMEOUT_MS: 90000,
     RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
     MAX_TENTATIVAS: 4,
-    VERSAO: '2.8.66-homolog'
+    VERSAO: '2.8.67-homolog'
 };
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
 document.title = `Logística Bocchi — Portal do Motorista e ADM Logística (${CONFIG.VERSAO})`;
@@ -1361,7 +1361,7 @@ function AdmApp({ st, setSt, user, onSair, toast }) {
     const dados = usarDadosMensais(st);
     const abas = [
         pode(user, 'painel_rh.visualizar') && ['rh', 'Fechamento RH'],
-        podeAbaPainel(user, 'PAINEL_CARGAS') && ['indicadores', 'Indicadores'],
+        ABAS_INDICADORES.some(([codigo]) => podeAbaIndicadores(user, codigo)) && ['indicadores', 'Indicadores'],
         ABAS_PAINEL.some(aba => podeAbaPainel(user, aba)) && ['painel', 'Painel'],
         pode(user, 'importar.criar') && ['importar', 'Importar'],
         pode(user, 'contestacoes.visualizar') && ['contest', 'Contestações'],
@@ -1397,7 +1397,7 @@ function AdmApp({ st, setSt, user, onSair, toast }) {
             setSt(s => ({ ...s, checklists: vindos }));
         }).catch(e => toast('Falha ao carregar checklists do banco D1 de homologação: ' + e.message));
     }, []);
-    const icones={rh:"▦",painel:"◫",importar:"↥",contest:"≡",sinistros:"◇",agendamentos:"▤",check:"✓",prem:"☆",cad:"▧"};
+    const icones={indicadores:"▥",rh:"▦",painel:"◫",importar:"↥",contest:"≡",sinistros:"◇",agendamentos:"▤",check:"✓",prem:"☆",cad:"▧"};
     return (React.createElement("div", { className: "ashell admin-lateral" },
         menuAberto && React.createElement("button",{className:"admin-menu-fundo","aria-label":"Fechar menu",onClick:()=>setMenuAberto(false)}),
         React.createElement("aside", { className: "admin-sidebar"+(menuAberto?" aberto":"") },
@@ -1412,7 +1412,7 @@ function AdmApp({ st, setSt, user, onSair, toast }) {
             React.createElement("div",{className:"row admin-conta"},React.createElement("div",null,React.createElement("strong",null,user.nome),React.createElement("small",null,user.perfil||"Gestão")),React.createElement(AlterarSenhaUsuario,{user,onSair,toast,claro:true}),React.createElement("button",{className:"btn btn-g btn-sm",onClick:onSair},"Sair"))),
         React.createElement("div", { className: "abody" },
             aba === 'rh' && React.createElement(PainelRH, { st: st, dados: dados, user: user }),
-            aba === 'indicadores' && React.createElement(AdmIndicadores),
+            aba === 'indicadores' && React.createElement(AdmIndicadores, { user }),
             aba === 'painel' && React.createElement(AdmPainel, { st: st, dados: dados, user: user, onNavegar: navegarPara }),
             aba === 'importar' && React.createElement(AdmImportar, { st: st, setSt: setSt, toast: toast }),
             aba === 'contest' && React.createElement(AdmContestacoes, { st: st, setSt: setSt, toast: toast, foco: destino?.id === 'contest' ? destino : null }),
