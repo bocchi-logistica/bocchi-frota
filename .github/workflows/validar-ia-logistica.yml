@@ -1,0 +1,24 @@
+name: Validar interface IA Logística
+on:
+  push:
+    branches:
+      - feature/ia-logistica-homolog
+  pull_request:
+    branches:
+      - migracao/cloudflare-d1-r2
+jobs:
+  validar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Verificar sintaxe da interface
+        run: |
+          node --check app.js
+          node --check js/modulos/cadastros.js
+          node --check js/modulos/ia-logistica.js
+      - name: Verificar integracao e permissao
+        run: |
+          node --input-type=module -e "import fs from 'node:fs';import assert from 'node:assert/strict';const app=fs.readFileSync('app.js','utf8');const cad=fs.readFileSync('js/modulos/cadastros.js','utf8');assert.match(app,/import\\('\/js\/modulos\/ia-logistica\\.js'\\)/);assert.match(app,/IA_LOGISTICA_CONSULTAR/);assert.match(cad,/IA_LOGISTICA_CONSULTAR/);"

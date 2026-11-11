@@ -1357,10 +1357,26 @@ function MotoristaApp({ st, setSt, user, onSair, toast }) {
 }
 /* Fila mantida fora da tela: continua enquanto o usuário navega dentro do aplicativo. */
 /* ================= SHELL ADM ================= */
+function AdmIaLogistica({user}) {
+    const referencia = React.useRef(null);
+    React.useEffect(() => {
+        let ativo = true, instancia = null;
+        import('/js/modulos/ia-logistica.js').then(modulo => {
+            if (!ativo || !referencia.current) return;
+            instancia = modulo.montarChatIaLogistica(referencia.current, {
+                apiUrl: CONFIG.API_URL,
+                obterToken: () => ApiService.token
+            });
+        }).catch(() => { if (ativo && referencia.current) referencia.current.textContent = 'Não foi possível carregar a IA Logística.'; });
+        return () => { ativo = false; instancia?.desmontar(); };
+    }, [user.id]);
+    return React.createElement('div', {ref: referencia});
+}
 function AdmApp({ st, setSt, user, onSair, toast }) {
     const dados = usarDadosMensais(st);
     const abas = [
         pode(user, 'painel_rh.visualizar') && ['rh', 'Fechamento RH'],
+        (user?.areasAcesso || []).includes('IA_LOGISTICA') && (user?.subtelasAcesso || []).includes('IA_LOGISTICA_CONSULTAR') && !/MOTORISTA/i.test(String(user?.perfil || '')) && ['ia', 'IA Logística'],
         ABAS_INDICADORES.some(([codigo]) => podeAbaIndicadores(user, codigo)) && ['indicadores', 'Indicadores'],
         ABAS_PAINEL.some(aba => podeAbaPainel(user, aba)) && ['painel', 'Painel'],
         pode(user, 'importar.criar') && ['importar', 'Importar'],
@@ -1397,7 +1413,7 @@ function AdmApp({ st, setSt, user, onSair, toast }) {
             setSt(s => ({ ...s, checklists: vindos }));
         }).catch(e => toast('Falha ao carregar checklists do banco D1 de homologação: ' + e.message));
     }, []);
-    const icones={indicadores:React.createElement("svg",{width:18,height:18,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:2,strokeLinecap:"round",strokeLinejoin:"round"},React.createElement("path",{d:"M3 3v18h18M7 15l5-5 4 3 5-7"})),rh:"▦",painel:"◫",importar:"↥",contest:"≡",sinistros:"◇",agendamentos:"▤",check:"✓",prem:"☆",cad:"▧"};
+    const icones={ia:"✦",indicadores:React.createElement("svg",{width:18,height:18,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:2,strokeLinecap:"round",strokeLinejoin:"round"},React.createElement("path",{d:"M3 3v18h18M7 15l5-5 4 3 5-7"})),rh:"▦",painel:"◫",importar:"↥",contest:"≡",sinistros:"◇",agendamentos:"▤",check:"✓",prem:"☆",cad:"▧"};
     return (React.createElement("div", { className: "ashell admin-lateral" },
         menuAberto && React.createElement("button",{className:"admin-menu-fundo","aria-label":"Fechar menu",onClick:()=>setMenuAberto(false)}),
         React.createElement("aside", { className: "admin-sidebar"+(menuAberto?" aberto":"") },
@@ -1412,6 +1428,7 @@ function AdmApp({ st, setSt, user, onSair, toast }) {
             React.createElement("div",{className:"row admin-conta"},React.createElement("div",null,React.createElement("strong",null,user.nome),React.createElement("small",null,user.perfil||"Gestão")),React.createElement(AlterarSenhaUsuario,{user,onSair,toast,claro:true}),React.createElement("button",{className:"btn btn-g btn-sm",onClick:onSair},"Sair"))),
         React.createElement("div", { className: "abody" },
             aba === 'rh' && React.createElement(PainelRH, { st: st, dados: dados, user: user }),
+            aba === 'ia' && React.createElement(AdmIaLogistica, { user }),
             aba === 'indicadores' && React.createElement(AdmIndicadores, { user }),
             aba === 'painel' && React.createElement(AdmPainel, { st: st, dados: dados, user: user, onNavegar: navegarPara }),
             aba === 'importar' && React.createElement(AdmImportar, { st: st, setSt: setSt, toast: toast }),
