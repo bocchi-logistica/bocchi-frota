@@ -1,4 +1,5 @@
 const AREAS_E_SUBTELAS = {
+    IA_LOGISTICA: [['IA_LOGISTICA_CONSULTAR', 'Consultar dados operacionais']],
     INDICADORES: ABAS_INDICADORES,
     PAINEL: [
         ['PAINEL_VISAO_GERAL', 'Visão Geral'],
@@ -39,7 +40,7 @@ const AREAS_E_SUBTELAS = {
         ['CADASTRO_PERFIS', 'Perfis']
     ]
 };
-const ROTULOS_AREAS = { INDICADORES: 'Indicadores', PAINEL: 'Painel', IMPORTACAO: 'Importação', CONTESTACOES: 'Contestações', RH_FECHAMENTO: 'RH / Fechamento', PREMIACAO: 'Premiação', CHECKLIST: 'Check list', SINISTROS: 'Sinistros', AGENDAMENTOS: 'Agendamentos', CADASTROS: 'Cadastros' };
+const ROTULOS_AREAS = { IA_LOGISTICA: 'IA Logística', INDICADORES: 'Indicadores', PAINEL: 'Painel', IMPORTACAO: 'Importação', CONTESTACOES: 'Contestações', RH_FECHAMENTO: 'RH / Fechamento', PREMIACAO: 'Premiação', CHECKLIST: 'Check list', SINISTROS: 'Sinistros', AGENDAMENTOS: 'Agendamentos', CADASTROS: 'Cadastros' };
 const normalizarCodigoAcesso = codigo => String(codigo || '')
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_')
