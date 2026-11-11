@@ -1,0 +1,15 @@
+// Componente visual desacoplado: nao persiste perguntas ou respostas.
+// O host fornece token por callback; nunca gravar credenciais no browser storage.
+export function montarChatIaLogistica(container,{apiUrl="",obterToken}){
+  if(!(container instanceof HTMLElement)||typeof obterToken!=="function")throw new Error("Configuracao de chat invalida.");
+  const raiz=document.createElement("section");raiz.className="ia-logistica";
+  raiz.innerHTML=`<style>.ia-logistica{font:inherit;max-width:900px;margin:auto;color:#173f2e}.ia-logistica .ia-mensagens{min-height:260px;max-height:56vh;overflow:auto;border:1px solid #d7e1da;border-radius:14px;padding:16px;background:#fafcfb}.ia-logistica .ia-msg{white-space:pre-wrap;margin:12px 0;padding:12px;border-radius:12px;background:#eef4ef}.ia-logistica .ia-msg[data-autor=usuario]{background:#e3f1e8}.ia-logistica form{display:flex;gap:8px;margin-top:12px}.ia-logistica textarea{flex:1;min-height:56px;resize:vertical;border:1px solid #b9c9be;border-radius:10px;padding:10px;font:inherit}.ia-logistica button{border:0;border-radius:10px;padding:12px 18px;background:#176344;color:white;font-weight:600;cursor:pointer}.ia-logistica button:disabled{opacity:.5}.ia-logistica small{display:block;margin-top:10px;color:#63776a}</style><h2>IA Logística</h2><div class="ia-mensagens" role="log" aria-live="polite"></div><form><textarea maxlength="600" aria-label="Pergunta para IA Logística" placeholder="Pergunte sobre a operação logística..." required></textarea><button type="submit">Consultar</button></form><small>Consultas somente leitura. As mensagens não são salvas no banco.</small>`;
+  const mensagens=raiz.querySelector(".ia-mensagens"),form=raiz.querySelector("form"),entrada=raiz.querySelector("textarea"),botao=raiz.querySelector("button");
+  let ativo=true;
+  function adicionar(autor,texto){if(!ativo)return;const div=document.createElement("div");div.className="ia-msg";div.dataset.autor=autor;div.textContent=texto;mensagens.append(div);mensagens.scrollTop=mensagens.scrollHeight;}
+  async function enviar(e){e.preventDefault();if(!ativo||botao.disabled)return;const pergunta=entrada.value.trim();if(pergunta.length<3)return;entrada.value="";adicionar("usuario",pergunta);botao.disabled=true;
+    try{const token=await obterToken();if(!token)throw Error("Sessão indisponível.");const res=await fetch(apiUrl.replace(/\\/$/,"")+"/ia/perguntar",{method:"POST",headers:{"Authorization":"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify({pergunta}),cache:"no-store"});const data=await res.json();if(!res.ok)throw Error(data.erro||"Falha na consulta.");const resultado=data.resultado;adicionar("assistente",resultado?JSON.stringify(resultado.dados,null,2):"Sem resultados.");}
+    catch(err){adicionar("assistente",err.message||"Não foi possível consultar.");}finally{if(ativo)botao.disabled=false;}}
+  form.addEventListener("submit",enviar);container.append(raiz);
+  return {desmontar(){ativo=false;form.removeEventListener("submit",enviar);raiz.remove();}};
+}
