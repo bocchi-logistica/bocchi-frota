@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - feature/ia-logistica-homolog
+      - migracao/cloudflare-d1-r2
   pull_request:
     branches:
       - migracao/cloudflare-d1-r2
