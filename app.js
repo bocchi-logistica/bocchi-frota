@@ -1200,7 +1200,7 @@ function Login({ onLogin }) {
                 React.createElement("div",{className:"login-eyebrow"},"BOCCHI FROTA"),
                 React.createElement("h1",null,"Quem move a Bocchi merece estar conectado."),
                 React.createElement("p",null,"Um espaço para facilitar sua rotina, cuidar dos nossos veículos e aproximar você da empresa. Juntos, seguimos com segurança, parceria e reconhecimento."),
-                React.createElement("div",{className:"login-servicos"},["Agendamento de veículos compartilhados","Checklists","Premiação","Sinistros","Indicadores"].map(s=>React.createElement("span",{key:s},s))),
+                React.createElement("div",{className:"login-servicos"},["Agendamento de veículos compartilhados","Checklists","Premiação","Sinistros","Indicadores","IA Logística"].map(s=>React.createElement("span",{key:s},s))),
                 React.createElement("div",{className:"login-em-breve"},"Em breve: manuais e controle de manutenção.")),
             React.createElement("div",{className:"login-valores"},"Segurança",React.createElement("span",null,"•"),"Parceria",React.createElement("span",null,"•"),"Reconhecimento")),
         React.createElement("div", { className: "login-card" },
