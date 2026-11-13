@@ -1,10 +1,7 @@
 const AREAS_E_SUBTELAS = {
     IA_LOGISTICA: [['IA_LOGISTICA_CONSULTAR', 'Consultar dados operacionais']],
     INDICADORES: ABAS_INDICADORES,
-    PAINEL: [
-        ['PAINEL_VISAO_GERAL', 'Visão Geral'],
-        ['PAINEL_CARGAS', 'Cargas']
-    ],
+    PAINEL: [],
     IMPORTACAO: [],
     CONTESTACOES: [],
     RH_FECHAMENTO: [
@@ -40,7 +37,7 @@ const AREAS_E_SUBTELAS = {
         ['CADASTRO_PERFIS', 'Perfis']
     ]
 };
-const ROTULOS_AREAS = { IA_LOGISTICA: 'IA Logística', INDICADORES: 'Indicadores', PAINEL: 'Painel', IMPORTACAO: 'Importação', CONTESTACOES: 'Contestações', RH_FECHAMENTO: 'RH / Fechamento', PREMIACAO: 'Premiação', CHECKLIST: 'Check list', SINISTROS: 'Sinistros', AGENDAMENTOS: 'Agendamentos', CADASTROS: 'Cadastros' };
+const ROTULOS_AREAS = { IA_LOGISTICA: 'IA Logística', INDICADORES: 'Indicadores', PAINEL: 'Tratativas', IMPORTACAO: 'Importação', CONTESTACOES: 'Contestações', RH_FECHAMENTO: 'RH / Fechamento', PREMIACAO: 'Premiação', CHECKLIST: 'Check list', SINISTROS: 'Sinistros', AGENDAMENTOS: 'Agendamentos', CADASTROS: 'Cadastros' };
 const normalizarCodigoAcesso = codigo => String(codigo || '')
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_')
@@ -290,8 +287,6 @@ function AdmCadastros({ st, setSt, toast, user }) {
             const areasCanon = canonListaAcesso(editPerfil.areasAcesso);
             const subtelasCanon = canonListaAcesso(editPerfil.subtelasAcesso);
             const subtelasValidas = subtelasCanon.filter(c => areasCanon.some(a => (AREAS_E_SUBTELAS[a] || []).some(([codigo]) => codigo === c)));
-            if (areasCanon.includes('PAINEL') && !ABAS_PAINEL.some(aba => subtelasValidas.includes(aba)))
-                throw new Error('Selecione ao menos uma aba do Painel ou desmarque a área.');
             const resposta = await ApiService.salvarPerfil({ ...editPerfil, titulo: String(editPerfil.titulo).toUpperCase(), areasAcesso: areasCanon, subtelasAcesso: subtelasValidas });
             if (!resposta?.ok && !resposta?.sucesso)
                 throw new Error(resposta?.erro || 'O D1 de homologação não confirmou o salvamento do perfil.');
@@ -596,8 +591,6 @@ function AdmCadastros({ st, setSt, toast, user }) {
                         React.createElement("td", null,
                             React.createElement("button", { className: "btn btn-s btn-sm", onClick: () => {
                                 const areasAcesso = [...(p.areasAcesso || [])], subtelasAcesso = [...(p.subtelasAcesso || [])];
-                                if (areasAcesso.includes('PAINEL') && !subtelasPainelDefinidas(subtelasAcesso))
-                                    subtelasAcesso.push(...ABAS_PAINEL);
                                 setEditPerfil({ ...p, areasAcesso, subtelasAcesso });
                             } }, "Editar")))))))),
         edit &&
@@ -816,4 +809,5 @@ function AdmCadastros({ st, setSt, toast, user }) {
             React.createElement(RegrasCapacidadeProduto, { tipo: editTipo, onChange: setEditTipo }),
             React.createElement("button", { className: "btn btn-p", style: { width: '100%', marginTop: 14 }, onClick: salvarTipo }, "Salvar tipo de ve\u00EDculo"))));
 }
+
 

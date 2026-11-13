@@ -8,7 +8,7 @@ Portal da Logística Bocchi Agrobios. O mesmo frontend apresenta a área do moto
 | --- | --- |
 | [index.html](index.html) | Página de entrada, estilos e carregamento do JavaScript |
 | [app.js](app.js) | Configuração do portal, sessão, cliente da API, navegação e telas |
-| [js/modulos/painel.js](js/modulos/painel.js) | Painel administrativo, Visão Geral, filtros e detalhamento de Cargas. |
+| [js/modulos/tratativas.js](js/modulos/tratativas.js) | Central de Tratativas: pendências de contestações de carga/PBT, checklists e sinistros, com atalhos para os módulos responsáveis. |
 | [js/modulos/checklist.js](js/modulos/checklist.js) | Checklist do motorista, detalhe e telas administrativas de aprovação, perguntas e relatório. |
 | [js/modulos/agendamentos.js](js/modulos/agendamentos.js) | Agenda do motorista e da gestão, reservas, retirada, devolução e parâmetros. |
 | [js/modulos/sinistros.js](js/modulos/sinistros.js) | Registro e consulta de sinistros no app, gestão e configurações administrativas. |
@@ -33,3 +33,6 @@ A API é mantida em [bocchi-frota-api](https://github.com/bocchi-logistica/bocch
 
 Registre a versão do frontend e o commit correspondente. A entrega só está confirmada quando o Worker da homologação aponta para esse commit e o portal exibe a versão esperada. Veja o [guia de entrega da API](https://github.com/bocchi-logistica/bocchi-frota-api/blob/migracao/cloudflare-d1-r2/README.md).
 
+
+
+A área interna `PAINEL` é mantida como identificador dos perfis existentes, com rótulo **Tratativas**. As antigas subtelas do Painel foram aposentadas; não concedem consulta de cargas, cálculo de terceiros ou acesso ao RH. A consulta de cargas administrativas fica em Indicadores, sob sua própria permissão.

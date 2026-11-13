@@ -84,7 +84,7 @@ const CONFIG = {
     TIMEOUT_MS: 90000,
     RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
     MAX_TENTATIVAS: 4,
-    VERSAO: '2.8.69-homolog-indicadores'
+    VERSAO: '2.8.70-homolog-tratativas'
 };
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
 document.title = `Logística Bocchi — Portal do Motorista e ADM Logística (${CONFIG.VERSAO})`;
@@ -138,7 +138,7 @@ function permissoesDoUsuario(user) {
 }
 const ACESSO_NOVO_POR_PERMISSAO = {
     'painel_rh.visualizar': { areas: ['RH_FECHAMENTO', 'FECHAMENTO_RH'] },
-    'painel.visualizar': { areas: ['PAINEL'] },
+    'tratativas.visualizar': { areas: ['PAINEL'] },
     'importar.criar': { areas: ['IMPORTACAO'], editar: true },
     'contestacoes.visualizar': { areas: ['CONTESTACOES'] },
     'contestacoes.decidir': { areas: ['CONTESTACOES'], editar: true },
@@ -195,15 +195,6 @@ function pode(user, permissao) {
     if (podePeloPerfilNovo(user, permissao))
         return true;
     return permissoesDoUsuario(user).has(permissao);
-}
-const ABAS_PAINEL = ['PAINEL_VISAO_GERAL', 'PAINEL_CARGAS'];
-const subtelasPainelDefinidas = subtelas => subtelas.some(codigo => codigo.startsWith('PAINEL_'));
-function podeAbaPainel(user, aba) {
-    if (!user?.acessosPerfilDefinidos) return pode(user, 'painel.visualizar');
-    const areas = (user.areasAcesso || []).map(normalizarPerfil);
-    const subtelas = (user.subtelasAcesso || []).map(normalizarPerfil);
-    return areas.includes('PAINEL') &&
-        (subtelasPainelDefinidas(subtelas) ? subtelas.includes(aba) : ABAS_PAINEL.includes(aba));
 }
 function temPerfil(user, perfil) { return perfisDoUsuario(user).includes(normalizarPerfil(perfil)); }
 /* ============================================================================
@@ -601,7 +592,7 @@ const ApiService = {
             q.set('somenteSalvas', '1');
         return this._req('GET', '/admin/apuracoes' + (q.toString() ? '?' + q.toString() : ''));
     },
-    salvarApuracoes(motoristaId, apuracoes, origem = 'PAINEL_MENSAL') {
+    salvarApuracoes(motoristaId, apuracoes, origem = 'RH_QUADRIMESTRE') {
         return this._req('POST', '/admin/apuracoes/salvar', { motoristaId, apuracoes, origem });
     },
     alterarStatusApuracao(itemId, status) {
@@ -1398,7 +1389,7 @@ function AdmApp({ st, setSt, user, onSair, toast }) {
         pode(user, 'painel_rh.visualizar') && ['rh', 'Fechamento RH'],
         (user?.areasAcesso || []).includes('IA_LOGISTICA') && (user?.subtelasAcesso || []).includes('IA_LOGISTICA_CONSULTAR') && !/MOTORISTA/i.test(String(user?.perfil || '')) && ['ia', 'IA Logística'],
         ABAS_INDICADORES.some(([codigo]) => podeAbaIndicadores(user, codigo)) && ['indicadores', 'Indicadores'],
-        ABAS_PAINEL.some(aba => podeAbaPainel(user, aba)) && ['painel', 'Painel'],
+        pode(user, 'tratativas.visualizar') && ['tratativas', 'Tratativas'],
         pode(user, 'importar.criar') && ['importar', 'Importar'],
         pode(user, 'contestacoes.visualizar') && ['contest', 'Contestações'],
         (pode(user, 'sinistros.visualizar') || pode(user, 'sinistros.configuracoes')) && ['sinistros', 'Sinistros'],
@@ -1433,7 +1424,7 @@ function AdmApp({ st, setSt, user, onSair, toast }) {
             setSt(s => ({ ...s, checklists: vindos }));
         }).catch(e => toast('Falha ao carregar checklists do banco D1 de homologação: ' + e.message));
     }, []);
-    const icones={ia:"✦",indicadores:React.createElement("svg",{width:18,height:18,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:2,strokeLinecap:"round",strokeLinejoin:"round"},React.createElement("path",{d:"M3 3v18h18M7 15l5-5 4 3 5-7"})),rh:"▦",painel:"◫",importar:"↥",contest:"≡",sinistros:"◇",agendamentos:"▤",check:"✓",prem:"☆",cad:"▧"};
+    const icones={ia:"✦",indicadores:React.createElement("svg",{width:18,height:18,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:2,strokeLinecap:"round",strokeLinejoin:"round"},React.createElement("path",{d:"M3 3v18h18M7 15l5-5 4 3 5-7"})),rh:"▦",tratativas:"◫",importar:"↥",contest:"≡",sinistros:"◇",agendamentos:"▤",check:"✓",prem:"☆",cad:"▧"};
     return (React.createElement("div", { className: "ashell admin-lateral" },
         menuAberto && React.createElement("button",{className:"admin-menu-fundo","aria-label":"Fechar menu",onClick:()=>setMenuAberto(false)}),
         React.createElement("aside", { className: "admin-sidebar"+(menuAberto?" aberto":"") },
@@ -1450,7 +1441,7 @@ function AdmApp({ st, setSt, user, onSair, toast }) {
             aba === 'rh' && React.createElement(PainelRH, { st: st, dados: dados, user: user }),
             aba === 'ia' && React.createElement(AdmIaLogistica, { user }),
             aba === 'indicadores' && React.createElement(AdmIndicadores, { user }),
-            aba === 'painel' && React.createElement(AdmPainel, { st: st, dados: dados, user: user, onNavegar: navegarPara }),
+            aba === 'tratativas' && React.createElement(AdmTratativas, { user: user, onNavegar: navegarPara }),
             aba === 'importar' && React.createElement(AdmImportar, { st: st, setSt: setSt, toast: toast }),
             aba === 'contest' && React.createElement(AdmContestacoes, { st: st, setSt: setSt, user: user, toast: toast, foco: destino?.id === 'contest' ? destino : null }),
             aba === 'agendamentos' && React.createElement(AdmAgendamentos, { user: user, toast: toast }),
@@ -1533,6 +1524,7 @@ function App() {
         React.createElement(Toast, { msg: toastMsg })));
 }
 ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App, null));
+
 
 
 
