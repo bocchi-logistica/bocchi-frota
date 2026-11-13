@@ -377,6 +377,7 @@ th.td-num{text-align:right}
 
 
 /* Entrada Bocchi Frota */
+.login-menu-toggle,.login-menu-fundo{display:none}
 .bocchi-login{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(420px,1fr);padding:0;background:#f1f5f1;align-items:center}
 .login-apresentacao{align-self:stretch;min-height:100vh;padding:52px clamp(32px,5vw,90px);background:linear-gradient(140deg,#092e25,#194e3b);color:white;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden}
 .login-apresentacao:after{content:"";position:absolute;width:390px;height:390px;border:55px solid rgba(128,187,139,.06);border-radius:50%;right:-190px;bottom:-160px;pointer-events:none}
@@ -395,8 +396,18 @@ th.td-num{text-align:right}
 .bocchi-login label{font-size:11px;text-transform:none;letter-spacing:0;color:#345343}.bocchi-login input{font-size:14px}
 .login-ajuda{text-align:center;font-size:11px;color:#768477;line-height:1.7;margin-top:23px}.login-versao{text-align:center;font-size:10px;color:#88938a;margin-top:23px}
 @media(max-width:800px){
-.bocchi-login{grid-template-columns:minmax(0,1fr);min-height:100vh;min-height:100svh;padding:24px 16px;align-content:center;gap:0}
-.bocchi-login .login-apresentacao{display:none}
+.bocchi-login{grid-template-columns:minmax(0,1fr);min-height:100vh;min-height:100svh;padding:72px 16px 24px;align-content:center;gap:0}
+.bocchi-login .login-apresentacao{display:flex;position:fixed;inset:0 auto 0 0;width:min(86vw,360px);height:100dvh;min-height:0;padding:82px 24px 30px;z-index:301;overflow-y:auto;visibility:hidden;transform:translateX(-100%);transition:transform .22s ease,visibility .22s;justify-content:flex-start;gap:28px}
+.bocchi-login.apresentacao-aberta .login-apresentacao{visibility:visible;transform:translateX(0)}
+.bocchi-login .login-menu-toggle{display:flex;align-items:center;justify-content:center;position:fixed;top:max(12px,env(safe-area-inset-top));left:max(12px,env(safe-area-inset-left));width:44px;height:44px;z-index:302;border:1px solid #d5e2d8;border-radius:12px;background:#fff;color:#173f2e;font-size:25px;box-shadow:0 3px 12px #173f2e15}
+.bocchi-login .login-menu-toggle:focus-visible{outline:3px solid #d8a928;outline-offset:3px}
+.bocchi-login .login-menu-fundo{display:block;position:fixed;inset:0;background:#081e1770;z-index:300;cursor:pointer}
+.bocchi-login .login-mensagem{margin:0}
+.bocchi-login .login-mensagem h1{font-size:30px}
+.bocchi-login .login-mensagem p{font-size:14px;margin-top:18px}
+.bocchi-login .login-eyebrow{margin-bottom:16px}
+.bocchi-login .login-servicos{margin-top:22px}
+.bocchi-login .login-valores{margin-top:auto;flex-wrap:wrap}
 .bocchi-login .login-card{grid-area:auto;width:100%;max-width:430px;min-width:0;margin:0;padding:28px 24px;border-radius:20px}
 .bocchi-login .logo-login{width:150px;margin-bottom:12px}
 .bocchi-login .login-boas-vindas{font-size:23px;line-height:1.25;margin-top:24px}
@@ -411,11 +422,11 @@ th.td-num{text-align:right}
 .bocchi-login .login-versao{font-size:11px;overflow-wrap:anywhere;margin-top:18px}
 }
 @media(max-width:360px){
-.bocchi-login{padding:16px 12px}
+.bocchi-login{padding:68px 12px 16px}
 .bocchi-login .login-card{padding:24px 18px}
 }
 @media(max-width:800px) and (max-height:620px){
-.bocchi-login{align-content:start;padding-top:16px;padding-bottom:16px}
+.bocchi-login{align-content:start;padding-top:68px;padding-bottom:16px}
 }
 </style>
 </head>
