@@ -1148,6 +1148,21 @@ function AvisoPrivacidade({claro=false}){
 }
 
 function Login({ onLogin }) {
+    const [apresentacaoAberta, setApresentacaoAberta] = useState(false);
+    const botaoApresentacao = React.useRef(null), cartaoLogin = React.useRef(null);
+    React.useEffect(() => {
+        const mobile = window.matchMedia('(max-width:800px)');
+        const overflowAnterior = document.body.style.overflow;
+        const sincronizar = () => {
+            const aberta = apresentacaoAberta && mobile.matches;
+            if (cartaoLogin.current) cartaoLogin.current.inert = aberta;
+            document.body.style.overflow = aberta ? 'hidden' : overflowAnterior;
+            if (!mobile.matches) setApresentacaoAberta(false);
+        };
+        sincronizar(); mobile.addEventListener('change', sincronizar);
+        return () => { mobile.removeEventListener('change', sincronizar); document.body.style.overflow = overflowAnterior; if (cartaoLogin.current) cartaoLogin.current.inert = false; };
+    }, [apresentacaoAberta]);
+    const fecharApresentacao = () => { setApresentacaoAberta(false); botaoApresentacao.current?.focus(); };
     const [login, setLogin] = useState('');
     const [senha, setSenha] = useState('');
     const [erro, setErro] = useState('');
@@ -1193,8 +1208,18 @@ function Login({ onLogin }) {
             setCarregando(false);
         }
     };
-    return (React.createElement("div", { className: "login-wrap bocchi-login" },
-        React.createElement("section",{className:"login-apresentacao","aria-label":"Bocchi Frota"},
+    return (React.createElement("div", { className: "login-wrap bocchi-login" + (apresentacaoAberta ? " apresentacao-aberta" : ""), onKeyDown: e => {
+        if (!apresentacaoAberta) return;
+        if (e.key === "Escape") { e.preventDefault(); fecharApresentacao(); }
+        if (e.key === "Tab") {
+            const itens = [botaoApresentacao.current, ...e.currentTarget.querySelectorAll(".login-apresentacao a[href]")].filter(Boolean);
+            const i = itens.indexOf(document.activeElement);
+            e.preventDefault(); itens[(i + (e.shiftKey ? -1 : 1) + itens.length) % itens.length]?.focus();
+        }
+    } },
+        React.createElement("button", { ref: botaoApresentacao, type: "button", className: "login-menu-toggle", "aria-expanded": apresentacaoAberta, "aria-controls": "login-apresentacao", "aria-label": apresentacaoAberta ? "Fechar apresentação da plataforma" : "Abrir apresentação da plataforma", onClick: () => setApresentacaoAberta(v => !v) }, apresentacaoAberta ? "✕" : "☰"),
+        apresentacaoAberta && React.createElement("button", { type: "button", className: "login-menu-fundo", "aria-label": "Fechar apresentação", tabIndex: -1, onClick: fecharApresentacao }),
+        React.createElement("section",{id:"login-apresentacao",className:"login-apresentacao","aria-label":"Conheça a plataforma Bocchi Frota"},
             React.createElement("a",{className:"login-empresa",href:"https://bocchiagrobios.com.br/",target:"_blank",rel:"noopener noreferrer"},"BOCCHI AGROBIOS"),
             React.createElement("div",{className:"login-mensagem"},
                 React.createElement("div",{className:"login-eyebrow"},"BOCCHI FROTA"),
@@ -1203,7 +1228,7 @@ function Login({ onLogin }) {
                 React.createElement("div",{className:"login-servicos"},["Agendamento de veículos compartilhados","Checklists","Premiação","Sinistros","Indicadores","IA Logística"].map(s=>React.createElement("span",{key:s},s))),
                 React.createElement("div",{className:"login-em-breve"},"Em breve: manuais e controle de manutenção.")),
             React.createElement("div",{className:"login-valores"},"Segurança",React.createElement("span",null,"•"),"Parceria",React.createElement("span",null,"•"),"Reconhecimento")),
-        React.createElement("div", { className: "login-card" },
+        React.createElement("div", { ref: cartaoLogin, className: "login-card" },
             React.createElement("img", { src: LOGO, className: "logo-login", alt: "Bocchi Agrobios" }),
             React.createElement("div",{className:"login-assinatura"},"Você e a Bocchi, no mesmo caminho."),
             React.createElement("h3",{className:"login-boas-vindas"},"Bem-vindo de volta"),
