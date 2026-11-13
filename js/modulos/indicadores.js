@@ -71,7 +71,7 @@ function IndicadoresFrotaPesada() {
     const porMotorista = base.flatMap(linha => {
         if (!motorista) return [linha];
         const m = (linha.motoristas || []).find(m => m.id === motorista);
-        return m ? [{...linha,faturamento:m.faturamento,peso:m.peso,cargas:m.cargas,motoristas:[m],meta:null}] : [];
+        return m ? [{...linha,faturamento:m.faturamento,peso:m.peso,cargas:m.cargas,motoristas:[m]}] : [];
     });
     const linhas = porMotorista.filter(linha => (!anoFabricacao || String(linha.anoFabricacao || 'sem') === anoFabricacao) && (!placa || linha.placa === placa) && (!tipo || linha.tipo === tipo) &&
         (!situacao || estado(linha) === situacao));
@@ -171,7 +171,7 @@ function IndicadoresFrotaPesada() {
         periodoValido && !atual && h('p',{role:'status'},'Carregando indicadores…'),
         atual?.erro && h('p',{className:'aviso-box',role:'alert'},atual.erro),
         atual?.linhas && h(React.Fragment,null,
-            motorista && h('div',{className:'aviso-box'},'Exibindo somente as cargas do motorista no período. As metas mensais são da placa e não são comparadas com recortes por motorista.'),
+            motorista && h('div',{className:'aviso-box'},'Exibindo somente as cargas do motorista no período, comparadas à meta mensal cadastrada para o tipo de veículo. A meta é integral, sem rateio pelo período trabalhado.'),
             h('div',{className:'ind-kpis'},
                 card('Faturamento total',moeda(soma(linhas,'faturamento')),placas.length+(placas.length===1?' placa com cargas':' placas com cargas'),true),
                 card('Peso transportado',numero(soma(linhas,'peso'))+' t','Total no filtro'),
