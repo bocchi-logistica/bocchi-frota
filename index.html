@@ -446,10 +446,10 @@ th.td-num{text-align:right}
 .motorista-identidade .nome{font-size:18px}
 .motorista-conta-toggle{display:flex;align-items:center;justify-content:center;width:44px;height:44px;flex:0 0 44px;background:#ffffff12;border:1px solid #ffffff30;border-radius:12px;color:white;font-size:28px;line-height:1}
 .motorista-conta-toggle:focus-visible{outline:3px solid #e5c45c;outline-offset:3px}
-.motorista-conta-opcoes{display:none;position:absolute;right:12px;top:calc(100% + 8px);width:min(290px,calc(100vw - 24px));padding:10px;border-radius:16px;background:#173f2e;border:1px solid #ffffff26;box-shadow:0 12px 30px #102e2538;z-index:25}
+.motorista-conta-opcoes{display:none;position:absolute;right:12px;top:calc(100% + 8px);width:min(230px,calc(100vw - 24px));padding:6px;border-radius:12px;background:#173f2e;border:1px solid #ffffff26;box-shadow:0 12px 30px #102e2538;z-index:25}
 .motorista-conta-opcoes.aberto{display:flex;flex-direction:column;align-items:stretch;gap:4px}
-.motorista-menu-titulo{display:block;padding:9px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:#bfd4c8;border-bottom:1px solid #ffffff20;margin-bottom:4px}
-.motorista-conta-opcoes>.btn,.motorista-conta-opcoes>button{width:100%;min-height:46px;text-align:left;justify-content:flex-start;padding:12px;border-radius:9px;white-space:normal}
+.motorista-menu-titulo{display:block;padding:7px 10px;font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:#bfd4c8;border-bottom:1px solid #ffffff20;margin-bottom:4px}
+.motorista-conta-opcoes>.btn,.motorista-conta-opcoes>button{width:100%;min-height:44px;text-align:left;justify-content:flex-start;padding:8px 10px;border-radius:8px;white-space:normal;font-size:12px}
 .motorista-conta-opcoes>button:hover{background:#ffffff12}
 .motorista-conta-opcoes .motorista-sair{border-top:1px solid #ffffff20;border-radius:0 0 9px 9px;margin-top:4px}
 }
@@ -457,6 +457,12 @@ th.td-num{text-align:right}
 .motorista-vinculos{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:6px;font-size:12px;line-height:1.5;color:#d5e6db}
 .motorista-vinculos .chip-placa{font-size:12px;white-space:nowrap}
 .motorista-vinculo-repetir{color:inherit;text-align:left;text-decoration:underline;min-height:36px;font:inherit}
+@media(max-width:800px){
+.motorista-conta-opcoes.aberto{gap:0}
+.motorista-conta-opcoes>div:not(.overlay):not(.motorista-menu-titulo){text-align:left!important;margin:0!important}
+.motorista-conta-opcoes>div:not(.overlay):not(.motorista-menu-titulo)>button{display:block;width:100%;min-height:44px;padding:8px 10px!important;text-align:left;font-size:12px!important}
+.motorista-conta-opcoes .motorista-sair{margin-top:2px}
+}
 </style>
 </head>
 <body>
