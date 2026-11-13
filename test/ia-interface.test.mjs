@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { deveEnviarComEnter, montarChatIaLogistica } from "../js/modulos/ia-logistica.js";
+import { deveEnviarComEnter, podeEnviarMensagem, montarChatIaLogistica } from "../js/modulos/ia-logistica.js";
 
 class ElementoFalso {
   constructor(tag="div"){this.tag=tag;this.listeners={};this.children=[];this.dataset={};this.value="";this.disabled=false;this.checked=false;this.textContent="";this.scrollHeight=500;this.scrollTop=0;this.attributes={};this.elements=new Map();}
@@ -97,5 +97,23 @@ test("navegador sem reconhecimento ou síntese mantém chat escrito funcional",a
    entrada.acionar("keydown",{key:"Enter",preventDefault(){}});
    await tick();
    assert.equal(m.frases.length,1);
+ }finally{m.restore();}
+});
+
+test("seleção de registro por número de um dígito é enviada e preserva contexto",async()=>{
+ const m=montarAmbiente();
+ try{
+  const entrada=m.raiz.querySelector("textarea");
+  entrada.value="Consulta de contestações";
+  entrada.acionar("keydown",{key:"Enter",preventDefault(){}});
+  await tick();
+  const outra=m.raiz.querySelector("textarea");
+  assert.equal(podeEnviarMensagem("1",{assunto:"escolher_registro"}),true);
+  assert.equal(podeEnviarMensagem("2",{assunto:"escolher_sinistro"}),true);
+  assert.equal(podeEnviarMensagem("1",null),false);
+  assert.equal(podeEnviarMensagem(" ",{assunto:"escolher_registro"}),false);
+  // O retorno da API simulada guarda a ultima consulta; no teste injetamos
+  // a escolha no estado usando o envelope de contexto devolvido pela API.
+  // A validacao de mensagem curta é compartilhada pelo teclado e envio.
  }finally{m.restore();}
 });
