@@ -1265,7 +1265,7 @@ function CabecalhoMotorista({user,placa,onSair,toast}) {
         React.createElement("div",{className:"motorista-identidade"},
             React.createElement("div",{className:"motorista-avatar","aria-hidden":true},String(user.nome||"M").trim().slice(0,1).toUpperCase()),
             React.createElement("div",{className:"motorista-identidade-texto"},
-                React.createElement("div",{className:"nome"},primeiroNome(user.nome)),
+                React.createElement("div",{className:"nome"},user.nome),
                 React.createElement("div",{className:"sub"},placa ? placa.tipo : "Motorista")),
             placa && React.createElement("span",{className:"chip-placa"},placa.placa)),
         React.createElement("button",{type:"button",ref:botao,className:"motorista-conta-toggle","aria-label":"Opções da conta","aria-expanded":menuAberto,"aria-controls":"motorista-conta-opcoes",onClick:()=>setMenuAberto(v=>!v)},"⋮"),
