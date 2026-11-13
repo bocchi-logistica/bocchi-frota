@@ -84,7 +84,7 @@ const CONFIG = {
     TIMEOUT_MS: 90000,
     RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
     MAX_TENTATIVAS: 4,
-    VERSAO: '2.8.68-homolog-security'
+    VERSAO: '2.8.69-homolog-indicadores'
 };
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
 document.title = `Logística Bocchi — Portal do Motorista e ADM Logística (${CONFIG.VERSAO})`;
@@ -1533,6 +1533,7 @@ function App() {
         React.createElement(Toast, { msg: toastMsg })));
 }
 ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App, null));
+
 
 
 
