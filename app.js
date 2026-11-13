@@ -1470,10 +1470,42 @@ function App() {
     useConexaoPortal(user);
     useEffect(() => {
         if (!user || !_expiraSessao) return;
-        const expirar = () => { ApiService.sair(); setUser(null); };
-        const timer = setTimeout(expirar, Math.max(0, Date.parse(_expiraSessao) - Date.now()));
-        window.addEventListener('bocchi:sessao-invalida', expirar);
-        return () => { clearTimeout(timer); window.removeEventListener('bocchi:sessao-invalida', expirar); };
+        let timer, renovando=false, ultimaRenovacao=0, encerrado=false;
+        const expirar = () => { if(encerrado)return; encerrado=true; ApiService.sair(); setUser(null); };
+        const programar = () => {
+            clearTimeout(timer);
+            timer=setTimeout(expirar, Math.max(0, Date.parse(_expiraSessao)-Date.now()));
+        };
+        const atividade = async event => {
+            if(!event.isTrusted || encerrado || document.visibilityState==='hidden')return;
+            if(Date.now()>=Date.parse(_expiraSessao)){expirar();return;}
+            if(renovando || Date.now()-ultimaRenovacao<15000)return;
+            renovando=true;ultimaRenovacao=Date.now();
+            const tokenAnterior=_token;
+            try{
+                const r=await fetchComTimeout(CONFIG.API_URL+'/sessao/atividade',{
+                    method:'POST',headers:{Authorization:'Bearer '+tokenAnterior}
+                });
+                if(encerrado || _token!==tokenAnterior)return;
+                if(r.status===401){expirar();return;}
+                if(!r.ok)return;
+                const data=await r.json();
+                if(encerrado || _token!==tokenAnterior)return;
+                if(!data.ok || !data.token || !Number.isFinite(Date.parse(data.expiraEm)))return;
+                _token=data.token;_expiraSessao=data.expiraEm;
+                try{sessionStorage.setItem('bocchi.portal.sessao',JSON.stringify({token:_token,expiraEm:_expiraSessao,usuario:user}));}catch{}
+                programar();
+            }catch{}finally{renovando=false;}
+        };
+        const eventos=['pointerdown','keydown','touchstart','scroll'];
+        programar();
+        eventos.forEach(e=>window.addEventListener(e,atividade,{passive:true}));
+        window.addEventListener('bocchi:sessao-invalida',expirar);
+        return ()=>{
+            encerrado=true;clearTimeout(timer);
+            eventos.forEach(e=>window.removeEventListener(e,atividade));
+            window.removeEventListener('bocchi:sessao-invalida',expirar);
+        };
     }, [user]);
     const [toastMsg, setToastMsg] = useState('');
     const tRef = useRef(null);
