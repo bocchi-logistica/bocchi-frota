@@ -368,6 +368,15 @@ function otimizarArquivoBinario(arquivo) {
    O acesso ao banco D1 de homologação é responsabilidade exclusiva do backend.
    ========================================================================== */
 let _expiraSessao = null;
+function mesmaSessaoToken(a,b){
+    if(a===b)return true;
+    if(!a||!b)return false;
+    try{
+        const ler=t=>JSON.parse(atob(t.split('.')[0].replace(/-/g,'+').replace(/_/g,'/')));
+        const x=ler(a),y=ler(b);
+        return !!x.nonce&&x.nonce===y.nonce&&x.sub===y.sub&&x.sv===y.sv;
+    }catch{return false;}
+}
 let _token = null;
 let _loginSessao = null; // identifica o proprietário do token atual
 const ApiService = {
@@ -394,7 +403,7 @@ const ApiService = {
         const privada = rota === '/cargas/me' || modulo === 'premiacao';
         const conferirSessao = () => {
             if (!privada) return;
-            if (token !== _token) throw new Error('Sessão alterada durante a consulta.');
+            if (!mesmaSessaoToken(token,_token)) throw new Error('Sessão alterada durante a consulta.');
             if (!token || !(Date.parse(_expiraSessao) > Date.now())) {
                 window.dispatchEvent(new Event('bocchi:sessao-invalida'));
                 throw new Error('Sessão inválida ou expirada.');
@@ -403,7 +412,7 @@ const ApiService = {
         conferirSessao();
         const resultado = await cacheLeiturasPortal.obter(token + '|' + caminho, async () => {
             const dados = await this._reqRede(metodo, caminho, corpo);
-            if (token !== _token) throw new Error('Sessão alterada durante a consulta.');
+            if (!mesmaSessaoToken(token,_token)) throw new Error('Sessão alterada durante a consulta.');
             return dados;
         }, ttl, modulo);
         conferirSessao();
@@ -493,7 +502,7 @@ const ApiService = {
         }
         _token = null; _loginSessao = null; _expiraSessao = null; try { sessionStorage.removeItem('bocchi.portal.sessao'); } catch {} },
     enviarChecklist(registro, sessaoEsperada = null) {
-        if (sessaoEsperada && (sessaoEsperada.token !== _token || sessaoEsperada.login !== _loginSessao)) {
+        if (sessaoEsperada && (sessaoEsperada.!mesmaSessaoToken(token,_token) || sessaoEsperada.login !== _loginSessao)) {
             const erro = new Error('Sessão alterada. O checklist permanece com o usuário que o criou.');
             erro.code = 'SESSAO_ALTERADA';
             throw erro;
@@ -745,7 +754,7 @@ const FilaEnvio = {
         // Um temporizador de uma sessão anterior pode disparar depois da troca de
         // motorista. Nesse caso ele é encerrado sem acessar nem enviar o registro.
         const tokenInicial = ApiService.token;
-        const sessaoValida = () => !!tokenInicial && ApiService.loginAtual === login && ApiService.token === tokenInicial;
+        const sessaoValida = () => !!tokenInicial && ApiService.loginAtual === login && mesmaSessaoToken(ApiService.token,tokenInicial);
         if (!sessaoValida())
             return;
         if (this._processando)
