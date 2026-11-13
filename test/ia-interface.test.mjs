@@ -117,3 +117,27 @@ test("seleção de registro por número de um dígito é enviada e preserva cont
   // A validacao de mensagem curta é compartilhada pelo teclado e envio.
  }finally{m.restore();}
 });
+
+
+test('nova conversa limpa o contexto antes da próxima pergunta',async()=>{
+ const m=montarAmbiente();try{
+  const entrada=m.raiz.querySelector('textarea'),form=m.raiz.querySelector('form');
+  entrada.value='Premiação do João?';await form.acionar('submit',{preventDefault(){}});
+  m.raiz.querySelector('.ia-nova').acionar('click');
+  entrada.value='Checklists pendentes?';await form.acionar('submit',{preventDefault(){}});
+  assert.equal(m.frases[1].contexto,null);
+ }finally{m.restore();}
+});
+test('respostas curtas de esclarecimento são aceitas em qualquer módulo',()=>{
+ assert.equal(podeEnviarMensagem('10',{assunto:'esclarecimento'}),true);
+ assert.equal(podeEnviarMensagem('ok',{assunto:'esclarecimento'}),true);
+ assert.equal(podeEnviarMensagem('10',null),false);
+});
+test('erro preserva texto para nova tentativa',async()=>{
+ const m=montarAmbiente();try{
+  globalThis.fetch=async()=>{throw Error('offline')};
+  const entrada=m.raiz.querySelector('textarea');entrada.value='Sinistros de outubro';
+  await m.raiz.querySelector('form').acionar('submit',{preventDefault(){}});
+  assert.equal(entrada.value,'Sinistros de outubro');assert.equal(m.raiz.querySelector('.ia-enviar').disabled,false);
+ }finally{m.restore();}
+});

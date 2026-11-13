@@ -6,17 +6,18 @@ export function deveEnviarComEnter(evento){
 export function podeEnviarMensagem(pergunta,contexto){
   const texto=String(pergunta||"").trim();
   if(texto.length>=3&&texto.length<=600)return true;
-  return /^[0-9]{1,8}$/.test(texto)&&["escolher_registro","escolher_sinistro"].includes(contexto?.assunto);
+  return texto.length>=1&&texto.length<3&&!!contexto?.assunto;
 }
 export function montarChatIaLogistica(container,{apiUrl="",obterToken}){
   if(!(container instanceof HTMLElement)||typeof obterToken!=="function")throw new Error("Configuracao de chat invalida.");
   const raiz=document.createElement("section");raiz.className="ia-logistica";
-  raiz.innerHTML=`<style>.ia-logistica{font:inherit;max-width:900px;margin:auto;color:#173f2e}.ia-logistica .ia-mensagens{min-height:260px;max-height:56vh;overflow:auto;border:1px solid #d7e1da;border-radius:14px;padding:16px;background:#fafcfb}.ia-logistica .ia-msg{white-space:pre-wrap;margin:12px 0;padding:12px;border-radius:12px;background:#eef4ef}.ia-logistica .ia-msg[data-autor=usuario]{background:#e3f1e8}.ia-logistica form{display:flex;gap:8px;margin-top:12px}.ia-logistica textarea{flex:1;min-height:56px;resize:vertical;border:1px solid #b9c9be;border-radius:10px;padding:10px;font:inherit}.ia-logistica button{border:0;border-radius:10px;padding:12px 18px;background:#176344;color:white;font-weight:600;cursor:pointer}.ia-logistica button:disabled{opacity:.5}.ia-logistica small{display:block;margin-top:10px;color:#63776a}.ia-logistica button.ia-microfone{padding:10px;min-width:50px;font-size:1.2rem}.ia-logistica button.ia-microfone[aria-pressed=true]{background:#a32630}.ia-logistica .ia-voz{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px}.ia-logistica .ia-voz button{padding:8px 10px;background:#e1ede6;color:#173f2e}.ia-logistica .ia-voz label{display:flex;align-items:center;gap:6px;cursor:pointer}.ia-logistica .ia-status{color:#526c5c;margin-top:6px;min-height:1.4em}.ia-logistica textarea{min-width:0}@media(max-width:520px){.ia-logistica form{gap:6px}.ia-logistica button.ia-enviar{padding:10px}}</style><h2>IA Logística</h2><div class="ia-mensagens" role="log" aria-live="polite"></div><form><textarea maxlength="600" aria-label="Pergunta para IA Logística" placeholder="Pergunte sobre a operação logística..." required></textarea><button type="button" class="ia-microfone" aria-label="Ditar pergunta" aria-pressed="false" title="Ditar pergunta por voz">🎙️</button><button class="ia-enviar" type="submit">Consultar</button></form><div class="ia-voz"><label><input class="ia-leitura" type="checkbox"> 🔊 Ler respostas em voz alta</label><button class="ia-ouvir" type="button" disabled>Ouvir última resposta</button><button class="ia-parar" type="button" disabled>Parar áudio</button></div><div class="ia-status" role="status" aria-live="polite"></div><small>Enter envia · Shift+Enter quebra linha. O ditado pode utilizar serviços de voz do navegador. Consultas somente leitura; mensagens não são salvas no banco.</small>`;
+  raiz.innerHTML=`<style>.ia-logistica{font:inherit;max-width:900px;margin:auto;color:#173f2e}.ia-logistica .ia-mensagens{min-height:260px;max-height:56vh;overflow:auto;border:1px solid #d7e1da;border-radius:14px;padding:16px;background:#fafcfb}.ia-logistica .ia-msg{white-space:pre-wrap;margin:12px 0;padding:12px;border-radius:12px;background:#eef4ef}.ia-logistica .ia-msg[data-autor=usuario]{background:#e3f1e8}.ia-logistica form{display:flex;gap:8px;margin-top:12px}.ia-logistica textarea{flex:1;min-height:56px;resize:vertical;border:1px solid #b9c9be;border-radius:10px;padding:10px;font:inherit}.ia-logistica button{border:0;border-radius:10px;padding:12px 18px;background:#176344;color:white;font-weight:600;cursor:pointer}.ia-logistica button:disabled{opacity:.5}.ia-logistica small{display:block;margin-top:10px;color:#63776a}.ia-logistica button.ia-microfone{padding:10px;min-width:50px;font-size:1.2rem}.ia-logistica button.ia-microfone[aria-pressed=true]{background:#a32630}.ia-logistica .ia-voz{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px}.ia-logistica .ia-voz button{padding:8px 10px;background:#e1ede6;color:#173f2e}.ia-logistica .ia-voz label{display:flex;align-items:center;gap:6px;cursor:pointer}.ia-logistica .ia-status{color:#526c5c;margin-top:6px;min-height:1.4em}.ia-logistica textarea{min-width:0}@media(max-width:520px){.ia-logistica form{gap:6px}.ia-logistica button.ia-enviar{padding:10px}}</style><h2>IA Logística</h2><button class="ia-nova" type="button">Nova conversa</button><div class="ia-mensagens" role="log" aria-live="polite"></div><form><textarea maxlength="600" aria-label="Pergunta para IA Logística" placeholder="Pergunte sobre a operação logística..." required></textarea><button type="button" class="ia-microfone" aria-label="Ditar pergunta" aria-pressed="false" title="Ditar pergunta por voz">🎙️</button><button class="ia-enviar" type="submit">Consultar</button></form><div class="ia-voz"><label><input class="ia-leitura" type="checkbox"> 🔊 Ler respostas em voz alta</label><button class="ia-ouvir" type="button" disabled>Ouvir última resposta</button><button class="ia-parar" type="button" disabled>Parar áudio</button></div><div class="ia-status" role="status" aria-live="polite"></div><small>Enter envia · Shift+Enter quebra linha. O ditado pode utilizar serviços de voz do navegador. Consultas somente leitura; mensagens não são salvas no banco.</small>`;
   const mensagens=raiz.querySelector(".ia-mensagens"),form=raiz.querySelector("form"),entrada=raiz.querySelector("textarea"),botao=raiz.querySelector(".ia-enviar"),microfone=raiz.querySelector(".ia-microfone"),autoFala=raiz.querySelector(".ia-leitura"),ouvir=raiz.querySelector(".ia-ouvir"),parar=raiz.querySelector(".ia-parar"),status=raiz.querySelector(".ia-status");
   const navegador=typeof window!=="undefined"?window:{};
   const Reconhecimento=navegador.SpeechRecognition||navegador.webkitSpeechRecognition;
   const sintese=navegador.speechSynthesis,Voz=navegador.SpeechSynthesisUtterance;
   const possuiAudio=!!sintese&&typeof sintese.speak==="function"&&typeof Voz==="function";
+  const nova=raiz.querySelector(".ia-nova");
   let ativo=true,contexto=null,ultimaResposta="",reconhecedor=null,ouvindo=false,enviando=false;
   if(!Reconhecimento){microfone.disabled=true;microfone.title="O navegador não oferece reconhecimento de voz.";}
   if(!possuiAudio){autoFala.disabled=true;ouvir.disabled=true;parar.disabled=true;}
@@ -56,16 +57,19 @@ export function montarChatIaLogistica(container,{apiUrl="",obterToken}){
   
   function adicionar(autor,texto){if(!ativo)return;const div=document.createElement("div");div.className="ia-msg";div.dataset.autor=autor;div.textContent=texto;mensagens.append(div);mensagens.scrollTop=mensagens.scrollHeight;}
   async function enviar(e){e.preventDefault();if(!ativo||enviando)return;const pergunta=entrada.value.trim();if(!podeEnviarMensagem(pergunta,contexto))return;
-    enviando=true;entrada.value="";adicionar("usuario",pergunta);botao.disabled=true;microfone.disabled=true;pararFala();
+    enviando=true;nova.disabled=true;aviso("Consultando as informações...");entrada.value="";adicionar("usuario",pergunta);botao.disabled=true;microfone.disabled=true;pararFala();
     try{
       const token=await obterToken();if(!token)throw Error("Sessão indisponível.");
       const res=await fetch(apiUrl.replace(/\/$/,"")+"/ia/perguntar",{method:"POST",headers:{"Authorization":"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify({pergunta,contexto}),cache:"no-store"});
       const data=await res.json();if(!res.ok)throw Error(data.erro||"Falha na consulta.");
-      contexto=data.contexto||null;const resultado=data.resultado;
+      if(!ativo)return;
+      aviso("");contexto=data.contexto||null;const resultado=data.resultado;
       resposta(data.resposta||(resultado?JSON.stringify(resultado.dados,null,2):"Sem resultados."));
-    }catch(err){resposta(err.message||"Não foi possível consultar.");}
-    finally{enviando=false;if(ativo){botao.disabled=false;microfone.disabled=!Reconhecimento;}}
+    }catch(err){if(ativo){entrada.value=pergunta;aviso("Não foi possível concluir. Tente novamente.");resposta(err.message||"Não foi possível consultar.");}}
+    finally{enviando=false;if(ativo){nova.disabled=false;botao.disabled=false;microfone.disabled=!Reconhecimento;entrada.focus?.();}}
   }
+  function reiniciar(){if(enviando)return;contexto=null;ultimaResposta="";mensagens.textContent="";entrada.value="";ouvir.disabled=true;pararFala();aviso("Nova conversa iniciada.");entrada.focus?.();}
+  nova.addEventListener("click",reiniciar);
   form.addEventListener("submit",enviar);
   entrada.addEventListener("keydown",teclado);
   microfone.addEventListener("click",ditar);
@@ -77,6 +81,7 @@ export function montarChatIaLogistica(container,{apiUrl="",obterToken}){
     ativo=false;
     try{reconhecedor?.abort()}catch{}
     if(possuiAudio)try{sintese.cancel()}catch{}
+    nova.removeEventListener("click",reiniciar);
     form.removeEventListener("submit",enviar);
     entrada.removeEventListener("keydown",teclado);
     microfone.removeEventListener("click",ditar);
@@ -86,3 +91,4 @@ export function montarChatIaLogistica(container,{apiUrl="",obterToken}){
     raiz.remove();
   }};
 }
+
