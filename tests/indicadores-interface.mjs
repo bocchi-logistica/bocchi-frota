@@ -26,6 +26,8 @@ test('filtro de motorista recorta totais e botão detalhar preserva placa/mês e
     assert.match(texto(select),/Sem motorista identificado/);
     select.props.onChange({target:{value:'sem'}});root=render();
     assert.match(texto(root),/200,00/);assert.match(texto(root),/60 t/);
+    assert.match(texto(root),/500,00/);assert.match(texto(root),/0 \/ 1/);
+    assert.match(texto(root),/Fora da meta/);
     const detalhe=nodes(root).find(n=>n.type==='button'&&texto(n)==='Detalhar');
     detalhe.props.onClick();root=render();
     const component=nodes(root).find(n=>typeof n.type==='function'&&n.type.name==='DetalheIndicadoresFrota');
