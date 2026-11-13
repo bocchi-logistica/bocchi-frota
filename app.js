@@ -84,7 +84,7 @@ const CONFIG = {
     TIMEOUT_MS: 90000,
     RETRY_DELAYS_MS: [0, 10000, 30000, 120000],
     MAX_TENTATIVAS: 4,
-    VERSAO: '2.8.67-homolog'
+    VERSAO: '2.8.68-homolog-security'
 };
 // A versão exibida no login e no título do navegador vem sempre do CONFIG.
 document.title = `Logística Bocchi — Portal do Motorista e ADM Logística (${CONFIG.VERSAO})`;
@@ -141,6 +141,7 @@ const ACESSO_NOVO_POR_PERMISSAO = {
     'painel.visualizar': { areas: ['PAINEL'] },
     'importar.criar': { areas: ['IMPORTACAO'], editar: true },
     'contestacoes.visualizar': { areas: ['CONTESTACOES'] },
+    'contestacoes.decidir': { areas: ['CONTESTACOES'], editar: true },
     'sinistros.visualizar': { area: 'SINISTROS', subtela: 'SINISTROS_GESTAO' },
     'sinistros.gerenciar': { area: 'SINISTROS', subtela: 'SINISTROS_GESTAO', editar: true },
     'sinistros.configuracoes': { area: 'SINISTROS', subtela: 'SINISTROS_CONFIGURACOES' },
@@ -500,7 +501,12 @@ const ApiService = {
             }).catch(() => {});
         }
         _token = null; _loginSessao = null; _expiraSessao = null; try { sessionStorage.removeItem('bocchi.portal.sessao'); } catch {} },
-    enviarChecklist(registro) {
+    enviarChecklist(registro, sessaoEsperada = null) {
+        if (sessaoEsperada && (sessaoEsperada.token !== _token || sessaoEsperada.login !== _loginSessao)) {
+            const erro = new Error('Sessão alterada. O checklist permanece com o usuário que o criou.');
+            erro.code = 'SESSAO_ALTERADA';
+            throw erro;
+        }
         return this._req('POST', '/checklists', registro);
     },
     consultarMeusChecklists() { return this._req('GET', '/checklists/me'); },
@@ -579,8 +585,8 @@ const ApiService = {
     admCorrigirKmAgendamento(id, d) { return this._req('POST', '/admin/agendamentos/' + encodeURIComponent(id) + '/corrigir-km', d); },
     salvarParametrosAgendamento(d) { return this._req('PATCH', '/admin/agendamentos/parametros', d); },
     obterPremiacao() { return this._req('GET', '/premiacao/me'); },
-    obterPremiacaoMotorista(nome, competencias = []) {
-        const q = new URLSearchParams({ motoristaNome: nome });
+    obterPremiacaoMotorista(nome, competencias = [], motoristaItemId = '') {
+        const q = new URLSearchParams(motoristaItemId ? { motoristaItemId: String(motoristaItemId) } : { motoristaNome: nome });
         if (Array.isArray(competencias) && competencias.length)
             q.set('competencias', competencias.join(','));
         return this._req('GET', '/premiacao/me?' + q.toString());
@@ -747,14 +753,18 @@ const FilaEnvio = {
             return;
         // Um temporizador de uma sessão anterior pode disparar depois da troca de
         // motorista. Nesse caso ele é encerrado sem acessar nem enviar o registro.
-        if (ApiService.loginAtual !== login)
+        const tokenInicial = ApiService.token;
+        const sessaoValida = () => !!tokenInicial && ApiService.loginAtual === login && ApiService.token === tokenInicial;
+        if (!sessaoValida())
             return;
         if (this._processando)
             return; // evita tentativas simultâneas
         this._processando = true;
         try {
             const fila = await this.pendentes(login);
+            if (!sessaoValida()) return;
             for (const item of fila) {
+                if (!sessaoValida() || this._loginDono(item) !== login) return;
                 const faltando = this.validar(item);
                 if (faltando.length) {
                     item.statusEnvio = 'DADOS_INCOMPLETOS';
@@ -765,15 +775,20 @@ const FilaEnvio = {
                 }
                 item.statusEnvio = 'ENVIANDO';
                 await IDB.salvarFila(item);
+                if (!sessaoValida()) {
+                    item.statusEnvio = 'PENDENTE';
+                    await IDB.salvarFila(item);
+                    return;
+                }
                 this._notificar();
                 try {
-                    const resp = await ApiService.enviarChecklist(item);
+                    const resp = await ApiService.enviarChecklist(item, { token: tokenInicial, login });
                     if (resp && resp.sucesso === true && resp.protocolo) {
                         item.statusEnvio = 'ENVIADO';
                         item.protocolo = resp.protocolo;
                         item.dataHoraRecebimento = resp.dataHoraRecebimento;
                         await IDB.salvarFila(item);
-                        if (toast)
+                        if (toast && sessaoValida())
                             toast('Checklist enviado. Protocolo: ' + resp.protocolo);
                     }
                     else {
@@ -781,6 +796,11 @@ const FilaEnvio = {
                     }
                 }
                 catch (e) {
+                    if (!sessaoValida() || e.code === 'SESSAO_ALTERADA') {
+                        item.statusEnvio = 'PENDENTE';
+                        await IDB.salvarFila(item);
+                        return;
+                    }
                     item.tentativas = (item.tentativas || 0) + 1;
                     item.ultimoErro = e.message;
                     item.statusEnvio = item.tentativas >= CONFIG.MAX_TENTATIVAS ? 'ERRO' : 'PENDENTE';
@@ -1432,7 +1452,7 @@ function AdmApp({ st, setSt, user, onSair, toast }) {
             aba === 'indicadores' && React.createElement(AdmIndicadores, { user }),
             aba === 'painel' && React.createElement(AdmPainel, { st: st, dados: dados, user: user, onNavegar: navegarPara }),
             aba === 'importar' && React.createElement(AdmImportar, { st: st, setSt: setSt, toast: toast }),
-            aba === 'contest' && React.createElement(AdmContestacoes, { st: st, setSt: setSt, toast: toast, foco: destino?.id === 'contest' ? destino : null }),
+            aba === 'contest' && React.createElement(AdmContestacoes, { st: st, setSt: setSt, user: user, toast: toast, foco: destino?.id === 'contest' ? destino : null }),
             aba === 'agendamentos' && React.createElement(AdmAgendamentos, { user: user, toast: toast }),
             aba === 'sinistros' && React.createElement(AdmSinistros, { toast: toast, user: user, foco: destino?.id === 'sinistros' ? destino : null }),
             aba === 'check' && React.createElement(AdmChecklist, { st: st, setSt: setSt, toast: toast, user: user, foco: destino?.id === 'check' ? destino : null }),
@@ -1513,5 +1533,6 @@ function App() {
         React.createElement(Toast, { msg: toastMsg })));
 }
 ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App, null));
+
 
 

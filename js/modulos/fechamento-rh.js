@@ -16,7 +16,7 @@ const FilaApuracaoRH = (() => {
             for (const competencia of competencias) {
                 try {
                     await executarComRetentativa(async () => {
-                        const resposta = await ApiService.obterPremiacaoMotorista(u.nome, [competencia]);
+                        const resposta = await ApiService.obterPremiacaoMotorista(u.nome, [competencia], idUsuario(u));
                         const apuracao = (resposta.apuracoes || []).find(a => a.competencia === competencia);
                         if (!apuracao)
                             throw new Error('A API não retornou a apuração.');
@@ -311,11 +311,11 @@ function PainelRH({ st, dados, user }) {
     };
     const alternarAuditoria = async (linha) => {
         const motoristaId = idUsuario(linha.u);
-        if (aberto === linha.u.nome) {
+        if (aberto === motoristaId) {
             setAberto('');
             return;
         }
-        setAberto(linha.u.nome);
+        setAberto(motoristaId);
         const atual = auditoriasRH[motoristaId];
         if (atual?.carregando || atual?.apuracoes)
             return;
@@ -330,7 +330,7 @@ function PainelRH({ st, dados, user }) {
             const erros = [];
             for (const competencia of competenciasAuditoria) {
                 try {
-                    const resposta = await ApiService.obterPremiacaoMotorista(linha.u.nome, [competencia]);
+                    const resposta = await ApiService.obterPremiacaoMotorista(linha.u.nome, [competencia], motoristaId);
                     const apuracao = (resposta.apuracoes || []).find(a => a.competencia === competencia);
                     if (apuracao)
                         porCompetencia[competencia] = apuracao;
@@ -491,8 +491,8 @@ function PainelRH({ st, dados, user }) {
                         React.createElement("td", { className: "td-num num" },
                             React.createElement("b", null, brl(l.pagar))),
                         React.createElement("td", null,
-                            React.createElement("button", { className: "btn btn-s btn-sm", onClick: () => alternarAuditoria(l) }, aberto === l.u.nome ? 'Fechar' : 'Auditar'))),
-                    aberto === l.u.nome && React.createElement("tr", null,
+                            React.createElement("button", { className: "btn btn-s btn-sm", onClick: () => alternarAuditoria(l) }, aberto === idUsuario(l.u) ? 'Fechar' : 'Auditar'))),
+                    aberto === idUsuario(l.u) && React.createElement("tr", null,
                         React.createElement("td", { colSpan: modoAtualizacao === 'SELECIONADOS' ? "10" : "9" },
                             auditoriasRH[idUsuario(l.u)]?.carregando && React.createElement("div", { className: "aviso-box" }, "Carregando faturamento e mem\u00F3ria de c\u00E1lculo..."),
                             auditoriasRH[idUsuario(l.u)]?.erro && React.createElement("div", { className: "aviso-box", style: { color: 'var(--erro)' } },
@@ -534,3 +534,4 @@ function PainelRH({ st, dados, user }) {
                             }))))))))),
         React.createElement("div", { className: "aviso-box" }, "O acumulado soma os quatro meses, inclusive resultados negativos. O valor a pagar nunca fica abaixo de R$ 0,00 e o saldo negativo n\u00E3o \u00E9 levado para o quadrimestre seguinte."));
 }
+
