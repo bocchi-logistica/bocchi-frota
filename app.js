@@ -502,7 +502,7 @@ const ApiService = {
         }
         _token = null; _loginSessao = null; _expiraSessao = null; try { sessionStorage.removeItem('bocchi.portal.sessao'); } catch {} },
     enviarChecklist(registro, sessaoEsperada = null) {
-        if (sessaoEsperada && (sessaoEsperada.!mesmaSessaoToken(token,_token) || sessaoEsperada.login !== _loginSessao)) {
+        if (sessaoEsperada && (!mesmaSessaoToken(sessaoEsperada.token,_token) || sessaoEsperada.login !== _loginSessao)) {
             const erro = new Error('Sessão alterada. O checklist permanece com o usuário que o criou.');
             erro.code = 'SESSAO_ALTERADA';
             throw erro;
