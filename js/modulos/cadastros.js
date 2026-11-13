@@ -581,7 +581,7 @@ function AdmCadastros({ st, setSt, toast, user }) {
                         React.createElement("td", null,
                             React.createElement("b", null, p.titulo)),
                         React.createElement("td", null, p.descricao || '—'),
-                        React.createElement("td", null, (p.areasAcesso || []).join(', ') || '—'),
+                        React.createElement("td", null, (p.areasAcesso || []).map(area => ROTULOS_AREAS[area] || area).join(', ') || '—'),
                         React.createElement("td", null, (p.subtelasAcesso || []).length),
                         React.createElement("td", null,
                             React.createElement("span", { className: "tag tag-ok" }, p.nivelAcesso)),
