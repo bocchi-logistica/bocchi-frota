@@ -23,3 +23,6 @@ jobs:
       - name: Verificar integracao e permissao
         run: |
           node --input-type=module -e "import fs from 'node:fs';import assert from 'node:assert/strict';const app=fs.readFileSync('app.js','utf8');const cad=fs.readFileSync('js/modulos/cadastros.js','utf8');assert.match(app,/import\\('\/js\/modulos\/ia-logistica\\.js'\\)/);assert.match(app,/IA_LOGISTICA_CONSULTAR/);assert.match(cad,/IA_LOGISTICA_CONSULTAR/);"
+
+      - name: Testar teclado, microfone e voz da interface
+        run: node --test test/ia-interface.test.mjs
