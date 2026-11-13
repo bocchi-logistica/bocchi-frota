@@ -1249,6 +1249,33 @@ function Login({ onLogin }) {
             React.createElement("div",{className:"login-versao"},"Versão ",CONFIG.VERSAO))));
 }
 /* ================= SHELL MOTORISTA ================= */
+
+function CabecalhoMotorista({user,placa,onSair,toast}) {
+    const [menuAberto,setMenuAberto] = useState(false);
+    const raiz = React.useRef(null), botao = React.useRef(null);
+    React.useEffect(() => {
+        if (!menuAberto) return;
+        const fora = e => { if (!raiz.current?.contains(e.target)) setMenuAberto(false); };
+        document.addEventListener('pointerdown',fora);
+        return () => document.removeEventListener('pointerdown',fora);
+    },[menuAberto]);
+    return React.createElement("header",{className:"mtop motorista-cabecalho",ref:raiz,onKeyDown:e=>{
+        if(e.key==="Escape" && !e.target.closest(".overlay")){setMenuAberto(false);botao.current?.focus();}
+    }},
+        React.createElement("div",{className:"motorista-identidade"},
+            React.createElement("div",{className:"motorista-avatar","aria-hidden":true},String(user.nome||"M").trim().slice(0,1).toUpperCase()),
+            React.createElement("div",{className:"motorista-identidade-texto"},
+                React.createElement("div",{className:"nome"},primeiroNome(user.nome)),
+                React.createElement("div",{className:"sub"},placa ? placa.tipo : "Motorista")),
+            placa && React.createElement("span",{className:"chip-placa"},placa.placa)),
+        React.createElement("button",{type:"button",ref:botao,className:"motorista-conta-toggle","aria-label":"Opções da conta","aria-expanded":menuAberto,"aria-controls":"motorista-conta-opcoes",onClick:()=>setMenuAberto(v=>!v)},"⋮"),
+        React.createElement("div",{id:"motorista-conta-opcoes",className:"motorista-conta-opcoes"+(menuAberto?" aberto":"")},
+            React.createElement("div",{className:"motorista-menu-titulo"},"Minha conta"),
+            React.createElement(AvisoPrivacidade,{claro:true}),
+            React.createElement(AlterarSenhaUsuario,{user,onSair,toast}),
+            React.createElement("button",{type:"button",className:"btn btn-sm motorista-sair",onClick:onSair},"Sair")));
+}
+
 function AlterarSenhaUsuario({user,onSair,toast,claro=false}){
  const [aberto,setAberto]=useState(false),[form,setForm]=useState({senhaAtual:"",novaSenha:"",confirmacao:""}),[salvando,setSalvando]=useState(false),[erro,setErro]=useState("");
  const motorista=normalizarPerfil(user.perfil)==="MOTORISTA";
@@ -1371,14 +1398,7 @@ function MotoristaApp({ st, setSt, user, onSair, toast }) {
         }
     };
     return (React.createElement("div", { className: 'mshell' + (aba === 'agendamento' ? ' mshell-agendamento' : '') },
-        React.createElement("div", { className: "mtop row" },
-            React.createElement("div", { className: "grow" },
-                React.createElement("div", { className: "nome" }, primeiroNome(user.nome)),
-                React.createElement("div", { className: "sub" }, placa ? placa.tipo : 'Motorista')),
-            placa && React.createElement("span", { className: "chip-placa" }, placa.placa),
-            React.createElement(AvisoPrivacidade,{claro:true}),
-            React.createElement(AlterarSenhaUsuario,{user,onSair,toast}),
-            React.createElement("button", { className: "btn btn-sm", style: { color: 'rgba(255,255,255,.8)' }, onClick: onSair }, "Sair")),
+        React.createElement(CabecalhoMotorista,{user,placa,onSair,toast}),
         React.createElement("div", { className: "mbody" },
             abas.length === 0 && React.createElement("div", { className: "card muted" }, "Seu usu\u00E1rio est\u00E1 sem m\u00F3dulos liberados. Fale com a log\u00EDstica."),
             aba === 'cargas' && carregandoCargas && React.createElement("div", { className: "card muted" }, "Carregando cargas do banco D1 de homologação..."),
