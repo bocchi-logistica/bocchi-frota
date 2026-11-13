@@ -18,7 +18,7 @@ export function montarChatIaLogistica(container,{apiUrl="",obterToken}){
   const sintese=navegador.speechSynthesis,Voz=navegador.SpeechSynthesisUtterance;
   const possuiAudio=!!sintese&&typeof sintese.speak==="function"&&typeof Voz==="function";
   const nova=raiz.querySelector(".ia-nova");
-  let ativo=true,contexto=null,ultimaResposta="",reconhecedor=null,ouvindo=false,enviando=false;
+  let ativo=true,contexto=null,ultimaResposta="",reconhecedor=null,ouvindo=false,enviando=false,controlador=null;
   if(!Reconhecimento){microfone.disabled=true;microfone.title="O navegador não oferece reconhecimento de voz.";}
   if(!possuiAudio){autoFala.disabled=true;ouvir.disabled=true;parar.disabled=true;}
   function aviso(texto){if(ativo)status.textContent=texto||"";}
@@ -58,15 +58,23 @@ export function montarChatIaLogistica(container,{apiUrl="",obterToken}){
   function adicionar(autor,texto){if(!ativo)return;const div=document.createElement("div");div.className="ia-msg";div.dataset.autor=autor;div.textContent=texto;mensagens.append(div);mensagens.scrollTop=mensagens.scrollHeight;}
   async function enviar(e){e.preventDefault();if(!ativo||enviando)return;const pergunta=entrada.value.trim();if(!podeEnviarMensagem(pergunta,contexto))return;
     enviando=true;nova.disabled=true;aviso("Consultando as informações...");entrada.value="";adicionar("usuario",pergunta);botao.disabled=true;microfone.disabled=true;pararFala();
+    controlador=new AbortController();
+    const sinal=controlador.signal;
+    let tempoLimite;
+    const avisoDemora=setTimeout(()=>aviso("A IA ainda está processando. Aguardando resposta..."),8000);
     try{
-      const token=await obterToken();if(!token)throw Error("Sessão indisponível.");
-      const res=await fetch(apiUrl.replace(/\/$/,"")+"/ia/perguntar",{method:"POST",headers:{"Authorization":"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify({pergunta,contexto}),cache:"no-store"});
+      const data=await Promise.race([(async()=>{
+      const token=await obterToken();
+      if(sinal.aborted)throw Error("Consulta interrompida.");if(!token)throw Error("Sessão indisponível.");
+      const res=await fetch(apiUrl.replace(/\/$/,"")+"/ia/perguntar",{method:"POST",headers:{"Authorization":"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify({pergunta,contexto}),cache:"no-store",signal:sinal});
       const data=await res.json();if(!res.ok)throw Error(data.erro||"Falha na consulta.");
+      return data;
+      })(),new Promise((_,reject)=>{tempoLimite=setTimeout(()=>{reject(Error("A consulta demorou além do esperado. Sua pergunta e conversa foram preservadas; tente novamente."));controlador?.abort();},35000);})]);
       if(!ativo)return;
       aviso("");contexto=data.contexto||null;const resultado=data.resultado;
       resposta(data.resposta||(resultado?JSON.stringify(resultado.dados,null,2):"Sem resultados."));
     }catch(err){if(ativo){entrada.value=pergunta;aviso("Não foi possível concluir. Tente novamente.");resposta(err.message||"Não foi possível consultar.");}}
-    finally{enviando=false;if(ativo){nova.disabled=false;botao.disabled=false;microfone.disabled=!Reconhecimento;entrada.focus?.();}}
+    finally{clearTimeout(tempoLimite);clearTimeout(avisoDemora);controlador=null;enviando=false;if(ativo){nova.disabled=false;botao.disabled=false;microfone.disabled=!Reconhecimento;entrada.focus?.();}}
   }
   function reiniciar(){if(enviando)return;contexto=null;ultimaResposta="";mensagens.textContent="";entrada.value="";ouvir.disabled=true;pararFala();aviso("Nova conversa iniciada.");entrada.focus?.();}
   nova.addEventListener("click",reiniciar);
@@ -78,7 +86,7 @@ export function montarChatIaLogistica(container,{apiUrl="",obterToken}){
   parar.addEventListener("click",pararAudio);
   container.append(raiz);
   return {desmontar(){
-    ativo=false;
+    ativo=false;controlador?.abort();
     try{reconhecedor?.abort()}catch{}
     if(possuiAudio)try{sintese.cancel()}catch{}
     nova.removeEventListener("click",reiniciar);

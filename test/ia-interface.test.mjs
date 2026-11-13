@@ -141,3 +141,21 @@ test('erro preserva texto para nova tentativa',async()=>{
   assert.equal(entrada.value,'Sinistros de outubro');assert.equal(m.raiz.querySelector('.ia-enviar').disabled,false);
  }finally{m.restore();}
 });
+
+test('consulta travada libera interface em 35s, aborta rede e preserva pergunta',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});
+ const m=montarAmbiente();
+ try{
+  let sinal;globalThis.fetch=async(_,opcoes)=>{sinal=opcoes.signal;return new Promise(()=>{});};
+  const entrada=m.raiz.querySelector('textarea');entrada.value='Faturamento de fevereiro de 2026?';
+  const p=m.raiz.querySelector('form').acionar('submit',{preventDefault(){}});
+  await tick();assert.equal(m.raiz.querySelector('.ia-enviar').disabled,true);
+  t.mock.timers.tick(8000);assert.match(m.raiz.querySelector('.ia-status').textContent,/ainda está processando/);
+  t.mock.timers.tick(27000);await p;
+  assert.equal(sinal.aborted,true);assert.equal(m.raiz.querySelector('.ia-enviar').disabled,false);
+  assert.equal(entrada.value,'Faturamento de fevereiro de 2026?');
+  globalThis.fetch=async()=>({ok:true,json:async()=>({resposta:'Recuperado'})});
+  await m.raiz.querySelector('form').acionar('submit',{preventDefault(){}});
+  assert.equal(m.raiz.querySelector('.ia-mensagens').children.at(-1).textContent,'Recuperado');
+ }finally{m.restore();}
+});
