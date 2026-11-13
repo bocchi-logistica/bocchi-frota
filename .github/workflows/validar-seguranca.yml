@@ -1,0 +1,22 @@
+name: Validar fila offline e identidade
+on:
+  pull_request:
+    branches: [migracao/cloudflare-d1-r2]
+  push:
+    branches: [fix/auditoria-seguranca-20261113]
+permissions:
+  contents: read
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Validar sintaxe e regressões
+        run: |
+          node --check app.js
+          node --check js/modulos/contestacoes.js
+          node --check js/modulos/fechamento-rh.js
+          node --test tests/*.mjs test/*.mjs

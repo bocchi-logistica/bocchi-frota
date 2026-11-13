@@ -1,5 +1,6 @@
 /* ================= ADM: CONTESTAÇÕES ================= */
-function AdmContestacoes({ st, setSt, toast, foco }) {
+function AdmContestacoes({ st, setSt, toast, foco, user }) {
+    const podeDecidir = pode(user, 'contestacoes.decidir');
     const [filtro, setFiltro] = useState('pendente');
     const [tipoFiltro, setTipoFiltro] = useState('todos');
     const [motoristaFiltro, setMotoristaFiltro] = useState('');
@@ -41,6 +42,7 @@ function AdmContestacoes({ st, setSt, toast, foco }) {
     useEffect(() => { carregar(); }, []);
     useAtualizacaoPortal(['contestacoes','cargas'], async () => { const r = await ApiService.admListarContestacoes(); setSt(s => ({ ...s, contestacoes: r.contestacoes || [] })); });
     const responder = async () => {
+        if (!podeDecidir) return;
         if (!resposta.trim()) {
             toast('Informe a justificativa da decisão.');
             return;
@@ -141,7 +143,7 @@ function AdmContestacoes({ st, setSt, toast, foco }) {
                     React.createElement("b", null, "Justificativa da an\u00E1lise:"),
                     " ",
                     ct.resposta),
-                String(ct.status || '').trim().toLowerCase() === 'pendente' &&
+                podeDecidir && String(ct.status || '').trim().toLowerCase() === 'pendente' &&
                     React.createElement("button", { className: "btn btn-s btn-sm", style: { marginTop: 10 }, onClick: () => { setRespondendo(ct); setDecisao('procede'); setResposta(''); } }, "Responder")));
         }),
         respondendo &&
