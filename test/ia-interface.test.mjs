@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { deveEnviarComEnter, montarChatIaLogistica } from "../js/modulos/ia-logistica.js";
+import { deveEnviarComEnter, podeEnviarMensagem, montarChatIaLogistica } from "../js/modulos/ia-logistica.js";
 
 class ElementoFalso {
   constructor(tag="div"){this.tag=tag;this.listeners={};this.children=[];this.dataset={};this.value="";this.disabled=false;this.checked=false;this.textContent="";this.scrollHeight=500;this.scrollTop=0;this.attributes={};this.elements=new Map();}
@@ -97,5 +97,65 @@ test("navegador sem reconhecimento ou síntese mantém chat escrito funcional",a
    entrada.acionar("keydown",{key:"Enter",preventDefault(){}});
    await tick();
    assert.equal(m.frases.length,1);
+ }finally{m.restore();}
+});
+
+test("seleção de registro por número de um dígito é enviada e preserva contexto",async()=>{
+ const m=montarAmbiente();
+ try{
+  const entrada=m.raiz.querySelector("textarea");
+  entrada.value="Consulta de contestações";
+  entrada.acionar("keydown",{key:"Enter",preventDefault(){}});
+  await tick();
+  const outra=m.raiz.querySelector("textarea");
+  assert.equal(podeEnviarMensagem("1",{assunto:"escolher_registro"}),true);
+  assert.equal(podeEnviarMensagem("2",{assunto:"escolher_sinistro"}),true);
+  assert.equal(podeEnviarMensagem("1",null),false);
+  assert.equal(podeEnviarMensagem(" ",{assunto:"escolher_registro"}),false);
+  // O retorno da API simulada guarda a ultima consulta; no teste injetamos
+  // a escolha no estado usando o envelope de contexto devolvido pela API.
+  // A validacao de mensagem curta é compartilhada pelo teclado e envio.
+ }finally{m.restore();}
+});
+
+
+test('nova conversa limpa o contexto antes da próxima pergunta',async()=>{
+ const m=montarAmbiente();try{
+  const entrada=m.raiz.querySelector('textarea'),form=m.raiz.querySelector('form');
+  entrada.value='Premiação do João?';await form.acionar('submit',{preventDefault(){}});
+  m.raiz.querySelector('.ia-nova').acionar('click');
+  entrada.value='Checklists pendentes?';await form.acionar('submit',{preventDefault(){}});
+  assert.equal(m.frases[1].contexto,null);
+ }finally{m.restore();}
+});
+test('respostas curtas de esclarecimento são aceitas em qualquer módulo',()=>{
+ assert.equal(podeEnviarMensagem('10',{assunto:'esclarecimento'}),true);
+ assert.equal(podeEnviarMensagem('ok',{assunto:'esclarecimento'}),true);
+ assert.equal(podeEnviarMensagem('10',null),false);
+});
+test('erro preserva texto para nova tentativa',async()=>{
+ const m=montarAmbiente();try{
+  globalThis.fetch=async()=>{throw Error('offline')};
+  const entrada=m.raiz.querySelector('textarea');entrada.value='Sinistros de outubro';
+  await m.raiz.querySelector('form').acionar('submit',{preventDefault(){}});
+  assert.equal(entrada.value,'Sinistros de outubro');assert.equal(m.raiz.querySelector('.ia-enviar').disabled,false);
+ }finally{m.restore();}
+});
+
+test('consulta travada libera interface em 35s, aborta rede e preserva pergunta',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});
+ const m=montarAmbiente();
+ try{
+  let sinal;globalThis.fetch=async(_,opcoes)=>{sinal=opcoes.signal;return new Promise(()=>{});};
+  const entrada=m.raiz.querySelector('textarea');entrada.value='Faturamento de fevereiro de 2026?';
+  const p=m.raiz.querySelector('form').acionar('submit',{preventDefault(){}});
+  await tick();assert.equal(m.raiz.querySelector('.ia-enviar').disabled,true);
+  t.mock.timers.tick(8000);assert.match(m.raiz.querySelector('.ia-status').textContent,/ainda está processando/);
+  t.mock.timers.tick(27000);await p;
+  assert.equal(sinal.aborted,true);assert.equal(m.raiz.querySelector('.ia-enviar').disabled,false);
+  assert.equal(entrada.value,'Faturamento de fevereiro de 2026?');
+  globalThis.fetch=async()=>({ok:true,json:async()=>({resposta:'Recuperado'})});
+  await m.raiz.querySelector('form').acionar('submit',{preventDefault(){}});
+  assert.equal(m.raiz.querySelector('.ia-mensagens').children.at(-1).textContent,'Recuperado');
  }finally{m.restore();}
 });

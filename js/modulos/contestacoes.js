@@ -157,3 +157,4 @@ function AdmContestacoes({ st, setSt, toast, foco, user }) {
                 React.createElement("div", { className: "aviso-box", style: { margin: '10px 0' } }, "A corre\u00E7\u00E3o do dado em si \u00E9 feita no sistema de origem \u2014 na pr\u00F3xima importa\u00E7\u00E3o a carga entra atualizada."),
                 React.createElement("button", { className: "btn btn-p", disabled: salvando, style: { width: '100%' }, onClick: responder }, salvando ? 'Salvando...' : 'Enviar resposta'))));
 }
+

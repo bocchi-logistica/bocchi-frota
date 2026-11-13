@@ -534,3 +534,4 @@ function PainelRH({ st, dados, user }) {
                             }))))))))),
         React.createElement("div", { className: "aviso-box" }, "O acumulado soma os quatro meses, inclusive resultados negativos. O valor a pagar nunca fica abaixo de R$ 0,00 e o saldo negativo n\u00E3o \u00E9 levado para o quadrimestre seguinte."));
 }
+

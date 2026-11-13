@@ -816,3 +816,4 @@ function AdmCadastros({ st, setSt, toast, user }) {
             React.createElement(RegrasCapacidadeProduto, { tipo: editTipo, onChange: setEditTipo }),
             React.createElement("button", { className: "btn btn-p", style: { width: '100%', marginTop: 14 }, onClick: salvarTipo }, "Salvar tipo de ve\u00EDculo"))));
 }
+
