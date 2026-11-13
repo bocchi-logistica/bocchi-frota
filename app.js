@@ -1250,7 +1250,19 @@ function Login({ onLogin }) {
 }
 /* ================= SHELL MOTORISTA ================= */
 
-function CabecalhoMotorista({user,placa,onSair,toast}) {
+function CabecalhoMotorista({user,onSair,toast}) {
+    const [vinculosAtuais,setVinculosAtuais] = useState(null);
+    const carregarVinculos = React.useCallback(() => ApiService._req("GET","/me/vinculos").then(r=>setVinculosAtuais({usuario:user.id,linhas:r.vinculos||[]})).catch(()=>setVinculosAtuais({usuario:user.id,erro:true})),[user.id]);
+    React.useEffect(() => {
+        let ativo=true;
+        ApiService._req("GET","/me/vinculos").then(r=>{if(ativo)setVinculosAtuais({usuario:user.id,linhas:r.vinculos||[]});}).catch(()=>{if(ativo)setVinculosAtuais({usuario:user.id,erro:true});});
+        return ()=>{ativo=false;};
+    },[user.id]);
+    useAtualizacaoPortal(['cadastros'],carregarVinculos);
+    const atuais=vinculosAtuais?.usuario===user.id?vinculosAtuais:null;
+    const placas=atuais?.linhas||[];
+    const tiposFrota=[...new Set(placas.map(v=>v.tipoFrota==="FROTA_PESADA"?"Frota pesada":v.tipoFrota==="FROTA_LEVE"?"Frota leve":"").filter(Boolean))];
+
     const [menuAberto,setMenuAberto] = useState(false);
     const raiz = React.useRef(null), botao = React.useRef(null);
     React.useEffect(() => {
@@ -1266,8 +1278,13 @@ function CabecalhoMotorista({user,placa,onSair,toast}) {
             React.createElement("div",{className:"motorista-avatar","aria-hidden":true},String(user.nome||"M").trim().slice(0,1).toUpperCase()),
             React.createElement("div",{className:"motorista-identidade-texto"},
                 React.createElement("div",{className:"nome"},user.nome),
-                React.createElement("div",{className:"sub"},placa ? placa.tipo : "Motorista")),
-            placa && React.createElement("span",{className:"chip-placa"},placa.placa)),
+                React.createElement("div",{className:"sub"},["Motorista",...tiposFrota].join(" · ")),
+                React.createElement("div",{className:"motorista-vinculos","aria-live":"polite"},
+                    !atuais ? "Consultando vínculo…" : atuais.erro ? React.createElement("button",{type:"button",className:"motorista-vinculo-repetir",onClick:carregarVinculos},"Não foi possível consultar o vínculo. Tentar novamente") :
+                    placas.length ? React.createElement(React.Fragment,null,
+                        React.createElement("span",null,placas.length===1?"Placa vinculada:":"Placas vinculadas:"),
+                        placas.map(v=>React.createElement("span",{key:v.placa,className:"chip-placa",title:v.tipoModelo+(v.principal?" · Vínculo principal":"")},v.placa))) :
+                    "Sem veículo vinculado"))),
         React.createElement("button",{type:"button",ref:botao,className:"motorista-conta-toggle","aria-label":"Opções da conta","aria-expanded":menuAberto,"aria-controls":"motorista-conta-opcoes",onClick:()=>setMenuAberto(v=>!v)},"⋮"),
         React.createElement("div",{id:"motorista-conta-opcoes",className:"motorista-conta-opcoes"+(menuAberto?" aberto":"")},
             React.createElement("div",{className:"motorista-menu-titulo"},"Minha conta"),
@@ -1379,7 +1396,6 @@ function MotoristaApp({ st, setSt, user, onSair, toast }) {
     });
     const [inicioChecklistAgendamento, setInicioChecklistAgendamento] = useState(null);
     const abrirChecklistDoAgendamento = dados => { setInicioChecklistAgendamento(dados); setAba('check'); };
-    const placa = Object.values(st.frota).find(f => f.motorista === user.nome && f.frota !== 'leve');
     const recuperarAplicativo = async () => {
         const ok = window.confirm('Usar a recuperação deste aparelho?\n\n' +
             'Rascunhos e registros incompletos serão apagados. Checklists válidos aguardando internet serão preservados.');
@@ -1398,7 +1414,7 @@ function MotoristaApp({ st, setSt, user, onSair, toast }) {
         }
     };
     return (React.createElement("div", { className: 'mshell' + (aba === 'agendamento' ? ' mshell-agendamento' : '') },
-        React.createElement(CabecalhoMotorista,{user,placa,onSair,toast}),
+        React.createElement(CabecalhoMotorista,{user,onSair,toast}),
         React.createElement("div", { className: "mbody" },
             abas.length === 0 && React.createElement("div", { className: "card muted" }, "Seu usu\u00E1rio est\u00E1 sem m\u00F3dulos liberados. Fale com a log\u00EDstica."),
             aba === 'cargas' && carregandoCargas && React.createElement("div", { className: "card muted" }, "Carregando cargas do banco D1 de homologação..."),
