@@ -1264,12 +1264,18 @@ function CabecalhoMotorista({user,onSair,toast}) {
     const tiposFrota=[...new Set(placas.map(v=>v.tipoFrota==="FROTA_PESADA"?"Frota pesada":v.tipoFrota==="FROTA_LEVE"?"Frota leve":"").filter(Boolean))];
 
     const [menuAberto,setMenuAberto] = useState(false);
-    const raiz = React.useRef(null), botao = React.useRef(null);
+    const raiz = React.useRef(null), botao = React.useRef(null), menuConta = React.useRef(null);
     React.useEffect(() => {
         if (!menuAberto) return;
-        const fora = e => { if (!raiz.current?.contains(e.target)) setMenuAberto(false); };
-        document.addEventListener('pointerdown',fora);
-        return () => document.removeEventListener('pointerdown',fora);
+        const fora = e => {
+            if (!menuConta.current?.contains(e.target) && !botao.current?.contains(e.target)) setMenuAberto(false);
+        };
+        document.addEventListener('pointerdown',fora,true);
+        document.addEventListener('click',fora,true);
+        return () => {
+            document.removeEventListener('pointerdown',fora,true);
+            document.removeEventListener('click',fora,true);
+        };
     },[menuAberto]);
     return React.createElement("header",{className:"mtop motorista-cabecalho",ref:raiz,onKeyDown:e=>{
         if(e.key==="Escape" && !e.target.closest(".overlay")){setMenuAberto(false);botao.current?.focus();}
@@ -1286,7 +1292,7 @@ function CabecalhoMotorista({user,onSair,toast}) {
                         placas.map(v=>React.createElement("span",{key:v.placa,className:"chip-placa",title:v.tipoModelo+(v.principal?" · Vínculo principal":"")},v.placa))) :
                     "Sem veículo vinculado"))),
         React.createElement("button",{type:"button",ref:botao,className:"motorista-conta-toggle","aria-label":"Opções da conta","aria-expanded":menuAberto,"aria-controls":"motorista-conta-opcoes",onClick:()=>setMenuAberto(v=>!v)},"⋮"),
-        React.createElement("div",{id:"motorista-conta-opcoes",className:"motorista-conta-opcoes"+(menuAberto?" aberto":"")},
+        React.createElement("div",{ref:menuConta,id:"motorista-conta-opcoes",className:"motorista-conta-opcoes"+(menuAberto?" aberto":"")},
             React.createElement("div",{className:"motorista-menu-titulo"},"Minha conta"),
             React.createElement(AvisoPrivacidade,{claro:true}),
             React.createElement(AlterarSenhaUsuario,{user,onSair,toast}),
