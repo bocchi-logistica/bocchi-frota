@@ -13,7 +13,12 @@ for(const status of ['FECHADO','CALCULADO','ABERTO'])test('categorias e motivos 
  const render=()=>{cursor=0;return vm.runInContext('TelaPremiacao({st,user,dados})',ctx)};
  const nodes=n=>!n||typeof n!=='object'?[]:[n,...n.children.flatMap(nodes)];
  const text=n=>n==null?'':typeof n==='object'?n.children.map(text).join(' '):String(n);
- let root=render();for(const label of ['Multas','Auditoria Interna','Notificação / Advertência'])assert(text(root).includes(label));
+ let root=render();
+ const grupo=nodes(root).find(n=>n.type==='details'&&n.props.className==='premiacao-descontos-grupo');
+ assert(grupo);assert.equal(grupo.props.open,undefined);
+ const total=nodes(grupo).find(n=>n.type==='summary');assert.match(text(total),/Total de descontos/);assert.match(text(total),/R\$ -50.00/);
+ assert(nodes(grupo).some(n=>n.props.className==='ocorrencia-abrir'));
+ for(const label of ['Multas','Auditoria Interna','Notificação / Advertência'])assert(text(root).includes(label));
  const button=nodes(root).find(n=>n.props.className==='ocorrencia-abrir');assert(button);button.props.onClick();root=render();assert.match(text(root),/Motivo de teste/);
  if(status!=='ABERTO'){assert.match(text(root),/R\$ 450.00/);assert.doesNotMatch(text(root),/R\$ 949.00/);assert.match(text(root),/Total de descontos/);}
  assert(!nodes(root).some(n=>n.type==='button'&&/Editar|Salvar/.test(text(n))));
