@@ -495,6 +495,68 @@ th.td-num{text-align:right}
 .agenda-reserva-card .agenda-status{white-space:normal}
 }
 
+
+/* Sinistros no app: seleção clara sem alterar os fluxos de envio. */
+.sinistro-motorista{display:grid;gap:14px;min-width:0}
+.sinistro-motorista>.card{margin:0}
+.sinistro-cabecalho{display:flex;align-items:center;gap:12px;padding:4px 2px 2px}
+.sinistro-cabecalho-icone{display:flex;align-items:center;justify-content:center;width:42px;height:42px;flex:0 0 42px;border-radius:13px;background:#fff0d5;color:#9a5c16;font:800 25px 'Archivo',sans-serif}
+.sinistro-cabecalho h2{font-size:22px;line-height:1.25;margin:0}
+.sinistro-cabecalho p{font-size:13px;line-height:1.5;color:var(--cinza);margin-top:4px}
+.sinistro-motorista .sinistro-seletor{padding:16px}
+.sinistro-seletor h3{font-size:15px;margin:0}
+.sinistro-motorista .sinistro-ocorrencia-escolha{gap:10px;margin-top:12px}
+.sinistro-motorista .sinistro-ocorrencia-btn{display:flex;align-items:center;gap:10px;padding:12px;min-height:76px;border:1px solid var(--linha);border-radius:12px;font-weight:400}
+.sinistro-motorista .sinistro-ocorrencia-btn:focus-visible{outline:3px solid #d6ac3b;outline-offset:3px}
+.sinistro-motorista .sinistro-ocorrencia-btn.on{border:1px solid var(--folha);box-shadow:0 0 0 1px var(--folha)}
+.sinistro-tipo-icone{font-size:21px;flex:0 0 26px;text-align:center}
+.sinistro-tipo-texto{flex:1;min-width:0}
+.sinistro-tipo-texto strong{display:block;font-size:14px;line-height:1.3}
+.sinistro-tipo-texto small{display:block;font-size:11px;line-height:1.4;color:var(--cinza);margin-top:4px}
+.sinistro-tipo-marca{font-size:18px;color:var(--folha)}
+.sinistro-motorista .sinistro-ocorrencia-btn.largo{min-height:58px}
+.sinistro-historico{padding:16px}
+.sinistro-historico h3{font-size:17px}
+.sinistro-contagem{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:28px;padding:0 7px;background:var(--folha-clara);color:var(--mata);border-radius:20px;font-size:12px;font-weight:700}
+.sinistro-historico-vazio{display:grid;gap:5px;padding:16px 12px;margin-top:12px;border:1px dashed var(--linha);border-radius:10px;background:#fafbf9;text-align:center}
+.sinistro-historico-vazio b{font-size:13px;font-weight:600}
+.sinistro-historico-vazio span{font-size:12px;line-height:1.5;color:var(--cinza)}
+.sinistro-historico .sinistro-registro-card{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.sinistro-historico .sinistro-registro-card>.grow{min-width:160px}
+@media(max-width:460px){
+.sinistro-cabecalho h2{font-size:21px}
+.sinistro-motorista .sinistro-seletor{padding:14px}
+.sinistro-motorista .sinistro-ocorrencia-btn{gap:7px;padding:10px 8px}
+.sinistro-tipo-icone{font-size:19px;flex-basis:22px}
+.sinistro-tipo-texto strong{font-size:13px}
+.sinistro-tipo-texto small{font-size:10px}
+.sinistro-tipo-marca{font-size:16px}
+.sinistro-motorista .agenda-modal-grid{gap:12px}
+}
+@media(max-width:340px){
+.sinistro-motorista .sinistro-ocorrencia-escolha{grid-template-columns:1fr}
+.sinistro-motorista .sinistro-ocorrencia-btn{min-height:60px}
+}
+
+
+.sinistro-motorista .sinistro-contato>.row{flex-wrap:wrap;gap:10px}
+.sinistro-motorista .sinistro-contato>.row>div:first-child{font-size:22px!important}
+.sinistro-motorista .sinistro-contato .btn{min-height:44px;font-size:12px;padding:9px 12px;white-space:normal}
+.sinistro-orientacoes>summary{cursor:pointer;list-style:none;min-height:36px}
+.sinistro-orientacoes>summary::-webkit-details-marker{display:none}
+.sinistro-orientacoes>summary:after{content:"⌄";color:var(--folha);font-size:20px}
+.sinistro-orientacoes:not([open])>summary:after{content:"›"}
+.sinistro-motorista .sinistro-orientacao-compacta{margin-top:12px}
+.sinistro-motorista .sinistro-orientacao-item{font-size:13px;line-height:1.5}
+.sinistro-motorista .sinistro-evidencia-chip{font-size:11px;padding:5px 8px}
+.sinistro-motorista>.card h3{font-size:17px;line-height:1.4}
+@media(max-width:800px){
+.sinistro-motorista .card label{font-size:11px;line-height:1.4;letter-spacing:.03em}
+.sinistro-motorista .card input,.sinistro-motorista .card select,.sinistro-motorista .card textarea{font-size:16px;max-width:100%;min-width:0}
+.sinistro-motorista .card select{padding-right:28px}
+.sinistro-motorista .agenda-modal-grid>div{min-width:0}
+.sinistro-motorista .sinistro-contato>.row>.grow{flex-basis:120px}
+}
 </style>
 </head>
 <body>
