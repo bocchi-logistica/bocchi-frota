@@ -463,6 +463,38 @@ th.td-num{text-align:right}
 .motorista-conta-opcoes>div:not(.overlay):not(.motorista-menu-titulo)>button{display:block;width:100%;min-height:44px;padding:8px 10px!important;text-align:left;font-size:12px!important}
 .motorista-conta-opcoes .motorista-sair{margin-top:2px}
 }
+
+/* Agenda do motorista: lista de reservas e calendário móvel resumido. */
+.agenda-reservas-lista{display:grid;gap:18px;margin-top:16px}
+.agenda-lista-resumo{font-size:12px;color:var(--cinza)}
+.agenda-reservas-dia{display:grid;gap:10px}
+.agenda-reservas-dia>h3{font-size:14px;text-transform:capitalize;color:var(--mata)}
+.agenda-reserva-card{display:grid;gap:10px;width:100%;min-width:0;padding:16px;text-align:left;background:#fff;border:1px solid var(--linha);border-left:5px solid var(--folha);border-radius:14px;box-shadow:var(--sombra);color:var(--tinta)}
+.agenda-reserva-cabecalho{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.agenda-reserva-placa{font:800 20px 'Archivo',sans-serif;letter-spacing:.04em;white-space:nowrap}
+.agenda-reserva-modelo{font-size:12px}
+.agenda-reserva-horarios{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:10px 0;border-top:1px solid var(--linha);border-bottom:1px solid var(--linha)}
+.agenda-reserva-horarios small{display:block;color:var(--cinza);font-size:11px;margin-bottom:4px}
+.agenda-reserva-horarios b{display:block;font-size:13px;line-height:1.5}
+.agenda-reserva-trajeto{font-size:14px;line-height:1.5;overflow-wrap:anywhere}
+.agenda-reserva-rodape{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:var(--folha)}
+.agenda-reserva-rodape span:last-child{font-weight:700}
+.agenda-qtd-reservas{display:none}
+.mshell.mshell-agendamento .agenda-fab-motorista{position:static;width:100%;height:auto;min-height:46px;border-radius:12px;font-size:15px;margin:16px 0 8px}
+@media(max-width:800px){
+.agenda-top-motorista .agenda-view-toggle{grid-template-columns:repeat(3,minmax(0,1fr))}
+.agenda-top-motorista .agenda-filtros{gap:8px}
+.agenda-top-motorista .agenda-filtros label{font-size:10px;margin-bottom:4px}
+.agenda-top-motorista .agenda-filtros select{font-size:13px;min-width:0;padding:10px 24px 10px 8px}
+.agenda-top-motorista .agenda-top-mes{font-size:18px}
+.agenda-cal-resumo{margin-top:16px}
+.mshell.mshell-agendamento .agenda-cal-resumo .agenda-dia{min-height:58px;padding:5px}
+.agenda-cal-resumo .agenda-evento,.agenda-cal-resumo .agenda-dia>.muted{display:none}
+.agenda-cal-resumo .agenda-qtd-reservas{display:block;width:max-content;max-width:100%;min-width:22px;margin-top:6px;padding:3px 5px;border-radius:12px;background:var(--folha-clara);color:var(--mata);font-size:11px;font-weight:700;text-align:center}
+.agenda-cal-resumo .agenda-qtd-reservas>span{display:none}
+.agenda-reserva-card .agenda-status{white-space:normal}
+}
+
 </style>
 </head>
 <body>
