@@ -19,7 +19,7 @@ function corAgendaVeiculo(placa) {
         hash = ((hash * 31) + chave.charCodeAt(i)) >>> 0;
     return AGENDA_CORES[hash % AGENDA_CORES.length];
 }
-function CalendarioAgenda({ mes, eventos, onAbrir, onSelecionarDia, diaSelecionado = null }) {
+function CalendarioAgenda({ mes, eventos, onAbrir, onSelecionarDia, diaSelecionado = null, compactoMobile = false }) {
     const ano = mes.getFullYear(), m = mes.getMonth(), primeiro = new Date(ano, m, 1), offset = (primeiro.getDay() + 6) % 7, inicio = new Date(ano, m, 1 - offset);
     const isoLocal = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const isoSelecionado = diaSelecionado ? isoLocal(diaSelecionado) : '';
@@ -30,10 +30,11 @@ function CalendarioAgenda({ mes, eventos, onAbrir, onSelecionarDia, diaSeleciona
         const iso = isoLocal(d);
         dias.push({ d, iso, eventos: eventos.filter(e => String(e.saidaPrevista).slice(0, 10) === iso) });
     }
-    return React.createElement("div", { className: "agenda-cal" },
+    return React.createElement("div", { className: "agenda-cal"+(compactoMobile?" agenda-cal-resumo":"") },
         ['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB', 'DOM'].map(x => React.createElement("div", { className: "agenda-semana", key: x }, x)),
         dias.map(({ d, iso, eventos: ev }) => React.createElement("div", { className: 'agenda-dia' + (d.getMonth() !== m ? ' off' : '') + (iso === isoSelecionado ? ' selecionado' : ''), key: iso, role: onSelecionarDia ? 'button' : undefined, onClick: () => onSelecionarDia && onSelecionarDia(new Date(d)) },
             React.createElement("b", null, d.getDate()),
+            compactoMobile && ev.length>0 && React.createElement("span",{className:"agenda-qtd-reservas"},ev.length,React.createElement("span",null,ev.length===1?" reserva":" reservas")),
             ev.slice(0, 3).map(e => { const c = corAgendaVeiculo(e.placa); return React.createElement("button", { className: "agenda-evento", style: { borderLeftColor: c.b, background: c.f, color: c.t }, key: e.id, onClick: clique => { clique.stopPropagation(); onAbrir(e); } },
                 React.createElement("b", null,
                     fmtDataHora(e.saidaPrevista).slice(-5),
@@ -282,8 +283,42 @@ function DetalheAgendamento({ item, admin, onClose, onAtualizar, toast, onAbrirC
                 React.createElement("button", { className: "btn btn-g", onClick: () => setAcao('') }, "Voltar"),
                 React.createElement("button", { className: "btn btn-p", disabled: salvando || acao === 'cancelar' && !motivo, onClick: executar }, "Confirmar"))));
 }
+
+function ListaReservasAgenda({eventos,mes,veiculos,onAbrir}) {
+    const inicio=new Date(mes.getFullYear(),mes.getMonth(),1), fim=new Date(mes.getFullYear(),mes.getMonth()+1,1);
+    const lista=eventos.filter(e=>new Date(e.saidaPrevista)<fim && new Date(e.retornoPrevisto||e.saidaPrevista)>=inicio)
+        .sort((a,b)=>new Date(a.saidaPrevista)-new Date(b.saidaPrevista));
+    const grupos=new Map();
+    for(const e of lista){
+        const data=new Date(Math.max(new Date(e.saidaPrevista).getTime(),inicio.getTime()));
+        const chave=data.toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long'});
+        if(!grupos.has(chave))grupos.set(chave,[]);
+        grupos.get(chave).push(e);
+    }
+    return React.createElement("section",{className:"agenda-reservas-lista","aria-label":"Reservas do mês"},
+        React.createElement("div",{className:"agenda-lista-resumo"},lista.length+" reserva"+(lista.length===1?"":"s")+" no período"),
+        !lista.length && React.createElement("div",{className:"card muted"},"Nenhuma reserva para os filtros deste mês."),
+        [...grupos].map(([dia,itens])=>React.createElement("section",{key:dia,className:"agenda-reservas-dia"},
+            React.createElement("h3",null,dia),
+            itens.map(e=>{
+                const veiculo=veiculos.find(v=>String(v.id)===String(e.veiculoId)||v.placa===e.placa),cor=corAgendaVeiculo(e.placa);
+                return React.createElement("button",{type:"button",key:e.id,className:"agenda-reserva-card",style:{borderLeftColor:cor.b},onClick:()=>onAbrir(e)},
+                    React.createElement("div",{className:"agenda-reserva-cabecalho"},
+                        React.createElement("strong",{className:"agenda-reserva-placa"},e.placa||"Veículo"),
+                        React.createElement(AgendaStatus,{status:e.status})),
+                    veiculo && React.createElement("div",{className:"muted agenda-reserva-modelo"},veiculo.modelo||veiculo.tipoModelo||""),
+                    React.createElement("div",{className:"agenda-reserva-horarios"},
+                        React.createElement("div",null,React.createElement("small",null,"Saída prevista"),React.createElement("b",null,fmtDataHora(e.saidaPrevista))),
+                        React.createElement("div",null,React.createElement("small",null,"Retorno previsto"),React.createElement("b",null,fmtDataHora(e.retornoPrevisto)))),
+                    React.createElement("div",{className:"agenda-reserva-trajeto"},[e.origem,e.destino].filter(Boolean).join(" → ")||"Destino não informado"),
+                    React.createElement("div",{className:"agenda-reserva-rodape"},
+                        React.createElement("span",null,e.meuAgendamento?"Minha reserva":"Reserva compartilhada"),
+                        React.createElement("span",null,"Ver detalhes ›")));
+            }))));
+}
+
 function TelaAgendamento({ user, toast, onAbrirChecklist }) {
-    const [base, setBase] = useState({ veiculos: [], agendamentos: [], parametros: {} }), [carregando, setCarregando] = useState(true), [mes, setMes] = useState(new Date()), [form, setForm] = useState(false), [detalhe, setDetalhe] = useState(null), [visual, setVisual] = useState('todos'), [veiculoFiltro, setVeiculoFiltro] = useState(''), [modoVisao, setModoVisao] = useState('mes'), [diaSelecionado, setDiaSelecionado] = useState(new Date()), [filtroRapido, setFiltroRapido] = useState('proximo');
+    const [base, setBase] = useState({ veiculos: [], agendamentos: [], parametros: {} }), [carregando, setCarregando] = useState(true), [mes, setMes] = useState(new Date()), [form, setForm] = useState(false), [detalhe, setDetalhe] = useState(null), [visual, setVisual] = useState('todos'), [veiculoFiltro, setVeiculoFiltro] = useState(''), [modoVisao, setModoVisao] = useState(() => window.matchMedia('(max-width:800px)').matches ? 'lista' : 'mes'), [diaSelecionado, setDiaSelecionado] = useState(new Date()), [filtroRapido, setFiltroRapido] = useState('proximo');
     const leituraAgenda = React.useRef(0);
     const carregar = async (silencioso = false) => {
         const leitura = ++leituraAgenda.current;
@@ -360,7 +395,7 @@ function TelaAgendamento({ user, toast, onAbrirChecklist }) {
     })() : null;
     return React.createElement(React.Fragment, null,
         carregando ? React.createElement("div", { className: "card muted" }, "Carregando agenda...") : React.createElement(React.Fragment, null,
-            React.createElement("div", { className: "agenda-top" },
+            React.createElement("div", { className: "agenda-top agenda-top-motorista" },
                 React.createElement("div", { className: "agenda-filtros" },
                     React.createElement("div", null,
                         React.createElement("label", { htmlFor: "tela-agendamento-veiculo" }, "Ve\u00EDculo"),
@@ -373,8 +408,8 @@ function TelaAgendamento({ user, toast, onAbrirChecklist }) {
                     React.createElement("div", null,
                         React.createElement("label", { htmlFor: "tela-agendamento-visualizar" }, "Visualizar"),
                         React.createElement("select", { id: "tela-agendamento-visualizar", name: "tela-agendamento-visualizar", value: visual, onChange: e => setVisual(e.target.value) },
-                            React.createElement("option", { value: "todos" }, "Todos os agendamentos"),
-                            React.createElement("option", { value: "meus" }, "Meus agendamentos")))),
+                            React.createElement("option", { value: "todos" }, "Todas as reservas"),
+                            React.createElement("option", { value: "meus" }, "Minhas reservas")))),
                 React.createElement("div", { className: "agenda-top-nav" },
                     React.createElement("button", { className: "btn btn-sm", style: { color: '#fff' }, onClick: () => { if (modoVisao === 'dia')
                             moverDia(-1);
@@ -387,7 +422,8 @@ function TelaAgendamento({ user, toast, onAbrirChecklist }) {
                             setMes(new Date(mes.getFullYear(), mes.getMonth() + 1, 1)); } }, "\u203A"),
                     React.createElement("div", { className: "agenda-top-spacer" }),
                     React.createElement("button", { className: "btn btn-sm", style: { color: '#fff', border: '1px solid rgba(255,255,255,.35)' }, onClick: irHoje }, "Hoje"),
-                    React.createElement("div", { className: "agenda-view-toggle" },
+                    React.createElement("div", { className: "agenda-view-toggle", "aria-label":"Visualização da agenda" },
+                        React.createElement("button", {className:modoVisao==="lista"?"on":"", "aria-pressed":modoVisao==="lista",onClick:()=>setModoVisao("lista")}, "Lista"),
                         React.createElement("button", { className: modoVisao === 'mes' ? 'on' : '', onClick: () => setModoVisao('mes') }, "M\u00EAs"),
                         React.createElement("button", { className: modoVisao === 'dia' ? 'on' : '', onClick: () => setModoVisao('dia') }, "Dia")))),
             configAcao ? React.createElement("div", { className: "agenda-proxima card" },
@@ -413,10 +449,8 @@ function TelaAgendamento({ user, toast, onAbrirChecklist }) {
                     React.createElement("div", { className: "agenda-proxima-info" },
                         React.createElement("b", null, "Status"),
                         AG_STATUS_LABEL[proxima.status] || proxima.status)),
-                React.createElement("button", { className: "btn btn-p", style: { width: '100%', marginTop: 13, fontSize: 16 }, onClick: () => setDetalhe(proxima) }, configAcao.botao)) : React.createElement("div", { className: "card", style: { margin: '14px 0' } },
-                React.createElement("b", null, "Nenhuma a\u00E7\u00E3o dispon\u00EDvel agora"),
-                React.createElement("div", { className: "muted" }, "Voc\u00EA n\u00E3o possui retirada, devolu\u00E7\u00E3o ou finaliza\u00E7\u00E3o pendente neste momento.")),
-            modoVisao === 'mes' ? React.createElement(CalendarioAgenda, { mes: mes, eventos: eventos, onAbrir: setDetalhe, diaSelecionado: diaSelecionado, onSelecionarDia: d => { setDiaSelecionado(d); setMes(d); setModoVisao('dia'); } }) : React.createElement("div", { className: "agenda-dia-lista" },
+                React.createElement("button", { className: "btn btn-p", style: { width: '100%', marginTop: 13, fontSize: 16 }, onClick: () => setDetalhe(proxima) }, configAcao.botao)) : null,
+            modoVisao === 'lista' ? React.createElement(ListaReservasAgenda,{eventos,mes,veiculos:base.veiculos,onAbrir:setDetalhe}) : modoVisao === 'mes' ? React.createElement(CalendarioAgenda, { compactoMobile:true,mes: mes, eventos: eventos, onAbrir: setDetalhe, diaSelecionado: diaSelecionado, onSelecionarDia: d => { setDiaSelecionado(d); setMes(d); setModoVisao('dia'); } }) : React.createElement("div", { className: "agenda-dia-lista" },
                 React.createElement("div", { className: "card row" },
                     React.createElement("button", { className: "btn btn-g btn-sm", onClick: () => moverDia(-1) }, "\u2039"),
                     React.createElement("b", { className: "grow", style: { textAlign: 'center' } }, diaSelecionado.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })),
@@ -436,7 +470,7 @@ function TelaAgendamento({ user, toast, onAbrirChecklist }) {
                                 " \u2192 ",
                                 e.destino)),
                         React.createElement(AgendaStatus, { status: e.status }))); }) : React.createElement("div", { className: "card muted" }, "Nenhum agendamento neste dia.")),
-            React.createElement("button", { className: "btn btn-p agenda-fab", onClick: () => setForm(true) }, "+")),
+            React.createElement("button", { className: "btn btn-p agenda-fab agenda-fab-motorista", onClick: () => setForm(true) }, "+ Agendar")),
         form && React.createElement(FormAgendamento, { base: base, dataInicial: diaSelecionado, onClose: () => setForm(false), onSalvo: carregar, toast: toast }),
         " ",
         detalheAtual && React.createElement(DetalheAgendamento, { item: detalheAtual, parametros: base.parametros, onClose: () => setDetalhe(null), onAtualizar: carregar, toast: toast, onAbrirChecklist: onAbrirChecklist }));
