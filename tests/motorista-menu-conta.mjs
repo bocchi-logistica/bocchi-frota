@@ -1,0 +1,24 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+const source=fs.readFileSync(new URL('../app.js',import.meta.url),'utf8');
+test('menu fecha fora inclusive no cabeçalho e escuta eventos na captura',()=>{
+ const states=[],refs=[],listeners=[],effects=[];let cursor=0,refIndex=0;
+ const React={createElement:(type,props,...children)=>({type,props:props||{},children}),useRef(){const i=refIndex++;return refs[i]||(refs[i]={current:null})},useCallback:f=>f,useEffect:f=>effects.push(f)};
+ const ctx=vm.createContext({React,useState(v){const i=cursor++;if(!(i in states))states[i]=v;return[states[i],v=>states[i]=typeof v==='function'?v(states[i]):v]},useAtualizacaoPortal(){},document:{addEventListener:(name,fn,capture)=>listeners.push({name,fn,capture}),removeEventListener:(name,fn,capture)=>{assert(listeners.some(l=>l.name===name&&l.fn===fn&&l.capture===capture))}},AvisoPrivacidade(){},AlterarSenhaUsuario(){}});
+ const start=source.indexOf('function CabecalhoMotorista(');vm.runInContext(source.slice(start,source.indexOf('function AlterarSenhaUsuario(',start)),ctx);
+ const render=()=>{cursor=0;refIndex=0;effects.length=0;return vm.runInContext('CabecalhoMotorista({user:{id:1,nome:"Nome completo"},onSair(){},toast(){}})',ctx)};
+ render();states[1]=true;render();
+ refs[0].current={contains:()=>true};
+ refs[1].current={contains:t=>t==='botao'};
+ refs[2].current={contains:t=>t==='menu'||t==='modal'};
+ const limpar=effects[1]();assert.equal(listeners.length,2);assert(listeners.every(l=>l.capture===true));
+ const pointer=listeners.find(l=>l.name==='pointerdown').fn;
+ pointer({target:'menu'});assert.equal(states[1],true);
+ pointer({target:'modal'});assert.equal(states[1],true);
+ pointer({target:'botao'});assert.equal(states[1],true);
+ pointer({target:'nome-no-cabecalho'});assert.equal(states[1],false);
+ states[1]=true;listeners.find(l=>l.name==='click').fn({target:'conteudo'});assert.equal(states[1],false);
+ limpar();
+});
