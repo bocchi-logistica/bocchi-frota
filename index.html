@@ -564,6 +564,18 @@ th.td-num{text-align:right}
 .premiacao-aviso-recolhivel>summary:after{content:"⌄";font-size:20px;flex-shrink:0}
 .premiacao-aviso-recolhivel[open]>summary:after{content:"⌃"}
 .premiacao-aviso-conteudo{padding:0 0 12px;line-height:1.6}
+
+/* Descontos: total recolhível, categorias e motivos em segundo nível. */
+.premiacao-descontos-grupo{border-bottom:1px solid var(--linha)}
+.premiacao-descontos-total{display:flex;align-items:center;gap:10px;list-style:none;cursor:pointer;min-height:48px;padding:12px 0;font-size:14px}
+.premiacao-descontos-total::-webkit-details-marker{display:none}
+.premiacao-descontos-total>span:first-child{flex:1;min-width:0}
+.premiacao-descontos-total>b{white-space:nowrap}
+.premiacao-descontos-seta{font-size:20px;color:var(--mata);transition:transform .15s}
+.premiacao-descontos-grupo[open]>.premiacao-descontos-total>.premiacao-descontos-seta{transform:rotate(180deg)}
+.premiacao-descontos-categorias{padding:0 0 8px 10px;border-left:2px solid var(--folha-clara);margin-bottom:10px}
+.premiacao-descontos-categorias>.ocorrencia-linha:last-child{border-bottom:0}
+
 </style>
 </head>
 <body>
