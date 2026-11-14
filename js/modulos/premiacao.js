@@ -108,7 +108,12 @@ function TelaPremiacao({ st, user, dados }) {
                     "Premia\u00E7\u00E3o pelo frete realizado ",
                     React.createElement("span", { className: "muted" }, fechado ? "(oficial)" : calculado ? "(calculado)" : "(estimativa)")),
                 React.createElement("b", { className: "num", style: { color: 'var(--mata)' } }, brl(ap.prod))),
-            [
+            React.createElement("details",{className:"premiacao-descontos-grupo"},
+                React.createElement("summary",{className:"premiacao-descontos-total"},
+                    React.createElement("span",null,"Total de descontos"),
+                    React.createElement("b",{className:"num"},brl(ap.totDesc ? -Math.abs(ap.totDesc) : 0)),
+                    React.createElement("span",{className:"premiacao-descontos-seta","aria-hidden":true},"⌄")),
+                React.createElement("div",{className:"premiacao-descontos-categorias"},[
                 { rotulo: 'Notificação / Advertência', aliases: ['Notificação / Advertência', 'Notificação / Advertencia'] },
                 { rotulo: 'Multas', aliases: ['Multas'] },
                 { rotulo: 'Auditoria Interna', aliases: ['Auditoria Interna', 'Check List'] }
@@ -164,10 +169,7 @@ function TelaPremiacao({ st, user, dados }) {
                                         React.createElement("ul", null, d.auditoriaResumo.itens.map((item, indice) =>
                                             React.createElement("li", { key: indice }, item.titulo + " · " + item.nota + "/" + item.maximo + (item.motivo ? " · " + item.motivo : "")))))));
                         }))));
-            }),
-            salvo && React.createElement("div",{className:"linha-item"},
-                React.createElement("span",null,"Total de descontos"),
-                React.createElement("b",null,brl(-Math.abs(ap.totDesc)))),
+            }))),
             React.createElement("div", { className: "linha-item", style: { fontSize: 15.5 } },
                 React.createElement("b", null, "Apurado no m\u00EAs"),
                 React.createElement("b", { className: "num", style: { color: ap.apurado < 0 ? 'var(--erro)' : 'var(--mata)' } }, brl(ap.apurado))),
