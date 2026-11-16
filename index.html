@@ -619,6 +619,24 @@ th.td-num{text-align:right}
 .checklist-grupo-acoes{flex-wrap:wrap;gap:8px}
 @media(max-width:800px){.checklist-evidencias textarea{font-size:16px}.checklist-item{padding:0 11px}.checklist-escolha{font-size:11px}}
 
+
+/* Respostas do checklist: intenção por cor, seleção e foco acessível. */
+.checklist-escolha.C{background:#f0f7f2;color:#235f3c}
+.checklist-escolha.NC{background:#fff3ef;color:#a13c28}
+.checklist-escolha{transition:background-color .15s,color .15s,box-shadow .15s}
+.checklist-escolha:focus-visible{outline:3px solid var(--colheita-escura);outline-offset:-3px;position:relative;z-index:1}
+@media(hover:hover) and (pointer:fine){
+.checklist-escolha.C:not(:disabled):hover{background:#287346;color:#fff}
+.checklist-escolha.NC:not(:disabled):hover{background:#b43b2c;color:#fff}
+}
+.checklist-escolha.C.on{background:#23653e;color:#fff}
+.checklist-escolha.NC.on{background:#b43b2c;color:#fff}
+.checklist-escolha:not(:disabled):active{box-shadow:inset 0 0 0 2px #ffffff70}
+.checklist-resposta.C{background:#e7f3e9;color:#235f3c;border-radius:7px;padding:4px 6px}
+.checklist-resposta.NC{background:#fff0e9;color:#a13c28;border-radius:7px;padding:4px 6px}
+.checklist-escolha:disabled{opacity:.65;cursor:default}
+@media(prefers-reduced-motion:reduce){.checklist-escolha{transition:none}}
+
 </style>
 </head>
 <body>
