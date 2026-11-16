@@ -1,8 +1,7 @@
 
 function pendenciaItemChecklist(p,r={},modoOcorrencia=false) {
     if (!r.resp) return !modoOcorrencia && p.obrigatoria ? 'Responda este item.' : '';
-    if (r.resp==='NA' && !p.permiteNA) return 'N/A não permitido para este item. Escolha Conforme ou Não conforme.';
-    if (!['C','NC','NA'].includes(r.resp)) return 'Resposta inválida.';
+    if (!['C','NC'].includes(r.resp)) return 'Escolha Conforme ou Não conforme para este item.';
     if (r.resp==='NC' && p.observacaoObrigatoriaNC && !String(r.obs||'').trim()) return 'Descreva o problema.';
     if (r.resp==='NC' && p.fotoNC && !r.foto) return 'Anexe a foto obrigatória.';
     return '';
@@ -44,14 +43,14 @@ function ChecklistPorGrupos({perguntas,resps,setResp,anexar,removerFoto,fileRefs
                     h('b',{className:'grow'},g),h('span',null,respondidas+' / '+lista.length),h('span',{'aria-hidden':true},i>liberado?'🔒':i===atual?'⌃':'⌄')),
                 i===atual&&lista.map(p=>{
                     const r=resps[p.id]||{},aberta=edicoes[p.id]??(!r.resp||!!pendenciaItemChecklist(p,r,modoOcorrencia));
-                    const rotulo=r.resp==='C'?'✓ Conforme':r.resp==='NC'?'! Não conforme':r.resp==='NA'?'— N/A':p.obrigatoria?'Pendente':'Opcional';
+                    const rotulo=r.resp==='C'?'✓ Conforme':r.resp==='NC'?'! Não conforme':p.obrigatoria?'Pendente':'Opcional';
                     return h('div',{className:'checklist-item',key:p.id,ref:el=>perguntasRefs.current[p.id]=el},
                         h('button',{type:'button',className:'checklist-item-resumo',disabled:enviando,'aria-expanded':aberta,onClick:()=>setEdicoes(v=>({...v,[p.id]:!aberta}))},
                             h('span',{className:'grow'},p.texto,p.obrigatoria&&!modoOcorrencia&&h('span',{className:'checklist-obrigatorio'},' *')),
                             h('span',{className:'checklist-resposta '+(r.resp||'')},rotulo,!aberta&&r.resp&&h('small',null,'Alterar'))),
                         aberta&&h(React.Fragment,null,
                             h('div',{className:'checklist-escolhas',role:'group','aria-label':p.texto},
-                                [['C','✓ Conforme'],['NC','! Não conforme'],...(p.permiteNA?[['NA','— N/A']]:[])].map(([v,t])=>
+                                [['C','✓ Conforme'],['NC','! Não conforme']].map(([v,t])=>
                                     h('button',{type:'button',key:v,className:'checklist-escolha '+v+(r.resp===v?' on':''),disabled:enviando,'aria-pressed':r.resp===v,onClick:()=>marcar(p,v)},t))),
                             r.resp==='NC'&&h('div',{className:'checklist-evidencias'},
                                 h('label',null,'Descrição do problema'+(p.observacaoObrigatoriaNC?' *':''),h('textarea',{rows:2,value:r.obs||'',disabled:enviando,onChange:e=>setResp(p.id,'obs',e.target.value),placeholder:'Descreva o problema...'})),
@@ -122,7 +121,6 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
         frequencia: p.frequencia || 'Diária',
         obrigatoria: p.obrigatoria === true,
         fotoNC: p.fotoObrigatoriaNC === true,
-        permiteNA: p.permiteNA === true,
         observacaoObrigatoriaNC: p.observacaoObrigatoriaNC !== false,
         ativa: p.ativa !== false,
         ordem: Number(p.ordem || 999)
@@ -487,12 +485,12 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
                 combustivel: frotaSel === 'leve' ? (extras.combustivel || '') : '',
                 tipoChecklist: modoOcorrenciaAgendamento ? 'LEVE_NC_AGENDAMENTO' : (frotaSel === 'leve' ? 'LEVE' : 'PESADA'),
                 versaoFormulario: CONFIG.VERSAO,
-                naPorCadastro: true,
+                respostasConformeNC: true,
                 localizacao: loc,
                 respostas: perguntasExibidas.filter(p => resps[p.id]?.resp).map(p => {
                     const r = resps[p.id] || {};
                     return { idPergunta: p.id, grupo: p.grupo, pergunta: p.texto,
-                        resposta: r.resp || 'NA', observacao: r.obs || '', possuiFoto: !!r.foto,
+                        resposta: r.resp, observacao: r.obs || '', possuiFoto: !!r.foto,
                         fotos: r.foto ? [{ nome: p.id + '-01.jpg', tipo: 'image/jpeg', conteudoBase64: r.foto }] : [] };
                 }),
                 quantidadeNC: perguntasExibidas.filter(p => resps[p.id] && resps[p.id].resp === 'NC').length,
@@ -819,7 +817,7 @@ function AdmChecklist({ st, setSt, toast, user, foco }) {
     const [carregandoBloqueados, setCarregandoBloqueados] = useState(false);
     const [liberandoVeiculo, setLiberandoVeiculo] = useState(null);
     const [observacaoLiberacao, setObservacaoLiberacao] = useState('');
-    const perguntaVazia = { texto: '', grupo: 'Anomalias estéticas', frota: 'pesada', frequencia: 'Diária', ordem: 10, obrigatoria: true, fotoNC: false, permiteNA: false, ativa: true };
+    const perguntaVazia = { texto: '', grupo: 'Anomalias estéticas', frota: 'pesada', frequencia: 'Diária', ordem: 10, obrigatoria: true, fotoNC: false, ativa: true };
     const [novaPerg, setNovaPerg] = useState(perguntaVazia);
     const [editandoPergunta, setEditandoPergunta] = useState(null);
     const [fFrota, setFFrota] = useState('pesada');
@@ -848,7 +846,6 @@ function AdmChecklist({ st, setSt, toast, user, foco }) {
                 frequencia: p.frequencia || 'Diária',
                 obrigatoria: p.obrigatoria === true,
                 fotoNC: p.fotoObrigatoriaNC === true,
-                permiteNA: p.permiteNA === true,
                 observacaoObrigatoriaNC: p.observacaoObrigatoriaNC === true,
                 ativa: p.ativa !== false,
                 ordem: Number(p.ordem || 999)
@@ -935,7 +932,6 @@ function AdmChecklist({ st, setSt, toast, user, foco }) {
                 ordem,
                 obrigatoria: novaPerg.obrigatoria,
                 fotoObrigatoriaNC: novaPerg.fotoNC,
-                permiteNA: novaPerg.permiteNA === true,
                 observacaoObrigatoriaNC: true,
                 ativa: novaPerg.ativa !== false
             };
@@ -952,9 +948,9 @@ function AdmChecklist({ st, setSt, toast, user, foco }) {
             toast('Erro ao salvar pergunta: ' + e.message);
         }
     };
-    const iniciarEdicao = p => { setEditandoPergunta(p); setNovaPerg({ texto: p.texto, grupo: p.grupo, frota: p.frota, frequencia: p.frequencia, ordem: p.ordem, obrigatoria: p.obrigatoria, fotoNC: p.fotoNC, permiteNA: p.permiteNA === true, ativa: p.ativa }); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+    const iniciarEdicao = p => { setEditandoPergunta(p); setNovaPerg({ texto: p.texto, grupo: p.grupo, frota: p.frota, frequencia: p.frequencia, ordem: p.ordem, obrigatoria: p.obrigatoria, fotoNC: p.fotoNC, ativa: p.ativa }); window.scrollTo({ top: 0, behavior: 'smooth' }); };
     const alternarPergunta = async (p) => { try {
-        await ApiService.atualizarPergunta(p.id, { texto: p.texto, grupo: p.grupo, tipoFrota: p.frota.toUpperCase(), frequencia: p.frequencia, ordem: p.ordem, obrigatoria: p.obrigatoria, fotoObrigatoriaNC: p.fotoNC, observacaoObrigatoriaNC: p.observacaoObrigatoriaNC, permiteNA: p.permiteNA === true, ativa: !p.ativa });
+        await ApiService.atualizarPergunta(p.id, { texto: p.texto, grupo: p.grupo, tipoFrota: p.frota.toUpperCase(), frequencia: p.frequencia, ordem: p.ordem, obrigatoria: p.obrigatoria, fotoObrigatoriaNC: p.fotoNC, observacaoObrigatoriaNC: p.observacaoObrigatoriaNC, ativa: !p.ativa });
         await carregarCatalogo();
         toast(p.ativa ? 'Pergunta inativada.' : 'Pergunta reativada.');
     }
@@ -1049,10 +1045,6 @@ function AdmChecklist({ st, setSt, toast, user, foco }) {
                         React.createElement("select", { id: "adm-checklist-resposta-obrigatoria", name: "adm-checklist-resposta-obrigatoria", value: novaPerg.obrigatoria ? 's' : 'n', onChange: e => setNovaPerg({ ...novaPerg, obrigatoria: e.target.value === 's' }) },
                             React.createElement("option", { value: "s" }, "Sim"),
                             React.createElement("option", { value: "n" }, "N\u00E3o"))),
-                    React.createElement("div",null,
-                        React.createElement("label",{htmlFor:"adm-checklist-permite-na"},"Permitir N/A?"),
-                        React.createElement("select",{id:"adm-checklist-permite-na",value:novaPerg.permiteNA?'s':'n',onChange:e=>setNovaPerg({...novaPerg,permiteNA:e.target.value==='s'})},
-                            React.createElement("option",{value:"n"},"Não"),React.createElement("option",{value:"s"},"Sim"))),
                     React.createElement("div", null,
                         React.createElement("label", { htmlFor: "adm-checklist-foto-obrigatoria-se-nc" }, "Foto obrigat\u00F3ria se NC?"),
                         React.createElement("select", { id: "adm-checklist-foto-obrigatoria-se-nc", name: "adm-checklist-foto-obrigatoria-se-nc", value: novaPerg.fotoNC ? 's' : 'n', onChange: e => setNovaPerg({ ...novaPerg, fotoNC: e.target.value === 's' }) },
