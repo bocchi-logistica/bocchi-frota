@@ -4,16 +4,16 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 const source=fs.readFileSync(new URL('../js/modulos/checklist.js',import.meta.url),'utf8');
 function setup(){
- const states=[],refs=[];let cursor=0,ri=0,envios=0;
+ const states=[],refs=[],effects=[];let cursor=0,ri=0,envios=0;
  const props={perguntas:[
  {id:'1',texto:'Faróis',grupo:'Elétrica',obrigatoria:true,permiteNA:false,observacaoObrigatoriaNC:true,fotoNC:true},
  {id:'2',texto:'Indicadores',grupo:'Elétrica',obrigatoria:true,permiteNA:true},
  {id:'3',texto:'Pneus',grupo:'Pneus',obrigatoria:true,permiteNA:false,observacaoObrigatoriaNC:true,fotoNC:true}],resps:{},
  setResp(id,campo,v){props.resps[id]={...props.resps[id],[campo]:v}},anexar(){},removerFoto(){},fileRefs:{current:{}},enviar(){envios++},enviando:false};
- const React={createElement:(type,props,...children)=>({type,props:props||{},children:children.flat(Infinity)})};
- const ctx=vm.createContext({React,useState(v){const i=cursor++;if(!(i in states))states[i]=v;return[states[i],v=>states[i]=typeof v==='function'?v(states[i]):v]},useRef(v){const i=ri++;return refs[i]||(refs[i]={current:v})},setTimeout:f=>f(),props});
+ const React={useEffect:f=>effects.push(f),createElement:(type,props,...children)=>({type,props:props||{},children:children.flat(Infinity)})};
+ const ctx=vm.createContext({React,document:{activeElement:null},useState(v){const i=cursor++;if(!(i in states))states[i]=v;return[states[i],v=>states[i]=typeof v==='function'?v(states[i]):v]},useRef(v){const i=ri++;return refs[i]||(refs[i]={current:v})},setTimeout:f=>f(),props});
  vm.runInContext(source.slice(0,source.indexOf('function TelaChecklist(')),ctx);
- return{props,states,ctx,render(){cursor=0;ri=0;return vm.runInContext('ChecklistPorGrupos(props)',ctx)},envios:()=>envios};
+ return{props,states,ctx,refs,flush(){effects.forEach(f=>f());},render(){cursor=0;ri=0;effects.length=0;return vm.runInContext('ChecklistPorGrupos(props)',ctx)},envios:()=>envios};
 }
 const nodes=n=>!n||typeof n!=='object'?[]:[n,...n.children.flatMap(nodes)];
 const text=n=>n==null?'':typeof n==='object'?n.children.map(text).join(' '):String(n);
@@ -35,4 +35,42 @@ test('exigências de observação/foto e opcionalidade seguem cadastro',()=>{
  ctx.p.observacaoObrigatoriaNC=true;
  assert.match(vm.runInContext('pendenciaItemChecklist(p,{resp:"NC",obs:"  "})',ctx),/Descreva/);
  assert.equal(vm.runInContext('pendenciaItemChecklist({...p,obrigatoria:true},{},true)',ctx),'');
+});
+
+test('NC sem concluir item: foto completa recolhe; texto em edição permanece aberto',()=>{
+ const t=setup();let tree=t.render();
+ click(tree,'! Não conforme');tree=t.render();t.flush();
+ assert(!text(tree).includes('Concluir item'));
+ let first=nodes(tree).find(n=>n.props.className==='checklist-item');
+ first.props.ref({contains:()=>true});
+ t.props.resps['1']={resp:'NC',obs:'Problema',foto:'foto-1'};
+ t.ctx.document.activeElement={tagName:'TEXTAREA'};tree=t.render();t.flush();tree=t.render();
+ first=nodes(tree).find(n=>n.props.className==='checklist-item');
+ assert(nodes(first).some(n=>n.type==='textarea'));
+ const evidence=nodes(first).find(n=>n.props.className==='checklist-evidencias');
+ evidence.props.onBlur({currentTarget:{contains:()=>true},relatedTarget:{}});
+ assert(nodes(t.render()).some(n=>n.type==='textarea'));
+ evidence.props.onBlur({currentTarget:{contains:()=>false},relatedTarget:null});
+ first=nodes(t.render()).find(n=>n.props.className==='checklist-item');
+ assert(!nodes(first).some(n=>n.type==='textarea'));
+ const resumo=nodes(first).find(n=>n.props.className==='checklist-item-resumo');resumo.props.onClick();assert(nodes(t.render()).some(n=>n.type==='textarea'));
+});
+test('foto obrigatória ausente mantém NC aberta; foto pronta fecha automaticamente',()=>{
+ const t=setup();let tree=t.render();click(tree,'! Não conforme');
+ t.props.resps['1']={resp:'NC',obs:'Problema'};tree=t.render();t.flush();
+ const evidence=nodes(tree).find(n=>n.props.className==='checklist-evidencias');
+ evidence.props.onBlur({currentTarget:{contains:()=>false},relatedTarget:null});
+ assert(nodes(t.render()).some(n=>n.type==='textarea'));
+ t.props.resps['1'].foto='foto-pronta';t.render();t.flush();
+ assert(!nodes(t.render()).some(n=>n.type==='textarea'));
+});
+test('foto opcional: descrição suficiente recolhe ao sair, sem impedir anexo',()=>{
+ const t=setup();t.props.perguntas[0].fotoNC=false;
+ let tree=t.render();click(tree,'! Não conforme');
+ t.props.resps['1']={resp:'NC',obs:'Problema'};tree=t.render();
+ const e=nodes(tree).find(n=>n.props.className==='checklist-evidencias');
+ e.props.onBlur({currentTarget:{contains:()=>true},relatedTarget:{}});
+ assert(nodes(t.render()).some(n=>n.type==='textarea'));
+ e.props.onBlur({currentTarget:{contains:()=>false},relatedTarget:null});
+ assert(!nodes(t.render()).some(n=>n.type==='textarea'));
 });
