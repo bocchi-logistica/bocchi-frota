@@ -74,3 +74,32 @@ test('foto opcional: descrição suficiente recolhe ao sair, sem impedir anexo',
  e.props.onBlur({currentTarget:{contains:()=>false},relatedTarget:null});
  assert(!nodes(t.render()).some(n=>n.type==='textarea'));
 });
+
+test('pendência aparece dentro da pergunta e usa foco sem rolagem adicional',()=>{
+ const t=setup(),rolagens=[];let foco;
+ t.ctx.document.querySelector=()=>({getBoundingClientRect:()=>({bottom:100})});
+ t.ctx.window={scrollBy:o=>rolagens.push(o)};
+ t.ctx.requestAnimationFrame=f=>f();
+ let tree=t.render(),item=nodes(tree).find(n=>n.props.className==='checklist-item');
+ item.props.ref({getBoundingClientRect:()=>({top:700}),querySelector:()=>({focus:o=>foco=o})});
+ click(tree,'Próximo grupo →');tree=t.render();
+ const primeiro=nodes(tree).find(n=>n.props.className==='checklist-item');
+ assert(nodes(primeiro).some(n=>n.props.role==='alert'));
+ assert(!tree.children.some(n=>n&&n.props?.role==='alert'));
+ assert.equal(rolagens[0].top,588);assert.equal(foco.preventScroll,true);
+});
+test('recolhimento espera clique seguinte e preserva a posição dessa pergunta',()=>{
+ const t=setup(),timers=[],frames=[],rolagens=[];
+ t.ctx.setTimeout=f=>timers.push(f);t.ctx.requestAnimationFrame=f=>frames.push(f);t.ctx.window={scrollBy:o=>rolagens.push(o)};
+ let tree=t.render();click(tree,'! Não conforme');
+ t.props.resps['1']={resp:'NC',obs:'Problema',foto:'foto'};
+ tree=t.render();
+ const evidencia=nodes(tree).find(n=>n.props.className==='checklist-evidencias');
+ let topo=500;const seguinte={isConnected:true,getBoundingClientRect:()=>({top:topo})};
+ evidencia.props.onBlur({currentTarget:{contains:()=>false},relatedTarget:{closest:()=>seguinte}});
+ const botoes=nodes(tree).filter(n=>n.type==='button'&&text(n)==='! Não conforme');
+ botoes[1].props.onClick();assert.equal(t.props.resps['2'].resp,'NC');
+ assert.equal(t.states[2]['1'],true);
+ timers.shift()();assert.equal(t.states[2]['1'],false);assert.equal(t.states[2]['2'],true);
+ topo=380;frames.shift()();assert.equal(rolagens[0].top,-120);
+});
