@@ -1,4 +1,15 @@
 
+function preservarPosicaoItemChecklist(elemento,alterar) {
+    const topo=elemento?.getBoundingClientRect?.().top;
+    alterar();
+    if(!Number.isFinite(topo))return;
+    requestAnimationFrame(()=>{
+        if(!elemento.isConnected)return;
+        const diferenca=elemento.getBoundingClientRect().top-topo;
+        if(Math.abs(diferenca)>1)window.scrollBy({top:diferenca,left:0,behavior:'instant'});
+    });
+}
+
 function pendenciaItemChecklist(p,r={},modoOcorrencia=false) {
     if (!r.resp) return !modoOcorrencia && p.obrigatoria ? 'Responda este item.' : '';
     if (!['C','NC'].includes(r.resp)) return 'Escolha Conforme ou Não conforme para este item.';
@@ -9,7 +20,7 @@ function pendenciaItemChecklist(p,r={},modoOcorrencia=false) {
 function ChecklistPorGrupos({perguntas,resps,setResp,anexar,removerFoto,fileRefs,enviar,enviando,modoOcorrencia=false}) {
     const h=React.createElement;
     const grupos=[...new Set(perguntas.map(p=>p.grupo))];
-    const [indice,setIndice]=useState(0),[liberado,setLiberado]=useState(0),[edicoes,setEdicoes]=useState({}),[erro,setErro]=useState('');
+    const [indice,setIndice]=useState(0),[liberado,setLiberado]=useState(0),[edicoes,setEdicoes]=useState({}),[erro,setErro]=useState(''),[erroPid,setErroPid]=useState('');
     const perguntasRefs=useRef({});
     const fotosAnteriores=useRef({});
     React.useEffect(()=>{
@@ -22,7 +33,10 @@ function ChecklistPorGrupos({perguntas,resps,setResp,anexar,removerFoto,fileRefs
             }
             fotosAnteriores.current[p.id]=r.foto;
         }
-        if(fechar.length){setEdicoes(v=>({...v,...Object.fromEntries(fechar.map(id=>[id,false]))}));setErro('');}
+        if(fechar.length){
+            const ancora=document.activeElement?.closest?.('.checklist-item')||perguntasRefs.current[fechar[0]];
+            preservarPosicaoItemChecklist(ancora,()=>{setEdicoes(v=>({...v,...Object.fromEntries(fechar.map(id=>[id,false]))}));});
+        }
     },[perguntas,resps,modoOcorrencia]);
     const atual=Math.min(indice,Math.max(0,grupos.length-1)),ultimo=atual===grupos.length-1;
     const completo=p=>!!resps[p.id]?.resp&&!pendenciaItemChecklist(p,resps[p.id],modoOcorrencia);
@@ -30,16 +44,23 @@ function ChecklistPorGrupos({perguntas,resps,setResp,anexar,removerFoto,fileRefs
     const irPendencia=p=>{
         const i=grupos.indexOf(p.grupo);
         setIndice(i);setLiberado(v=>Math.max(v,i));setEdicoes(v=>({...v,[p.id]:true}));
-        setTimeout(()=>{perguntasRefs.current[p.id]?.scrollIntoView({block:'nearest',behavior:'auto'});perguntasRefs.current[p.id]?.querySelector('button')?.focus();},0);
+        setTimeout(()=>{
+            const item=perguntasRefs.current[p.id];if(!item)return;
+            const cabecalho=document.querySelector('.motorista-cabecalho,.mtop');
+            const limite=Math.max(0,cabecalho?.getBoundingClientRect().bottom||0)+12;
+            window.scrollBy({top:item.getBoundingClientRect().top-limite,left:0,behavior:'instant'});
+            const campo=resps[p.id]?.resp==='NC'&&p.observacaoObrigatoriaNC&&!String(resps[p.id]?.obs||'').trim()?item.querySelector('textarea'):item.querySelector('button');
+            campo?.focus({preventScroll:true});
+        },0);
     };
     const avancar=()=>{
         setErro('');
         const faltando=perguntas.filter(p=>ultimo||p.grupo===grupos[atual]).find(pendente);
-        if(faltando){setErro(pendenciaItemChecklist(faltando,resps[faltando.id],modoOcorrencia));irPendencia(faltando);return;}
+        if(faltando){setErroPid(faltando.id);setErro(pendenciaItemChecklist(faltando,resps[faltando.id],modoOcorrencia));irPendencia(faltando);return;}
         if(ultimo){enviar();return;}
         setLiberado(v=>Math.max(v,atual+1));setIndice(atual+1);
     };
-    const marcar=(p,resp)=>{setResp(p.id,'resp',resp);setErro('');setEdicoes(v=>({...v,[p.id]:resp==='NC'}));};
+    const marcar=(p,resp)=>preservarPosicaoItemChecklist(perguntasRefs.current[p.id],()=>{setResp(p.id,'resp',resp);setErro('');setEdicoes(v=>({...v,[p.id]:resp==='NC'}));});
     const concluidos=perguntas.filter(completo).length;
     if(!grupos.length)return null;
     return h('section',{className:'checklist-grupos'},
@@ -62,12 +83,16 @@ function ChecklistPorGrupos({perguntas,resps,setResp,anexar,removerFoto,fileRefs
                             h('span',{className:'grow'},p.texto,p.obrigatoria&&!modoOcorrencia&&h('span',{className:'checklist-obrigatorio'},' *')),
                             h('span',{className:'checklist-resposta '+(r.resp||'')},rotulo,!aberta&&r.resp&&h('small',null,'Alterar'))),
                         aberta&&h(React.Fragment,null,
+                            erro&&erroPid===p.id&&pendenciaItemChecklist(p,r,modoOcorrencia)&&h('div',{className:'erro-box checklist-erro-item',role:'alert'},erro),
                             h('div',{className:'checklist-escolhas',role:'group','aria-label':p.texto},
                                 [['C','✓ Conforme'],['NC','! Não conforme']].map(([v,t])=>
                                     h('button',{type:'button',key:v,className:'checklist-escolha '+v+(r.resp===v?' on':''),disabled:enviando,'aria-pressed':r.resp===v,onClick:()=>marcar(p,v)},t))),
                             r.resp==='NC'&&h('div',{className:'checklist-evidencias',onBlur:e=>{
                                 if(e.currentTarget.contains(e.relatedTarget))return;
-                                if(!pendenciaItemChecklist(p,r,modoOcorrencia)){setEdicoes(v=>({...v,[p.id]:false}));setErro('');}
+                                if(pendenciaItemChecklist(p,r,modoOcorrencia))return;
+                                // Aguarda o clique da próxima pergunta antes de recolher a anterior.
+                                const ancora=e.relatedTarget?.closest?.('.checklist-item')||perguntasRefs.current[p.id];
+                                setTimeout(()=>preservarPosicaoItemChecklist(ancora,()=>{setEdicoes(v=>({...v,[p.id]:false}));}),0);
                             }},
                                 h('label',null,'Descrição do problema'+(p.observacaoObrigatoriaNC?' *':''),h('textarea',{rows:2,value:r.obs||'',disabled:enviando,onChange:e=>setResp(p.id,'obs',e.target.value),placeholder:'Descreva o problema...'})),
                                 h('div',{className:'row',style:{flexWrap:'wrap'}},
@@ -77,7 +102,6 @@ function ChecklistPorGrupos({perguntas,resps,setResp,anexar,removerFoto,fileRefs
                                     h('span',{className:'muted'},p.fotoNC?'Foto obrigatória':'Foto opcional')))));
                 }));
         }),
-        erro&&h('div',{className:'erro-box',role:'alert'},erro),
         h('div',{className:'row checklist-grupo-acoes'},
             atual>0&&h('button',{type:'button',className:'btn btn-s',disabled:enviando,onClick:()=>{setIndice(atual-1);setErro('');}},'← Grupo anterior'),
             h('button',{type:'button',className:'btn btn-p grow',disabled:enviando,onClick:avancar},enviando?'Enviando...':ultimo?'Enviar checklist':'Próximo grupo →')));
