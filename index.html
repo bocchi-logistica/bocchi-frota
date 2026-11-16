@@ -637,6 +637,30 @@ th.td-num{text-align:right}
 .checklist-escolha:disabled{opacity:.65;cursor:default}
 @media(prefers-reduced-motion:reduce){.checklist-escolha{transition:none}}
 
+
+/* Ajustes de leitura: grupo neutro, respostas com cores semânticas. */
+.checklist-grupo-cabecalho{background:#f1f2ee;color:#39443c}
+.checklist-grupo.ativo>.checklist-grupo-cabecalho{background:#e9ece7;color:#243e2e}
+.checklist-escolha.C{background:#fff;color:#23613b}
+.checklist-escolha.NC{background:#fff;color:#a13c28}
+.checklist-resposta.C,.checklist-resposta.NC{background:transparent;padding:0;border-radius:0}
+.checklist-escolha.C.on{background:#23653e;color:#fff}
+.checklist-escolha.NC.on{background:#b43b2c;color:#fff}
+.checklist-orientacoes{padding:0 12px}
+.checklist-orientacoes>summary{display:flex;align-items:center;justify-content:space-between;gap:10px;list-style:none;cursor:pointer;min-height:42px;padding:10px 0;font-weight:600}
+.checklist-orientacoes>summary::-webkit-details-marker{display:none}
+.checklist-orientacoes>summary:after{content:"⌄";font-size:19px}
+.checklist-orientacoes[open]>summary:after{content:"⌃"}
+.checklist-orientacoes>div{padding-bottom:12px;line-height:1.5}
+.checklist-identificacao{padding:12px 14px}
+.checklist-identificacao label{font-size:11px;margin-bottom:4px}
+.checklist-identificacao .form-grid{margin-top:8px!important;gap:8px}
+@media(max-width:800px){
+.checklist-identificacao input,.checklist-identificacao select{padding-top:9px;padding-bottom:9px;min-height:44px;font-size:16px}
+.checklist-progresso{gap:7px}
+.checklist-progresso .btn{min-height:36px;font-size:11px}
+}
+
 </style>
 </head>
 <body>
