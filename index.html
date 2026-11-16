@@ -586,6 +586,39 @@ th.td-num{text-align:right}
 .motorista-conta-opcoes .motorista-sair{margin-top:0}
 }
 
+
+/* Checklist por grupos: perguntas compactas e evidências por cadastro. */
+.checklist-grupos{display:grid;gap:12px;min-width:0}
+.checklist-progresso{display:grid;gap:10px;padding:4px 2px;font-size:12px}
+.checklist-progresso>.row{flex-wrap:wrap;gap:8px}
+.checklist-progresso .btn{justify-self:start;padding-left:0}
+.checklist-progresso-trilha{height:6px;background:var(--folha-clara);border-radius:8px;overflow:hidden}
+.checklist-progresso-trilha>div{height:100%;background:var(--folha)}
+.checklist-grupo{background:var(--branco);border:1px solid var(--linha);border-radius:14px;overflow:hidden}
+.checklist-grupo-cabecalho{width:100%;display:flex;gap:10px;align-items:center;text-align:left;min-height:50px;padding:13px 14px;color:var(--mata);font-size:13px;background:var(--folha-clara)}
+.checklist-grupo-cabecalho:disabled{opacity:.6}
+.checklist-grupo-cabecalho .grow{min-width:0}
+.checklist-item{padding:0 13px;border-top:1px solid var(--linha);scroll-margin:170px 0 100px}
+.checklist-item-resumo{display:flex;width:100%;gap:12px;align-items:flex-start;text-align:left;min-height:50px;padding:13px 0;color:var(--tinta);font-size:13px;line-height:1.5}
+.checklist-item-resumo .grow{min-width:0}
+.checklist-obrigatorio{color:var(--erro)}
+.checklist-resposta{font-size:11px;line-height:1.5;text-align:right;max-width:98px;flex-shrink:0;color:var(--cinza)}
+.checklist-resposta.C{color:var(--mata)}
+.checklist-resposta.NC{color:var(--erro)}
+.checklist-resposta small{display:block;font-size:11px;text-decoration:underline}
+.checklist-escolhas{display:flex;border:1px solid var(--linha);border-radius:9px;overflow:hidden;margin-bottom:12px}
+.checklist-escolha{flex:1;min-width:0;min-height:44px;text-align:center;padding:8px 5px;font-size:12px;font-weight:600;color:var(--cinza);border-right:1px solid var(--linha)}
+.checklist-escolha:last-child{border:0}
+.checklist-escolha.C.on{background:var(--folha-clara);color:var(--mata)}
+.checklist-escolha.NC.on{background:var(--erro-claro);color:var(--erro)}
+.checklist-escolha.NA.on{background:var(--papel);color:var(--tinta)}
+.checklist-evidencias{display:grid;gap:10px;padding:0 0 14px}
+.checklist-evidencias label{font-size:12px;text-transform:none;letter-spacing:0}
+.checklist-evidencias label textarea{margin-top:6px}
+.checklist-evidencias .btn{justify-self:start}
+.checklist-grupo-acoes{flex-wrap:wrap;gap:8px}
+@media(max-width:800px){.checklist-evidencias textarea{font-size:16px}.checklist-item{padding:0 11px}.checklist-escolha{font-size:11px}}
+
 </style>
 </head>
 <body>
