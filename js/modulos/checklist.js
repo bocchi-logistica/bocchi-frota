@@ -11,6 +11,19 @@ function ChecklistPorGrupos({perguntas,resps,setResp,anexar,removerFoto,fileRefs
     const grupos=[...new Set(perguntas.map(p=>p.grupo))];
     const [indice,setIndice]=useState(0),[liberado,setLiberado]=useState(0),[edicoes,setEdicoes]=useState({}),[erro,setErro]=useState('');
     const perguntasRefs=useRef({});
+    const fotosAnteriores=useRef({});
+    React.useEffect(()=>{
+        const fechar=[];
+        for(const p of perguntas){
+            const r=resps[p.id]||{};
+            if(r.resp==='NC'&&r.foto&&r.foto!==fotosAnteriores.current[p.id]&&!pendenciaItemChecklist(p,r,modoOcorrencia)){
+                const item=perguntasRefs.current[p.id],ativo=document.activeElement;
+                if(!(ativo?.tagName==='TEXTAREA'&&item?.contains(ativo)))fechar.push(p.id);
+            }
+            fotosAnteriores.current[p.id]=r.foto;
+        }
+        if(fechar.length){setEdicoes(v=>({...v,...Object.fromEntries(fechar.map(id=>[id,false]))}));setErro('');}
+    },[perguntas,resps,modoOcorrencia]);
     const atual=Math.min(indice,Math.max(0,grupos.length-1)),ultimo=atual===grupos.length-1;
     const completo=p=>!!resps[p.id]?.resp&&!pendenciaItemChecklist(p,resps[p.id],modoOcorrencia);
     const pendente=p=>!!pendenciaItemChecklist(p,resps[p.id],modoOcorrencia);
@@ -52,14 +65,16 @@ function ChecklistPorGrupos({perguntas,resps,setResp,anexar,removerFoto,fileRefs
                             h('div',{className:'checklist-escolhas',role:'group','aria-label':p.texto},
                                 [['C','✓ Conforme'],['NC','! Não conforme']].map(([v,t])=>
                                     h('button',{type:'button',key:v,className:'checklist-escolha '+v+(r.resp===v?' on':''),disabled:enviando,'aria-pressed':r.resp===v,onClick:()=>marcar(p,v)},t))),
-                            r.resp==='NC'&&h('div',{className:'checklist-evidencias'},
+                            r.resp==='NC'&&h('div',{className:'checklist-evidencias',onBlur:e=>{
+                                if(e.currentTarget.contains(e.relatedTarget))return;
+                                if(!pendenciaItemChecklist(p,r,modoOcorrencia)){setEdicoes(v=>({...v,[p.id]:false}));setErro('');}
+                            }},
                                 h('label',null,'Descrição do problema'+(p.observacaoObrigatoriaNC?' *':''),h('textarea',{rows:2,value:r.obs||'',disabled:enviando,onChange:e=>setResp(p.id,'obs',e.target.value),placeholder:'Descreva o problema...'})),
                                 h('div',{className:'row',style:{flexWrap:'wrap'}},
                                     r.foto&&h(React.Fragment,null,h('img',{className:'foto-thumb',src:r.foto,alt:'Foto da não conformidade'}),h('button',{type:'button',className:'btn btn-g btn-sm',disabled:enviando,onClick:()=>removerFoto(p.id)},'Remover foto')),
                                     h('button',{type:'button',className:'btn btn-s btn-sm',disabled:enviando,onClick:()=>fileRefs.current[p.id]?.click()},'Anexar foto'),
                                     h('input',{type:'file',accept:'image/*',capture:'environment',style:{display:'none'},ref:el=>fileRefs.current[p.id]=el,onChange:e=>anexar(p.id,e)}),
-                                    h('span',{className:'muted'},p.fotoNC?'Foto obrigatória':'Foto opcional')),
-                                h('button',{type:'button',className:'btn btn-s btn-sm',disabled:enviando,onClick:()=>{const msg=pendenciaItemChecklist(p,r,modoOcorrencia);if(msg){setErro(msg);return;}setEdicoes(v=>({...v,[p.id]:false}));setErro('');}},'Concluir item'))));
+                                    h('span',{className:'muted'},p.fotoNC?'Foto obrigatória':'Foto opcional')))));
                 }));
         }),
         erro&&h('div',{className:'erro-box',role:'alert'},erro),
@@ -654,7 +669,7 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
                     React.createElement("select", { id: "tela-checklist-grupo-com-problema", name: "tela-checklist-grupo-com-problema", value: grupoOcorrencia, onChange: e => { setGrupoOcorrencia(e.target.value); setResps({}); } },
                         React.createElement("option", { value: "" }, "Selecionar..."),
                         grupos.map(g => React.createElement("option", { key: g, value: g }, g))))),
-            React.createElement("div", { className: "card" },
+            React.createElement("div", { className: "card checklist-identificacao" },
                 React.createElement("label", null, "Ve\u00EDculo"),
                 inicioAgendamento?.placa ? React.createElement(React.Fragment, null,
                     React.createElement("input", { value: veiculo, readOnly: true }),
@@ -679,10 +694,9 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
                                 React.createElement("option", null, "Meio tanque"),
                                 React.createElement("option", null, "3/4"),
                                 React.createElement("option", null, "Tanque cheio"))))),
-            React.createElement("div", { className: "aviso-box" },
-                "Marque cada item. Em ",
-                React.createElement("b", null, "n\u00E3o conforme (NC)"),
-                ", descreva o problema e anexe foto quando o item pedir. Seu preenchimento \u00E9 salvo automaticamente neste aparelho."),
+            React.createElement("details", {className:"aviso-box checklist-orientacoes"},
+                React.createElement("summary",null,"Como preencher o checklist"),
+                React.createElement("div",null,"Marque cada item. Em não conforme (NC), descreva o problema e anexe foto quando o item pedir. Seu preenchimento é salvo automaticamente neste aparelho.")),
             React.createElement(ChecklistPorGrupos,{key:veiculo+'|'+perguntasExibidas.map(p=>p.id).join(',')+'|'+modoOcorrenciaAgendamento,perguntas:perguntasExibidas,resps,setResp,anexar,removerFoto,fileRefs,enviar,enviando,modoOcorrencia:modoOcorrenciaAgendamento}),
             enviando && React.createElement("div", { className: "aviso-box" },
                 React.createElement("b", null, "Enviando checklist..."),
