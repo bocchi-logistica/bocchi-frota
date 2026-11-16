@@ -1,3 +1,74 @@
+
+function pendenciaItemChecklist(p,r={},modoOcorrencia=false) {
+    if (!r.resp) return !modoOcorrencia && p.obrigatoria ? 'Responda este item.' : '';
+    if (r.resp==='NA' && !p.permiteNA) return 'N/A não permitido para este item. Escolha Conforme ou Não conforme.';
+    if (!['C','NC','NA'].includes(r.resp)) return 'Resposta inválida.';
+    if (r.resp==='NC' && p.observacaoObrigatoriaNC && !String(r.obs||'').trim()) return 'Descreva o problema.';
+    if (r.resp==='NC' && p.fotoNC && !r.foto) return 'Anexe a foto obrigatória.';
+    return '';
+}
+function ChecklistPorGrupos({perguntas,resps,setResp,anexar,removerFoto,fileRefs,enviar,enviando,modoOcorrencia=false}) {
+    const h=React.createElement;
+    const grupos=[...new Set(perguntas.map(p=>p.grupo))];
+    const [indice,setIndice]=useState(0),[liberado,setLiberado]=useState(0),[edicoes,setEdicoes]=useState({}),[erro,setErro]=useState('');
+    const perguntasRefs=useRef({});
+    const atual=Math.min(indice,Math.max(0,grupos.length-1)),ultimo=atual===grupos.length-1;
+    const completo=p=>!!resps[p.id]?.resp&&!pendenciaItemChecklist(p,resps[p.id],modoOcorrencia);
+    const pendente=p=>!!pendenciaItemChecklist(p,resps[p.id],modoOcorrencia);
+    const irPendencia=p=>{
+        const i=grupos.indexOf(p.grupo);
+        setIndice(i);setLiberado(v=>Math.max(v,i));setEdicoes(v=>({...v,[p.id]:true}));
+        setTimeout(()=>{perguntasRefs.current[p.id]?.scrollIntoView({block:'nearest',behavior:'auto'});perguntasRefs.current[p.id]?.querySelector('button')?.focus();},0);
+    };
+    const avancar=()=>{
+        setErro('');
+        const faltando=perguntas.filter(p=>ultimo||p.grupo===grupos[atual]).find(pendente);
+        if(faltando){setErro(pendenciaItemChecklist(faltando,resps[faltando.id],modoOcorrencia));irPendencia(faltando);return;}
+        if(ultimo){enviar();return;}
+        setLiberado(v=>Math.max(v,atual+1));setIndice(atual+1);
+    };
+    const marcar=(p,resp)=>{setResp(p.id,'resp',resp);setErro('');setEdicoes(v=>({...v,[p.id]:resp==='NC'}));};
+    const concluidos=perguntas.filter(completo).length;
+    if(!grupos.length)return null;
+    return h('section',{className:'checklist-grupos'},
+        h('div',{className:'checklist-progresso'},
+            h('div',{className:'row'},h('b',{className:'grow','aria-live':'polite'},concluidos+' de '+perguntas.length+' itens concluídos'),
+                h('span',null,'Grupo '+(atual+1)+' de '+grupos.length)),
+            h('div',{className:'checklist-progresso-trilha',role:'progressbar','aria-label':'Preenchimento do checklist','aria-valuemin':0,'aria-valuemax':perguntas.length,'aria-valuenow':concluidos},
+                h('div',{style:{width:concluidos/perguntas.length*100+'%'}})),
+            h('button',{type:'button',className:'btn btn-g btn-sm',disabled:enviando,onClick:()=>{const p=perguntas.find(pendente);if(p)irPendencia(p);}},'Ir para a próxima pendência')),
+        grupos.map((g,i)=>{
+            const lista=perguntas.filter(p=>p.grupo===g),respondidas=lista.filter(completo).length;
+            return h('section',{className:'checklist-grupo'+(i===atual?' ativo':''),key:g},
+                h('button',{type:'button',className:'checklist-grupo-cabecalho',disabled:enviando||i>liberado,'aria-expanded':i===atual,onClick:()=>{setIndice(i);setErro('');}},
+                    h('b',{className:'grow'},g),h('span',null,respondidas+' / '+lista.length),h('span',{'aria-hidden':true},i>liberado?'🔒':i===atual?'⌃':'⌄')),
+                i===atual&&lista.map(p=>{
+                    const r=resps[p.id]||{},aberta=edicoes[p.id]??(!r.resp||!!pendenciaItemChecklist(p,r,modoOcorrencia));
+                    const rotulo=r.resp==='C'?'✓ Conforme':r.resp==='NC'?'! Não conforme':r.resp==='NA'?'— N/A':p.obrigatoria?'Pendente':'Opcional';
+                    return h('div',{className:'checklist-item',key:p.id,ref:el=>perguntasRefs.current[p.id]=el},
+                        h('button',{type:'button',className:'checklist-item-resumo',disabled:enviando,'aria-expanded':aberta,onClick:()=>setEdicoes(v=>({...v,[p.id]:!aberta}))},
+                            h('span',{className:'grow'},p.texto,p.obrigatoria&&!modoOcorrencia&&h('span',{className:'checklist-obrigatorio'},' *')),
+                            h('span',{className:'checklist-resposta '+(r.resp||'')},rotulo,!aberta&&r.resp&&h('small',null,'Alterar'))),
+                        aberta&&h(React.Fragment,null,
+                            h('div',{className:'checklist-escolhas',role:'group','aria-label':p.texto},
+                                [['C','✓ Conforme'],['NC','! Não conforme'],...(p.permiteNA?[['NA','— N/A']]:[])].map(([v,t])=>
+                                    h('button',{type:'button',key:v,className:'checklist-escolha '+v+(r.resp===v?' on':''),disabled:enviando,'aria-pressed':r.resp===v,onClick:()=>marcar(p,v)},t))),
+                            r.resp==='NC'&&h('div',{className:'checklist-evidencias'},
+                                h('label',null,'Descrição do problema'+(p.observacaoObrigatoriaNC?' *':''),h('textarea',{rows:2,value:r.obs||'',disabled:enviando,onChange:e=>setResp(p.id,'obs',e.target.value),placeholder:'Descreva o problema...'})),
+                                h('div',{className:'row',style:{flexWrap:'wrap'}},
+                                    r.foto&&h(React.Fragment,null,h('img',{className:'foto-thumb',src:r.foto,alt:'Foto da não conformidade'}),h('button',{type:'button',className:'btn btn-g btn-sm',disabled:enviando,onClick:()=>removerFoto(p.id)},'Remover foto')),
+                                    h('button',{type:'button',className:'btn btn-s btn-sm',disabled:enviando,onClick:()=>fileRefs.current[p.id]?.click()},'Anexar foto'),
+                                    h('input',{type:'file',accept:'image/*',capture:'environment',style:{display:'none'},ref:el=>fileRefs.current[p.id]=el,onChange:e=>anexar(p.id,e)}),
+                                    h('span',{className:'muted'},p.fotoNC?'Foto obrigatória':'Foto opcional')),
+                                h('button',{type:'button',className:'btn btn-s btn-sm',disabled:enviando,onClick:()=>{const msg=pendenciaItemChecklist(p,r,modoOcorrencia);if(msg){setErro(msg);return;}setEdicoes(v=>({...v,[p.id]:false}));setErro('');}},'Concluir item'))));
+                }));
+        }),
+        erro&&h('div',{className:'erro-box',role:'alert'},erro),
+        h('div',{className:'row checklist-grupo-acoes'},
+            atual>0&&h('button',{type:'button',className:'btn btn-s',disabled:enviando,onClick:()=>{setIndice(atual-1);setErro('');}},'← Grupo anterior'),
+            h('button',{type:'button',className:'btn btn-p grow',disabled:enviando,onClick:avancar},enviando?'Enviando...':ultimo?'Enviar checklist':'Próximo grupo →')));
+}
+
 /* ================= MOTORISTA: CHECK LIST ================= */
 function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioConsumido, onConcluidoAgendamento }) {
     /* O envio passa pela fila local (IndexedDB) e pelo serviço de integração,
@@ -51,7 +122,8 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
         frequencia: p.frequencia || 'Diária',
         obrigatoria: p.obrigatoria === true,
         fotoNC: p.fotoObrigatoriaNC === true,
-        observacaoObrigatoriaNC: p.observacaoObrigatoriaNC === true,
+        permiteNA: p.permiteNA === true,
+        observacaoObrigatoriaNC: p.observacaoObrigatoriaNC !== false,
         ativa: p.ativa !== false,
         ordem: Number(p.ordem || 999)
     })).sort((a, b) => a.grupo.localeCompare(b.grupo, 'pt-BR') || a.ordem - b.ordem);
@@ -370,6 +442,8 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
         if (ultimoKm && km < ultimoKm && !window.confirm('Atenção: a quilometragem informada (' + km + ') é MENOR que a última registrada para esta placa (' + ultimoKm + '). Deseja continuar mesmo assim?'))
             return;
         for (const p of perguntasExibidas) {
+            const pendencia = pendenciaItemChecklist(p,resps[p.id],modoOcorrenciaAgendamento);
+            if(pendencia){toast(pendencia+' '+p.texto.slice(0,45));return;}
             const r = resps[p.id];
             // No checklist periódico completo, mantém a obrigatoriedade normal.
             // No modo NC do agendamento, o motorista responde somente o(s) item(ns) com problema.
@@ -377,7 +451,7 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
                 toast('Responda: "' + p.texto.slice(0, 40) + '..."');
                 return;
             }
-            if (r && r.resp === 'NC' && !r.obs) {
+            if (r && r.resp === 'NC' && p.observacaoObrigatoriaNC && !String(r.obs || '').trim()) {
                 toast('Descreva o problema do item não conforme: ' + p.texto.slice(0, 35) + '...');
                 return;
             }
@@ -397,6 +471,7 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
                 return;
             }
         }
+        if(!perguntasExibidas.some(p=>resps[p.id]?.resp)){toast('Responda ao menos um item antes de enviar.');return;}
         if (!window.confirm('Confirma o envio do ' + (modoChecklistAdicional ? 'checklist adicional' : 'checklist') + ' da placa ' + veiculo + '?'))
             return;
         setEnviando(true);
@@ -412,8 +487,9 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
                 combustivel: frotaSel === 'leve' ? (extras.combustivel || '') : '',
                 tipoChecklist: modoOcorrenciaAgendamento ? 'LEVE_NC_AGENDAMENTO' : (frotaSel === 'leve' ? 'LEVE' : 'PESADA'),
                 versaoFormulario: CONFIG.VERSAO,
+                naPorCadastro: true,
                 localizacao: loc,
-                respostas: (modoOcorrenciaAgendamento ? perguntasExibidas.filter(p => resps[p.id]?.resp) : perguntasExibidas).map(p => {
+                respostas: perguntasExibidas.filter(p => resps[p.id]?.resp).map(p => {
                     const r = resps[p.id] || {};
                     return { idPergunta: p.id, grupo: p.grupo, pergunta: p.texto,
                         resposta: r.resp || 'NA', observacao: r.obs || '', possuiFoto: !!r.foto,
@@ -609,35 +685,12 @@ function TelaChecklist({ st, setSt, user, toast, inicioAgendamento, onInicioCons
                 "Marque cada item. Em ",
                 React.createElement("b", null, "n\u00E3o conforme (NC)"),
                 ", descreva o problema e anexe foto quando o item pedir. Seu preenchimento \u00E9 salvo automaticamente neste aparelho."),
-            (modoOcorrenciaAgendamento ? (grupoOcorrencia ? [grupoOcorrencia] : []) : grupos).map(g => React.createElement(React.Fragment, { key: g },
-                React.createElement("h3", { style: { margin: '6px 2px 0' } }, g),
-                perguntasExibidas.filter(p => p.grupo === g).map(p => {
-                    const r = resps[p.id] || {};
-                    return (React.createElement("div", { className: "card perg", key: p.id },
-                        React.createElement("div", { className: "txt" },
-                            p.texto,
-                            " ",
-                            !modoOcorrenciaAgendamento && p.obrigatoria && React.createElement("span", { style: { color: 'var(--erro)' } }, "*")),
-                        React.createElement("div", { className: "resp-btns" },
-                            React.createElement("button", { className: 'resp-btn c' + (r.resp === 'C' ? ' on' : ''), onClick: () => setResp(p.id, 'resp', 'C') }, "Conforme"),
-                            React.createElement("button", { className: 'resp-btn nc' + (r.resp === 'NC' ? ' on' : ''), onClick: () => setResp(p.id, 'resp', 'NC') }, "N\u00E3o conforme"),
-                            React.createElement("button", { className: 'resp-btn na' + (r.resp === 'NA' ? ' on' : ''), onClick: () => setResp(p.id, 'resp', 'NA') }, "N/A")),
-                        r.resp === 'NC' && React.createElement("div", { style: { marginTop: 10 } },
-                            React.createElement("textarea", { rows: "2", placeholder: "Descreva o problema...", value: r.obs || '', onChange: e => setResp(p.id, 'obs', e.target.value) }),
-                            React.createElement("div", { className: "row", style: { marginTop: 8 } },
-                                r.foto && React.createElement(React.Fragment, null,
-                                    React.createElement("img", { className: "foto-thumb", src: r.foto, alt: "Foto da n\u00E3o conformidade" }),
-                                    React.createElement("button", { className: "btn btn-g btn-sm", onClick: () => removerFoto(p.id), "aria-label": "Remover foto" }, "\u2715 Remover")),
-                                React.createElement("button", { className: "foto-add", onClick: () => fileRefs.current[p.id] && fileRefs.current[p.id].click(), "aria-label": "Anexar foto" }, "\uD83D\uDCF7"),
-                                React.createElement("input", { type: "file", accept: "image/*", capture: "environment", style: { display: 'none' }, ref: el => fileRefs.current[p.id] = el, onChange: e => anexar(p.id, e) }),
-                                React.createElement("span", { className: "muted" }, p.fotoNC ? 'Foto obrigatória' : 'Foto opcional')))));
-                }))),
+            React.createElement(ChecklistPorGrupos,{key:veiculo+'|'+perguntasExibidas.map(p=>p.id).join(',')+'|'+modoOcorrenciaAgendamento,perguntas:perguntasExibidas,resps,setResp,anexar,removerFoto,fileRefs,enviar,enviando,modoOcorrencia:modoOcorrenciaAgendamento}),
             enviando && React.createElement("div", { className: "aviso-box" },
                 React.createElement("b", null, "Enviando checklist..."),
                 " N\u00E3o feche esta p\u00E1gina."),
             React.createElement("div", { className: "row" },
-                React.createElement("button", { className: "btn btn-g grow", disabled: enviando, onClick: cancelar }, "Cancelar"),
-                React.createElement("button", { className: "btn btn-p grow", disabled: enviando, style: enviando ? { opacity: .6 } : {}, onClick: enviar }, enviando ? 'Enviando...' : 'Enviar check list'))),
+                React.createElement("button", { className: "btn btn-g grow", disabled: enviando, onClick: cancelar }, "Cancelar"))),
         !preenchendo && meus.length > 0 && React.createElement(React.Fragment, null,
             React.createElement("div", { className: "row", style: { marginTop: 4, flexWrap: 'wrap' } },
                 React.createElement("h3", { className: "grow", style: { margin: 0 } }, "Hist\u00F3rico"),
@@ -766,7 +819,7 @@ function AdmChecklist({ st, setSt, toast, user, foco }) {
     const [carregandoBloqueados, setCarregandoBloqueados] = useState(false);
     const [liberandoVeiculo, setLiberandoVeiculo] = useState(null);
     const [observacaoLiberacao, setObservacaoLiberacao] = useState('');
-    const perguntaVazia = { texto: '', grupo: 'Anomalias estéticas', frota: 'pesada', frequencia: 'Diária', ordem: 10, obrigatoria: true, fotoNC: false, ativa: true };
+    const perguntaVazia = { texto: '', grupo: 'Anomalias estéticas', frota: 'pesada', frequencia: 'Diária', ordem: 10, obrigatoria: true, fotoNC: false, permiteNA: false, ativa: true };
     const [novaPerg, setNovaPerg] = useState(perguntaVazia);
     const [editandoPergunta, setEditandoPergunta] = useState(null);
     const [fFrota, setFFrota] = useState('pesada');
@@ -795,6 +848,7 @@ function AdmChecklist({ st, setSt, toast, user, foco }) {
                 frequencia: p.frequencia || 'Diária',
                 obrigatoria: p.obrigatoria === true,
                 fotoNC: p.fotoObrigatoriaNC === true,
+                permiteNA: p.permiteNA === true,
                 observacaoObrigatoriaNC: p.observacaoObrigatoriaNC === true,
                 ativa: p.ativa !== false,
                 ordem: Number(p.ordem || 999)
@@ -881,6 +935,7 @@ function AdmChecklist({ st, setSt, toast, user, foco }) {
                 ordem,
                 obrigatoria: novaPerg.obrigatoria,
                 fotoObrigatoriaNC: novaPerg.fotoNC,
+                permiteNA: novaPerg.permiteNA === true,
                 observacaoObrigatoriaNC: true,
                 ativa: novaPerg.ativa !== false
             };
@@ -897,9 +952,9 @@ function AdmChecklist({ st, setSt, toast, user, foco }) {
             toast('Erro ao salvar pergunta: ' + e.message);
         }
     };
-    const iniciarEdicao = p => { setEditandoPergunta(p); setNovaPerg({ texto: p.texto, grupo: p.grupo, frota: p.frota, frequencia: p.frequencia, ordem: p.ordem, obrigatoria: p.obrigatoria, fotoNC: p.fotoNC, ativa: p.ativa }); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+    const iniciarEdicao = p => { setEditandoPergunta(p); setNovaPerg({ texto: p.texto, grupo: p.grupo, frota: p.frota, frequencia: p.frequencia, ordem: p.ordem, obrigatoria: p.obrigatoria, fotoNC: p.fotoNC, permiteNA: p.permiteNA === true, ativa: p.ativa }); window.scrollTo({ top: 0, behavior: 'smooth' }); };
     const alternarPergunta = async (p) => { try {
-        await ApiService.atualizarPergunta(p.id, { texto: p.texto, grupo: p.grupo, tipoFrota: p.frota.toUpperCase(), frequencia: p.frequencia, ordem: p.ordem, obrigatoria: p.obrigatoria, fotoObrigatoriaNC: p.fotoNC, observacaoObrigatoriaNC: p.observacaoObrigatoriaNC, ativa: !p.ativa });
+        await ApiService.atualizarPergunta(p.id, { texto: p.texto, grupo: p.grupo, tipoFrota: p.frota.toUpperCase(), frequencia: p.frequencia, ordem: p.ordem, obrigatoria: p.obrigatoria, fotoObrigatoriaNC: p.fotoNC, observacaoObrigatoriaNC: p.observacaoObrigatoriaNC, permiteNA: p.permiteNA === true, ativa: !p.ativa });
         await carregarCatalogo();
         toast(p.ativa ? 'Pergunta inativada.' : 'Pergunta reativada.');
     }
@@ -994,6 +1049,10 @@ function AdmChecklist({ st, setSt, toast, user, foco }) {
                         React.createElement("select", { id: "adm-checklist-resposta-obrigatoria", name: "adm-checklist-resposta-obrigatoria", value: novaPerg.obrigatoria ? 's' : 'n', onChange: e => setNovaPerg({ ...novaPerg, obrigatoria: e.target.value === 's' }) },
                             React.createElement("option", { value: "s" }, "Sim"),
                             React.createElement("option", { value: "n" }, "N\u00E3o"))),
+                    React.createElement("div",null,
+                        React.createElement("label",{htmlFor:"adm-checklist-permite-na"},"Permitir N/A?"),
+                        React.createElement("select",{id:"adm-checklist-permite-na",value:novaPerg.permiteNA?'s':'n',onChange:e=>setNovaPerg({...novaPerg,permiteNA:e.target.value==='s'})},
+                            React.createElement("option",{value:"n"},"Não"),React.createElement("option",{value:"s"},"Sim"))),
                     React.createElement("div", null,
                         React.createElement("label", { htmlFor: "adm-checklist-foto-obrigatoria-se-nc" }, "Foto obrigat\u00F3ria se NC?"),
                         React.createElement("select", { id: "adm-checklist-foto-obrigatoria-se-nc", name: "adm-checklist-foto-obrigatoria-se-nc", value: novaPerg.fotoNC ? 's' : 'n', onChange: e => setNovaPerg({ ...novaPerg, fotoNC: e.target.value === 's' }) },
