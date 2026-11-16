@@ -19,13 +19,13 @@ const nodes=n=>!n||typeof n!=='object'?[]:[n,...n.children.flatMap(nodes)];
 const text=n=>n==null?'':typeof n==='object'?n.children.map(text).join(' '):String(n);
 const click=(tree,label)=>{const b=nodes(tree).find(n=>n.type==='button'&&text(n)===label);assert(b,'Botão '+label);b.props.onClick();};
 test('avança por grupo, mantém respostas e só envia todos no último',()=>{
- const t=setup();let r=t.render();assert(!text(r).includes('Enviar checklist'));assert.equal(nodes(r).filter(n=>n.props.className?.startsWith('checklist-escolha NA')).length,1);
+ const t=setup();let r=t.render();assert(!text(r).includes('Enviar checklist'));assert.equal(nodes(r).filter(n=>n.props.className?.startsWith('checklist-escolha NA')).length,0);
  click(r,'Próximo grupo →');assert.equal(t.envios(),0);assert(text(t.render()).includes('Responda este item.'));
- t.props.resps={'1':{resp:'C'},'2':{resp:'NA'}};r=t.render();click(r,'Próximo grupo →');r=t.render();assert(text(r).includes('Enviar checklist'));assert.equal(t.envios(),0);
+ t.props.resps={'1':{resp:'C'},'2':{resp:'C'}};r=t.render();click(r,'Próximo grupo →');r=t.render();assert(text(r).includes('Enviar checklist'));assert.equal(t.envios(),0);
  t.props.resps['3']={resp:'NC',obs:'Desgaste'};click(r,'Enviar checklist');assert.equal(t.envios(),0);assert(text(t.render()).includes('Anexe a foto obrigatória.'));
  t.props.resps['3'].foto='data:image/jpeg;base64,teste';r=t.render();click(r,'Enviar checklist');assert.equal(t.envios(),1);
- click(t.render(),'← Grupo anterior');assert.equal(t.props.resps['2'].resp,'NA');
- t.props.resps['1']={resp:'NA'};click(t.render(),'Próximo grupo →');assert(text(t.render()).includes('N/A não permitido'));assert.equal(t.envios(),1);
+ click(t.render(),'← Grupo anterior');assert.equal(t.props.resps['2'].resp,'C');
+ t.props.resps['1']={resp:'NA'};click(t.render(),'Próximo grupo →');assert(text(t.render()).includes('Escolha Conforme ou Não conforme'));assert.equal(t.envios(),1);
 });
 test('exigências de observação/foto e opcionalidade seguem cadastro',()=>{
  const {ctx}=setup();
