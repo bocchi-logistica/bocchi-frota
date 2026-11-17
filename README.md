@@ -27,6 +27,18 @@ A documentação consolidada, revisada em **17/11/2026**, está no [guia de entr
 
 A API é mantida em [bocchi-frota-api](https://github.com/bocchi-logistica/bocchi-frota-api/tree/migracao/cloudflare-d1-r2). Veja o [mapa de rotas e acessos](https://github.com/bocchi-logistica/bocchi-frota-api/blob/migracao/cloudflare-d1-r2/docs/ROTAS_E_ACESSOS.md).
 
+## O que são as pastas test e tests?
+
+São testes automatizados do portal. `test/` contém verificações da interface de IA; `tests/` contém verificações de checklist, agenda, premiação, sessão, permissões e outros comportamentos da interface. A diferença de nome é apenas a organização atual das suítes.
+
+Manter as duas pastas na entrega técnica ao TI. Não são dados operacionais ou telas do motorista. Na raiz deste repositório, com Node.js 24 ou superior, executar:
+
+```sh
+node --test tests/*.mjs test/*.mjs
+```
+
+Esses testes não substituem testes completos em navegador e celular com contas e permissões de teste.
+
 ## Testar uma alteração
 
 1. Para executar a versão entregue em homologação, abra `/portal` no Worker de homologação. O Worker serve o commit do frontend fixado na API.
