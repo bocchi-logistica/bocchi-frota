@@ -2,6 +2,10 @@
 
 Portal da Logística Bocchi Agrobios. O mesmo frontend apresenta a área do motorista e os módulos administrativos conforme o acesso retornado pela API.
 
+## Entrega para avaliação do TI
+
+A documentação consolidada, revisada em **17/11/2026**, está no [guia de entrega da Plataforma Logística](https://github.com/bocchi-logistica/bocchi-frota-api/blob/migracao/cloudflare-d1-r2/docs/ENTREGA_TI.md). Para análise completa, baixar **este portal e a API**, ambos na branch `migracao/cloudflare-d1-r2`. O guia descreve regras, dados, limitações e cenários para avaliar integração ou reconstrução no bFlow.
+
 ## Onde mexer
 
 | Arquivo | Responsabilidade |
