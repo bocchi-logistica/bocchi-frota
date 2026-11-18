@@ -17,3 +17,19 @@ test('lista agrupa reservas do mês, inclui travessia de mês e abre detalhe ori
  const one=cards.find(n=>n.props.key===1);one.props.onClick();assert.equal(aberto,ctx.props.eventos[0]);
  const content=JSON.stringify(tree);assert.match(content,/ABC2030/);assert.match(content,/Veículo teste/);assert.match(content,/Passo Fundo/);assert.match(content,/Saída prevista/);assert.match(content,/Retorno previsto/);
 });
+
+test('próxima ação compacta mantém dados e abre exatamente a reserva indicada',()=>{
+ const ctx=vm.createContext({React:{createElement:(type,props,...children)=>({type,props:props||{},children:children.flat(Infinity)})}});
+ vm.runInContext(source,ctx);
+ const nodes=n=>!n||typeof n!=='object'?[]:[n,...n.children.flatMap(nodes)];
+ for(const [status,titulo] of [['AGENDADO','Retirar veículo'],['EM_USO','Devolver veículo'],['PENDENTE_FINALIZACAO','Concluir devolução']]){
+  let aberto=null;
+  ctx.props={agendamento:{id:status,placa:'ABC2030',origem:'Origem teste',destino:'Destino teste',saidaPrevista:'2026-11-18T15:12:00',retornoPrevisto:'2026-11-18T17:12:00',status},acao:{titulo,sub:'Orientação da reserva',botao:titulo},onAbrir:r=>aberto=r};
+  const tree=vm.runInContext('ProximaAcaoAgenda(props)',ctx),all=nodes(tree),buttons=all.filter(n=>n.type==='button');
+  assert.equal(buttons.length,1);
+  buttons[0].props.onClick();assert.equal(aberto,ctx.props.agendamento);
+  const text=JSON.stringify(tree);assert.match(text,/ABC2030/);assert.match(text,/15:12/);assert.match(text,/17:12/);assert.match(text,/Origem teste/);assert.match(text,/Destino teste/);
+ }
+ ctx.props={agendamento:null,acao:null,onAbrir(){}};
+ assert.equal(vm.runInContext('ProximaAcaoAgenda(props)',ctx),null);
+});
