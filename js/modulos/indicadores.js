@@ -91,7 +91,6 @@ function IndicadoresFrotaPesada() {
     const meses = agrupar('mes').sort((a,b) => a.nome.localeCompare(b.nome));
     const naMeta = linhas.filter(linha => estado(linha) === 'dentro').length;
     const comMeta = linhas.filter(linha => linha.meta !== null).length;
-    const grid = min => ({display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(min(100%, '+min+'px),1fr))',gap:14});
     const select = (nome, valor, mudar, opcoes) => h('label',null,nome,
         h('select',{value:valor,onChange:e=>mudar(e.target.value)},
             h('option',{value:''},'Todos'),opcoes.map(([id,texto])=>h('option',{key:id,value:id},texto))));
@@ -101,19 +100,55 @@ function IndicadoresFrotaPesada() {
     const nomeMotoristas = linha => (linha.motoristas || []).map(m => m.nome).join(' / ') || 'Sem motorista identificado';
     const paginas = [['faturamento','Faturamento'],['despesas','Despesas'],['km','Km e consumo'],['resultado','Resultado']];
     const estilo = h('style',null,`
-        .ind-conteudo{display:grid;gap:16px;min-width:0}.ind-conteudo .card{min-width:0}
-        .ind-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
-        .ind-kpi{border-top:3px solid #d8a928;display:flex;flex-direction:column;gap:8px;min-width:0;padding:18px}
-        .ind-kpi small{line-height:1.45}.ind-valor{font-size:clamp(22px,2vw,30px);font-weight:800;line-height:1.2;overflow-wrap:anywhere}
-        .ind-destaque{background:#163c30;color:#fff;border-color:#163c30}
+        .ind-conteudo{display:grid;gap:14px;min-width:0}.ind-conteudo .card{min-width:0}
+        .ind-cabecalho{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:2px 0}
+        .ind-cabecalho h2{font-size:23px;line-height:1.3;margin:0 0 4px}
+        .ind-cabecalho p{font-size:13px;color:var(--cinza);margin:0;line-height:1.5}
+        .ind-periodo{font-size:12px;white-space:nowrap;color:var(--mata);background:#e8f0eb;padding:7px 11px;border-radius:8px;font-variant-numeric:tabular-nums}
+        .ind-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+        .ind-kpi{display:flex;flex-direction:column;gap:6px;min-width:0;padding:14px;border:1px solid var(--linha);box-shadow:0 2px 6px #173f2e08}
+        .ind-kpi small{line-height:1.4;font-size:11px;color:var(--cinza)}
+        .ind-kpi small:first-child{font-size:12px;font-weight:600;color:var(--tinta)}
+        .ind-valor{font-size:clamp(19px,1.45vw,25px);font-weight:800;line-height:1.3;overflow-wrap:anywhere}
+        .ind-destaque{background:#edf5ef;border-color:#c1d6c9;color:var(--mata)}
+        .ind-destaque small:first-child{color:var(--mata)}
+        .ind-filtros-card{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 14px;align-items:start;padding:14px}
+        .ind-filtros-principais{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;grid-column:1/-1}
+        .ind-filtros-card label,.ind-filtros label{margin:0;min-width:0;text-transform:none;letter-spacing:0;font-size:11px;line-height:1.4}
+        .ind-filtros-card select,.ind-filtros-card input,.ind-filtros select,.ind-filtros input{margin-top:5px;min-width:0;max-width:100%;font-size:13px;height:40px;padding:8px 10px}
+        .ind-filtros-avancados{min-width:0}
+        .ind-filtros-avancados>summary{display:flex;align-items:center;gap:8px;cursor:pointer;list-style:none;width:fit-content;min-height:36px;color:var(--mata);font-size:12px;font-weight:700}
+        .ind-filtros-avancados>summary::-webkit-details-marker{display:none}
+        .ind-filtros-seta{display:inline-block;transition:transform .15s}
+        .ind-filtros-avancados[open] .ind-filtros-seta{transform:rotate(180deg)}
+        .ind-filtros-contagem{font-size:10px;background:#e8f0eb;border-radius:99px;padding:3px 7px;font-weight:600}
+        .ind-filtros-extras{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding-top:9px}
         .ind-filtros{display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:12px;align-items:end}
-        .ind-filtros label{margin:0;min-width:0}.ind-filtros select,.ind-filtros input{margin-top:5px}
         .ind-acoes{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;grid-column:1/-1}
+        .ind-filtros-card>.ind-acoes{grid-column:2;align-self:start}
+        .ind-filtros-card>.ind-acoes .btn{min-height:36px;font-size:12px}
         .ind-tabela{overflow-x:auto}.ind-tabela td{vertical-align:top}.ind-tabela th{white-space:nowrap}
-        .ind-grafico-linha{display:grid;grid-template-columns:82px minmax(24px,1fr) minmax(112px,auto);gap:10px;align-items:center;width:100%;padding:8px 0;text-align:left;color:inherit}
+        .ind-legenda{display:flex;align-items:center;gap:8px 18px;flex-wrap:wrap;font-size:11px;color:var(--cinza)}
+        .ind-legenda span{display:inline-flex;align-items:center;gap:6px}
+        .ind-legenda i{width:8px;height:8px;border-radius:50%;display:inline-block}
+        .ind-legenda small{margin-left:auto;font-size:11px}
+        .ind-graficos{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+        .ind-grafico h3{font-size:15px;line-height:1.4}
+        .ind-grafico-dados{max-height:280px;overflow-y:auto;display:grid;gap:3px;margin-top:10px}
+        .ind-grafico-linha{display:grid;grid-template-columns:82px minmax(24px,1fr) minmax(112px,auto);gap:10px;align-items:center;width:100%;padding:7px 0;text-align:left;color:inherit;font-size:12px}
+        button.ind-grafico-linha:hover{background:#f5f8f5;border-radius:6px}
         .ind-roteiro{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
-        @media(max-width:850px){.ind-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
-        @media(max-width:480px){.ind-kpis{grid-template-columns:1fr}.ind-filtros{grid-template-columns:1fr}.ind-grafico-linha{grid-template-columns:72px minmax(12px,1fr) minmax(100px,auto);font-size:12px}.ind-valor{font-size:26px}}
+        @media(min-width:1500px){.ind-kpis{grid-template-columns:repeat(6,minmax(0,1fr))}}
+        @media(max-width:1000px){.ind-filtros-principais{grid-template-columns:repeat(2,minmax(0,1fr))}.ind-filtros-extras{grid-template-columns:repeat(2,minmax(0,1fr))}}
+        @media(max-width:850px){.ind-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.ind-graficos{grid-template-columns:1fr}}
+        @media(max-width:620px){
+            .ind-cabecalho{align-items:flex-start;flex-direction:column;gap:8px}.ind-cabecalho h2{font-size:20px}
+            .ind-filtros-card{grid-template-columns:1fr}.ind-filtros-card>.ind-acoes{grid-column:1;justify-content:flex-start}
+            .ind-filtros-card select,.ind-filtros-card input{font-size:16px;min-height:44px}
+            .ind-filtros-card>.ind-acoes .btn{min-height:44px}.ind-legenda small{margin-left:0;width:100%}
+        }
+        @media(max-width:480px){.ind-filtros{grid-template-columns:1fr}.ind-grafico-linha{grid-template-columns:72px minmax(12px,1fr) minmax(100px,auto);font-size:12px}.ind-valor{font-size:20px}}
+        @media(max-width:360px){.ind-filtros-principais,.ind-filtros-extras{grid-template-columns:1fr}.ind-valor{font-size:18px}}
     `);
     const navegacao = h('nav',{className:'subtabs','aria-label':'Indicadores da frota pesada'},paginas.map(([id,nome]) =>
         h('button',{key:id,type:'button',className:'subtab'+(paginaIndicador===id?' on':''),'aria-pressed':paginaIndicador===id,
@@ -136,8 +171,8 @@ function IndicadoresFrotaPesada() {
 
     function grafico(titulo, itens, campo, formato, selecionar) {
         const max = Math.max(1,...itens.map(item=>item[campo]));
-        return h('div',{className:'card'},h('h3',null,titulo),
-            h('div',{style:{maxHeight:330,overflowY:'auto',display:'grid',gap:9,marginTop:12}},itens.map(item=>{
+        return h('div',{className:'card ind-grafico'},h('h3',null,titulo),
+            h('div',{className:'ind-grafico-dados'},itens.map(item=>{
                 const nome = itens === meses ? mesTexto(item.nome) : item.nome;
                 const cor = campo === 'peso' ? '#267a70' : cores[estado(item)];
                 const conteudo = [h('span',{key:'nome',style:{minWidth:66,fontWeight:700}},nome),
@@ -152,18 +187,24 @@ function IndicadoresFrotaPesada() {
     }
 
     return h('section',{className:'ind-conteudo'},estilo,navegacao,
-        h('header',{style:{background:'linear-gradient(115deg,#102e25,#205844)',borderRadius:18,color:'#fff',padding:'18px 22px'}},
-            h('small',{style:{color:'#f0cc67',letterSpacing:2,fontWeight:700}},'BOCCHI FROTA · INDICADORES'),
-            h('h2',{style:{color:'inherit',fontSize:'clamp(23px,2.5vw,30px)',margin:'5px 0'}},'Faturamento da frota pesada'),
-            h('div',null,'Acompanhe receita, volume transportado e metas por placa e competência.')),
-        h('div',{className:'card ind-filtros'},
-            h('label',null,'Competência inicial',h('input',{type:'month',value:inicio,onChange:e=>setInicio(e.target.value)})),
-            h('label',null,'Competência final',h('input',{type:'month',value:fim,onChange:e=>setFim(e.target.value)})),
-            select('Motorista',motorista,v=>{setMotorista(v);setSituacao('');},motoristas),
-            select('Ano de fabricação',anoFabricacao,setAnoFabricacao,[...new Set(base.map(l=>String(l.anoFabricacao || 'sem')))].sort().map(v=>[v,v==='sem'?'Não informado':v])),
-            select('Placa',placa,setPlaca,unicos('placa').map(v=>[v,v])),
-            select('Tipo de veículo',tipo,setTipo,unicos('tipo').map(v=>[v,v])),
-            select('Situação',situacao,setSituacao,Object.entries(rotulos)),
+        h('header',{className:'ind-cabecalho'},
+            h('div',null,h('h2',null,'Faturamento da frota pesada'),
+                h('p',null,'Receita, volume transportado e metas do período selecionado.')),
+            h('span',{className:'ind-periodo'},periodoValido ? mesTexto(inicio)+' — '+mesTexto(fim) : 'Período a definir')),
+        h('div',{className:'card ind-filtros-card'},
+            h('div',{className:'ind-filtros-principais'},
+                h('label',null,'Competência inicial',h('input',{type:'month',value:inicio,onChange:e=>setInicio(e.target.value)})),
+                h('label',null,'Competência final',h('input',{type:'month',value:fim,onChange:e=>setFim(e.target.value)})),
+                select('Placa',placa,setPlaca,unicos('placa').map(v=>[v,v])),
+                select('Motorista',motorista,v=>{setMotorista(v);setSituacao('');},motoristas)),
+            h('details',{className:'ind-filtros-avancados'},
+                h('summary',null,h('span',null,'Mais filtros'),
+                    [anoFabricacao,tipo,situacao].filter(Boolean).length>0 && h('span',{className:'ind-filtros-contagem'},[anoFabricacao,tipo,situacao].filter(Boolean).length+' aplicados'),
+                    h('span',{className:'ind-filtros-seta','aria-hidden':true},'⌄')),
+                h('div',{className:'ind-filtros-extras'},
+                    select('Ano de fabricação',anoFabricacao,setAnoFabricacao,[...new Set(base.map(l=>String(l.anoFabricacao || 'sem')))].sort().map(v=>[v,v==='sem'?'Não informado':v])),
+                    select('Tipo de veículo',tipo,setTipo,unicos('tipo').map(v=>[v,v])),
+                    select('Situação',situacao,setSituacao,Object.entries(rotulos)))),
             h('div',{className:'ind-acoes'},
                 h('button',{type:'button',className:'btn btn-s btn-sm',onClick:()=>{setInicio(mesAtual);setFim(mesAtual);setPlaca('');setTipo('');setSituacao('');setMotorista('');setAnoFabricacao('');}},'Limpar filtros'),
                 h('button',{type:'button',className:'btn btn-p btn-sm',disabled:!periodoValido||!atual,onClick:()=>{ApiService.limparCache();setRevisao(v=>v+1);}},'Atualizar dados'))),
@@ -181,8 +222,10 @@ function IndicadoresFrotaPesada() {
                 card('Meta atingida',naMeta+' / '+comMeta,'Placas por mês com meta válida')),
             linhas.length === 0 ? h('p',{className:'aviso-box'},'Nenhuma carga para os filtros selecionados.') :
             h(React.Fragment,null,
-                h('p',{className:'muted'},'Verde · dentro da meta   |   Vermelho · fora da meta   |   Cinza · sem meta válida. Clique em uma placa no gráfico para filtrar.'),
-                h('div',{style:grid(390)},
+                h('div',{className:'ind-legenda'},
+                    Object.entries(rotulos).map(([id,rotulo])=>h('span',{key:id},h('i',{'aria-hidden':true,style:{background:cores[id]}}),rotulo)),
+                    h('small',null,'Clique em uma placa no gráfico para filtrar.')),
+                h('div',{className:'ind-graficos'},
                     grafico('Faturamento por placa',placas,'faturamento',moeda,p=>setPlaca(placa===p?'':p)),
                     grafico('Faturamento total por mês',meses,'faturamento',moeda),
                     grafico('Peso transportado por placa',placas,'peso',v=>numero(v)+' t',p=>setPlaca(placa===p?'':p)),
