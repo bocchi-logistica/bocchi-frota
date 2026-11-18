@@ -656,6 +656,57 @@ th.td-num{text-align:right}
 
 .checklist-grupos{overflow-anchor:none}
 .checklist-erro-item{margin:0 0 10px}
+
+/* Administração da premiação: listas e formulários com hierarquia própria. */
+.premiacao-config-card{margin-bottom:18px}
+.premiacao-config-titulo h3{font-size:18px;line-height:1.3;margin:0 0 5px}
+.premiacao-config-titulo p{font-size:13px;line-height:1.5;margin:0}
+.premiacao-tabela-scroll{overflow-x:auto;margin-top:14px;border:1px solid var(--linha);border-radius:11px}
+.premiacao-tabela-scroll:focus-visible{outline:2px solid var(--folha);outline-offset:2px}
+.premiacao-tabela-scroll table{margin:0;width:100%;border-collapse:collapse;font-size:13px}
+.premiacao-tabela-scroll th{background:#f6f7f4;font-size:10px;line-height:1.4;padding:11px 12px;white-space:nowrap}
+.premiacao-tabela-scroll td{padding:11px 12px;vertical-align:middle}
+.premiacao-tabela-scroll tr:last-child td{border-bottom:0}
+.premiacao-tabela-scroll tbody tr:hover{background:#fafbf9}
+.premiacao-tabela-scroll th:last-child,.premiacao-tabela-scroll td:last-child{text-align:right;width:85px}
+.premiacao-tabela-regras{min-width:750px}
+.premiacao-vigencia{white-space:nowrap;font-variant-numeric:tabular-nums}
+.premiacao-celula-ajuda{display:block;color:var(--cinza);font-size:11px;margin-top:3px}
+.premiacao-regra-editor{margin-top:16px;border:1px solid var(--linha);border-radius:11px;background:#fafbf9}
+.premiacao-regra-editor>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;list-style:none;cursor:pointer;color:var(--mata)}
+.premiacao-regra-editor>summary::-webkit-details-marker{display:none}
+.premiacao-regra-editor>summary b{display:block;font-size:14px}
+.premiacao-regra-editor>summary small{display:block;font-size:12px;margin-top:3px;color:var(--cinza)}
+.premiacao-editor-seta{font-size:20px;transition:transform .15s}
+.premiacao-regra-editor[open] .premiacao-editor-seta{transform:rotate(180deg)}
+.premiacao-regra-editor form{padding:0 14px 14px}
+.premiacao-regra-campos{display:grid;grid-template-columns:1.35fr repeat(5,minmax(0,1fr));gap:12px;padding-top:12px;border-top:1px solid var(--linha)}
+.premiacao-regra-campos label{display:flex;flex-direction:column;gap:6px;margin:0;min-width:0;text-transform:none;letter-spacing:0;font-size:12px}
+.premiacao-regra-campos label>span{min-height:32px;display:flex;align-items:flex-end;line-height:1.3}
+.premiacao-regra-campos input,.premiacao-regra-campos select{width:100%;min-width:0;height:44px;font-size:14px;padding:9px 10px;background:#fff}
+.premiacao-regra-rodape{display:flex;justify-content:space-between;align-items:center;gap:14px;border-top:1px solid var(--linha);margin-top:14px;padding-top:12px;font-size:12px;line-height:1.5}
+.premiacao-regra-acoes{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.premiacao-regra-acoes .btn{min-height:40px;white-space:nowrap}
+.premiacao-regra-mensagem{margin:12px 0 0;font-size:13px}
+.premiacao-metas-cabecalho{display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap}
+.premiacao-metas-filtros{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.premiacao-metas-filtros label{font-size:11px;margin:0;text-transform:none;letter-spacing:0}
+.premiacao-metas-filtros select{display:block;width:240px;max-width:100%;height:40px;font-size:13px;margin-top:5px;padding:8px 10px}
+.premiacao-metas-filtros .btn{min-height:40px}
+.premiacao-tabela-metas{min-width:1080px}
+.premiacao-tabela-metas td{white-space:nowrap;font-variant-numeric:tabular-nums}
+.premiacao-tabela-metas td:first-child{white-space:normal;min-width:160px}
+@media(max-width:1250px){.premiacao-regra-campos{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:620px){
+.premiacao-regra-campos{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.premiacao-regra-rodape{align-items:stretch;flex-direction:column}
+.premiacao-regra-acoes{justify-content:flex-end;flex-wrap:wrap}
+.premiacao-metas-filtros{width:100%}
+.premiacao-metas-filtros label{flex:1;min-width:180px}
+.premiacao-metas-filtros select{width:100%}
+}
+@media(max-width:380px){.premiacao-regra-campos{grid-template-columns:1fr}.premiacao-regra-campos label>span{min-height:0}}
+
 </style>
 </head>
 <body>
