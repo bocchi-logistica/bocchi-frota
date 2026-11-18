@@ -2,6 +2,22 @@
 const AG_STATUS_LABEL = { AGENDADO: 'Agendado', AGUARDANDO_RETIRADA: 'Aguardando retirada', RETIRADA_ATRASADA: 'Retirada atrasada', EM_USO: 'Em uso', PENDENTE_FINALIZACAO: 'Pendente finalização', DEVOLUCAO_ATRASADA: 'Devolução atrasada', BLOQUEADO_NC: 'Bloqueado por NC', PENDENTE_ANALISE: 'Pendente análise', FINALIZADO: 'Finalizado', CANCELADO: 'Cancelado' };
 const fmtDataHora = v => v ? new Date(v).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '—';
 function AgendaStatus({ status }) { return React.createElement("span", { className: 'agenda-status ' + status }, AG_STATUS_LABEL[status] || status); }
+function ProximaAcaoAgenda({ agendamento, acao, onAbrir }) {
+    if (!agendamento || !acao) return null;
+    const trajeto = [agendamento.origem, agendamento.destino].filter(Boolean).join(' → ');
+    return React.createElement("section", { className: "agenda-proxima card", "aria-label": "Próxima ação da agenda" },
+        React.createElement("div", { className: "agenda-proxima-cabecalho" },
+            React.createElement("div", { className: "agenda-proxima-resumo" },
+                React.createElement("div", { className: "kicker" }, "Próxima ação"),
+                React.createElement("h2", { className: "titulo" }, acao.titulo),
+                React.createElement("p", { className: "agenda-proxima-aviso muted" }, acao.sub)),
+            React.createElement("button", { type: "button", className: "btn btn-p agenda-proxima-botao", onClick: () => onAbrir(agendamento) }, acao.botao)),
+        React.createElement("div", { className: "agenda-proxima-meta" },
+            React.createElement("span", { className: "agenda-proxima-placa", "aria-label": "Veículo" }, agendamento.placa || '—'),
+            React.createElement("span", null, "Horário: ", fmtDataHora(agendamento.saidaPrevista).slice(-5), " às ", fmtDataHora(agendamento.retornoPrevisto).slice(-5)),
+            React.createElement(AgendaStatus, { status: agendamento.status })),
+        trajeto && React.createElement("div", { className: "agenda-proxima-trajeto" }, React.createElement("span", null, "Trajeto: "), trajeto));
+}
 const AGENDA_CORES = [
     { b: '#1F7A55', f: '#E7F4ED', t: '#154C38' },
     { b: '#376FA6', f: '#EAF2FA', t: '#244E78' },
@@ -426,30 +442,7 @@ function TelaAgendamento({ user, toast, onAbrirChecklist }) {
                         React.createElement("button", {className:modoVisao==="lista"?"on":"", "aria-pressed":modoVisao==="lista",onClick:()=>setModoVisao("lista")}, "Lista"),
                         React.createElement("button", { className: modoVisao === 'mes' ? 'on' : '', onClick: () => setModoVisao('mes') }, "M\u00EAs"),
                         React.createElement("button", { className: modoVisao === 'dia' ? 'on' : '', onClick: () => setModoVisao('dia') }, "Dia")))),
-            configAcao ? React.createElement("div", { className: "agenda-proxima card" },
-                React.createElement("div", { className: "kicker" },
-                    React.createElement("span", null, "\u25CF"),
-                    " Pr\u00F3xima a\u00E7\u00E3o"),
-                React.createElement("div", { className: "titulo" }, configAcao.titulo),
-                React.createElement("div", { className: "muted", style: { fontSize: 14 } }, configAcao.sub),
-                React.createElement("div", { className: "agenda-proxima-grid" },
-                    React.createElement("div", { className: "agenda-proxima-info" },
-                        React.createElement("b", null, "Ve\u00EDculo"),
-                        proxima.placa || '—'),
-                    React.createElement("div", { className: "agenda-proxima-info" },
-                        React.createElement("b", null, "Trajeto"),
-                        proxima.origem,
-                        " \u2192 ",
-                        proxima.destino),
-                    React.createElement("div", { className: "agenda-proxima-info" },
-                        React.createElement("b", null, "Hor\u00E1rio"),
-                        fmtDataHora(proxima.saidaPrevista).slice(-5),
-                        " \u00E0s ",
-                        fmtDataHora(proxima.retornoPrevisto).slice(-5)),
-                    React.createElement("div", { className: "agenda-proxima-info" },
-                        React.createElement("b", null, "Status"),
-                        AG_STATUS_LABEL[proxima.status] || proxima.status)),
-                React.createElement("button", { className: "btn btn-p", style: { width: '100%', marginTop: 13, fontSize: 16 }, onClick: () => setDetalhe(proxima) }, configAcao.botao)) : null,
+            React.createElement(ProximaAcaoAgenda, { agendamento: proxima, acao: configAcao, onAbrir: setDetalhe }),
             modoVisao === 'lista' ? React.createElement(ListaReservasAgenda,{eventos,mes,veiculos:base.veiculos,onAbrir:setDetalhe}) : modoVisao === 'mes' ? React.createElement(CalendarioAgenda, { compactoMobile:true,mes: mes, eventos: eventos, onAbrir: setDetalhe, diaSelecionado: diaSelecionado, onSelecionarDia: d => { setDiaSelecionado(d); setMes(d); setModoVisao('dia'); } }) : React.createElement("div", { className: "agenda-dia-lista" },
                 React.createElement("div", { className: "card row" },
                     React.createElement("button", { className: "btn btn-g btn-sm", onClick: () => moverDia(-1) }, "\u2039"),
