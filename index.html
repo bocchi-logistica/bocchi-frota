@@ -227,12 +227,17 @@ th.td-num{text-align:right}
 .agenda-view-toggle button{padding:8px 12px;border-radius:8px;color:#fff;font-weight:700}
 .agenda-view-toggle button.on{background:#fff;color:var(--mata)}
 .agenda-atalhos{display:flex;gap:8px;overflow-x:auto;padding:10px 2px 2px;margin-top:10px;scrollbar-width:none}.agenda-atalhos::-webkit-scrollbar{display:none}.agenda-atalho{white-space:nowrap;padding:9px 13px;border-radius:99px;background:#fff;border:1.5px solid var(--linha);font-weight:700;font-size:13px;color:var(--tinta)}.agenda-atalho.on{background:var(--mata);border-color:var(--mata);color:#fff}.agenda-top-nav{display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:nowrap}.agenda-top-mes{font-family:'Archivo';font-weight:800;font-size:24px;white-space:nowrap;min-width:max-content;flex:0 0 auto}.agenda-top-spacer{flex:1 1 auto;min-width:4px}
-.agenda-proxima{border-left:7px solid var(--folha);padding:18px 16px;margin:14px 0;background:#fff}
-.agenda-proxima .kicker{font-family:'Archivo';font-weight:800;font-size:13px;text-transform:uppercase;letter-spacing:.03em;color:var(--mata);display:flex;align-items:center;gap:7px}
-.agenda-proxima .titulo{font-family:'Archivo';font-weight:800;font-size:27px;margin:5px 0 4px;line-height:1.1}
-.agenda-proxima-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:13px}
-.agenda-proxima-info{padding:11px 12px;background:#f5f7f5;border-radius:11px;min-width:0}
-.agenda-proxima-info b{display:block;font-size:11px;text-transform:uppercase;color:var(--cinza);margin-bottom:3px}
+.agenda-proxima{border-left:4px solid var(--folha);padding:12px 14px;margin:12px 0;background:#fff}
+.agenda-proxima-cabecalho{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.agenda-proxima-resumo{min-width:0;flex:1}
+.agenda-proxima .kicker{font-family:'Archivo';font-weight:800;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--cinza)}
+.agenda-proxima .titulo{font-family:'Archivo';font-weight:800;font-size:20px;margin:3px 0;line-height:1.2}
+.agenda-proxima-aviso{font-size:12px;line-height:1.4;margin:0}
+.agenda-proxima-botao{flex:0 0 auto;min-height:44px;padding:9px 14px;font-size:13px}
+.agenda-proxima-meta{display:flex;align-items:center;flex-wrap:wrap;gap:6px 12px;margin-top:9px;font-size:12px}
+.agenda-proxima-placa{font-weight:800;letter-spacing:.04em;color:var(--mata)}
+.agenda-proxima-trajeto{margin-top:5px;font-size:12px;line-height:1.4;overflow-wrap:anywhere}
+.agenda-proxima-trajeto>span{color:var(--cinza)}
 .agenda-dia-lista{display:flex;flex-direction:column;gap:8px}
 .agenda-dia-card{padding:13px 14px;border-left:5px solid var(--folha);background:#fff;border-radius:12px;box-shadow:var(--sombra);text-align:left;width:100%}
 .agenda-fab{position:fixed;right:22px;bottom:86px;width:58px;height:58px;border-radius:50%;font-size:28px;z-index:25}
@@ -270,11 +275,14 @@ th.td-num{text-align:right}
   .agenda-dia{min-height:75px;padding:3px}
   .agenda-evento{font-size:8.5px;padding:4px}
   .agenda-modal-grid{grid-template-columns:1fr}
-  .agenda-proxima-grid{grid-template-columns:1fr 1fr}
-  .agenda-proxima .titulo{font-size:24px}
+  .agenda-proxima{padding:11px 12px}
+  .agenda-proxima .titulo{font-size:18px}
+  .agenda-proxima-cabecalho{align-items:flex-start}
+  .agenda-proxima-botao{max-width:46%;white-space:normal}
 }
 @media(max-width:390px){
-  .agenda-proxima-grid{grid-template-columns:1fr}
+  .agenda-proxima-cabecalho{flex-wrap:wrap}
+  .agenda-proxima-botao{max-width:100%;width:100%}
   .agenda-filtros{grid-template-columns:1fr 1fr;gap:7px}
   .agenda-filtros select{font-size:14px;padding-left:10px;padding-right:26px}
 }
@@ -429,39 +437,31 @@ th.td-num{text-align:right}
 .bocchi-login{align-content:start;padding-top:68px;padding-bottom:16px}
 }
 
-/* Cabeçalho do motorista: identidade e opções da conta */
+/* Cabeçalho do motorista: mesma navegação da conta em todas as telas */
 .motorista-cabecalho{display:flex;align-items:center;justify-content:space-between;gap:16px}
 .motorista-identidade{display:flex;align-items:center;gap:10px;min-width:0;flex:1}
 .motorista-avatar{display:flex;align-items:center;justify-content:center;width:40px;height:40px;flex:0 0 40px;border-radius:12px;background:#ffffff18;border:1px solid #ffffff26;font:700 20px 'Archivo',sans-serif}
-.motorista-identidade-texto{min-width:0}
+.motorista-identidade-texto{min-width:0;flex:1}
 .motorista-identidade .nome{overflow-wrap:anywhere;line-height:1.3}
 .motorista-identidade .sub{margin-top:2px;line-height:1.4}
-.motorista-conta-toggle,.motorista-menu-titulo{display:none}
-.motorista-conta-opcoes{display:flex;align-items:center;gap:12px}
-.motorista-sair{color:rgba(255,255,255,.85)}
-@media(max-width:800px){
-.motorista-cabecalho{padding:14px 16px;gap:12px;min-height:76px}
-.motorista-identidade{flex-wrap:wrap;column-gap:10px;row-gap:6px}
-.motorista-identidade .chip-placa{font-size:11px;padding:5px 8px;white-space:nowrap}
-.motorista-identidade .nome{font-size:18px}
+.motorista-menu-titulo{display:none}
 .motorista-conta-toggle{display:flex;align-items:center;justify-content:center;width:44px;height:44px;flex:0 0 44px;background:#ffffff12;border:1px solid #ffffff30;border-radius:12px;color:white;font-size:28px;line-height:1}
 .motorista-conta-toggle:focus-visible{outline:3px solid #e5c45c;outline-offset:3px}
-.motorista-conta-opcoes{display:none;position:absolute;right:12px;top:calc(100% + 8px);width:min(230px,calc(100vw - 24px));padding:6px;border-radius:12px;background:#173f2e;border:1px solid #ffffff26;box-shadow:0 12px 30px #102e2538;z-index:25}
-.motorista-conta-opcoes.aberto{display:flex;flex-direction:column;align-items:stretch;gap:4px}
-.motorista-menu-titulo{display:block;padding:7px 10px;font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:#bfd4c8;border-bottom:1px solid #ffffff20;margin-bottom:4px}
-.motorista-conta-opcoes>.btn,.motorista-conta-opcoes>button{width:100%;min-height:44px;text-align:left;justify-content:flex-start;padding:8px 10px;border-radius:8px;white-space:normal;font-size:12px}
+.motorista-conta-opcoes{display:none;position:absolute;right:12px;top:calc(100% + 8px);width:min(210px,calc(100vw - 24px));padding:4px;border-radius:11px;background:#173f2e;border:1px solid #ffffff26;box-shadow:0 12px 30px #102e2538;z-index:25}
+.motorista-conta-opcoes.aberto{display:flex;flex-direction:column;align-items:stretch;gap:0}
+.motorista-conta-opcoes>button{width:100%;min-height:44px;text-align:left!important;padding:8px 10px!important;border-radius:8px;white-space:normal;font-size:12px!important;text-decoration:none!important}
 .motorista-conta-opcoes>button:hover{background:#ffffff12}
-.motorista-conta-opcoes .motorista-sair{border-top:1px solid #ffffff20;border-radius:0 0 9px 9px;margin-top:4px}
-}
-
+.motorista-conta-opcoes>div:not(.overlay):not(.motorista-menu-titulo){text-align:left!important;margin:0!important}
+.motorista-conta-opcoes>div:not(.overlay):not(.motorista-menu-titulo)>button{display:block;width:100%;min-height:44px;padding:8px 10px!important;text-align:left;font-size:12px!important}
+.motorista-conta-opcoes .motorista-sair{color:rgba(255,255,255,.85);border-top:1px solid #ffffff20;border-radius:0 0 9px 9px;margin-top:0}
 .motorista-vinculos{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:6px;font-size:12px;line-height:1.5;color:#d5e6db}
 .motorista-vinculos .chip-placa{font-size:12px;white-space:nowrap}
 .motorista-vinculo-repetir{color:inherit;text-align:left;text-decoration:underline;min-height:36px;font:inherit}
 @media(max-width:800px){
-.motorista-conta-opcoes.aberto{gap:0}
-.motorista-conta-opcoes>div:not(.overlay):not(.motorista-menu-titulo){text-align:left!important;margin:0!important}
-.motorista-conta-opcoes>div:not(.overlay):not(.motorista-menu-titulo)>button{display:block;width:100%;min-height:44px;padding:8px 10px!important;text-align:left;font-size:12px!important}
-.motorista-conta-opcoes .motorista-sair{margin-top:2px}
+.motorista-cabecalho{padding:14px 16px;gap:12px;min-height:76px}
+.motorista-identidade{flex-wrap:nowrap;column-gap:10px;row-gap:6px}
+.motorista-identidade .chip-placa{font-size:11px;padding:5px 8px;white-space:nowrap}
+.motorista-identidade .nome{font-size:18px}
 }
 
 /* Agenda do motorista: lista de reservas e calendário móvel resumido. */
@@ -577,14 +577,7 @@ th.td-num{text-align:right}
 .premiacao-descontos-categorias>.ocorrencia-linha:last-child{border-bottom:0}
 
 
-@media(max-width:800px){
-.motorista-identidade{flex-wrap:nowrap}
-.motorista-identidade-texto{flex:1;min-width:0}
-.motorista-conta-opcoes{width:min(210px,calc(100vw - 24px));padding:4px;border-radius:11px}
-.motorista-conta-opcoes .motorista-menu-titulo{display:none}
-.motorista-conta-opcoes>button{min-height:44px;padding:8px 10px!important;text-align:left!important;font-size:12px!important;text-decoration:none!important}
-.motorista-conta-opcoes .motorista-sair{margin-top:0}
-}
+
 
 
 /* Checklist por grupos: perguntas compactas e evidências por cadastro. */
